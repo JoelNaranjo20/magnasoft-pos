@@ -1,0 +1,148 @@
+/**
+ * MODULE_REGISTRY
+ * Central registry of all available modules in the system.
+ * The `id` field maps directly to the key in the `config` JSONB column of the `business` table.
+ */
+export const MODULE_REGISTRY = {
+    pos: {
+        id: 'module_pos',
+        label: 'Punto de Venta',
+        description: 'Módulo principal de ventas y cobros',
+        icon: 'point_of_sale',
+        default: true,
+    },
+    vehicles: {
+        id: 'module_vehicles',
+        label: 'Gestión de Vehículos',
+        description: 'Registro de clientes por placa y tipo de vehículo',
+        icon: 'directions_car',
+        default: false,
+    },
+    vehicle_queue: {
+        id: 'module_service_queue',
+        label: 'Cola de Vehículos / Servicio',
+        description: 'Cola de espera para servicios automotrices',
+        icon: 'queue',
+        default: false,
+    },
+    tables: {
+        id: 'module_tables',
+        label: 'Mesas / Restaurante',
+        description: 'Gestión de mesas y comandas',
+        icon: 'table_restaurant',
+        default: false,
+    },
+    commissions: {
+        id: 'module_commissions',
+        label: 'Gestión de Comisiones',
+        description: 'Cálculo y asignación de comisiones a trabajadores',
+        icon: 'percent',
+        default: false,
+    },
+    commission_payment: {
+        id: 'module_commission_payment',
+        label: 'Pago de Liquidaciones',
+        description: 'Liquidación y pago de comisiones a empleados',
+        icon: 'payments',
+        default: false,
+    },
+    customers: {
+        id: 'module_customers',
+        label: 'Gestión de Clientes',
+        description: 'Base de datos de clientes y fidelización',
+        icon: 'group',
+        default: true,
+    },
+    inventory: {
+        id: 'module_inventory',
+        label: 'Control de Inventario',
+        description: 'Gestión de stock y productos',
+        icon: 'inventory_2',
+        default: true,
+    },
+    payroll: {
+        id: 'module_payroll',
+        label: 'Gestión de Nómina',
+        description: 'Salarios y pagos a trabajadores',
+        icon: 'account_balance_wallet',
+        default: false,
+    },
+    appointments: {
+        id: 'module_appointments',
+        label: 'Citas y Agenda',
+        description: 'Gestión de citas y calendario',
+        icon: 'event',
+        default: false,
+    },
+} as const;
+
+export type ModuleKey = keyof typeof MODULE_REGISTRY;
+
+export const INDUSTRY_PRESETS = {
+    automotive: {
+        module_vehicles: true,
+        module_service_queue: true,
+        module_commissions: true,
+        module_commission_payment: true,
+        module_customers: true,
+        module_inventory: true,
+        module_payroll: true,
+        module_tables: false,
+        module_appointments: false,
+    },
+    barbershop: {
+        module_vehicles: false,
+        module_service_queue: false,
+        module_commissions: true,
+        module_commission_payment: true,
+        module_customers: true,
+        module_inventory: true,
+        module_payroll: true,
+        module_tables: false,
+        module_appointments: false,
+    },
+    restaurant: {
+        module_vehicles: false,
+        module_service_queue: false,
+        module_commissions: false,
+        module_commission_payment: false,
+        module_customers: true,
+        module_inventory: true,
+        module_payroll: true,
+        module_tables: true,
+        module_appointments: false,
+    },
+    retail: {
+        module_vehicles: false,
+        module_service_queue: false,
+        module_commissions: false,
+        module_commission_payment: false,
+        module_customers: true,
+        module_inventory: true,
+        module_payroll: false,
+        module_tables: false,
+        module_appointments: false,
+    },
+    beauty_salon: {
+        module_vehicles: false,
+        module_service_queue: false,
+        module_commissions: true,
+        module_commission_payment: true,
+        module_customers: true,
+        module_inventory: true,
+        module_payroll: true,
+        module_tables: false,
+        module_appointments: true,
+    },
+    hotel: {
+        module_vehicles: false,
+        module_service_queue: false,
+        module_commissions: false,
+        module_commission_payment: false,
+        module_customers: true,
+        module_inventory: true,
+        module_payroll: true,
+        module_tables: false,
+        module_appointments: false,
+    },
+} as const;

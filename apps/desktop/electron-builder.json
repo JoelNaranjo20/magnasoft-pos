@@ -1,0 +1,44 @@
+{
+    "appId": "com.servitecapos.app",
+    "productName": "Serviteca POS",
+    "directories": {
+        "output": "release"
+    },
+    "files": [
+        "dist/**/*",
+        "dist-electron/**/*"
+    ],
+    "win": {
+        "icon": "build/icon.ico",
+        "target": [
+            {
+                "target": "nsis",
+                "arch": [
+                    "x64"
+                ]
+            }
+        ],
+        "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "mac": {
+        "icon": "build/icon.png",
+        "target": [
+            "dmg",
+            "zip"
+        ],
+        "category": "public.app-category.business"
+    },
+    "nsis": {
+        "oneClick": false,
+        "perMachine": true,
+        "allowToChangeInstallationDirectory": true,
+        "deleteAppDataOnUninstall": false,
+        "installerIcon": "build/icon.ico",
+        "uninstallerIcon": "build/icon.ico",
+        "installerHeaderIcon": "build/icon.ico",
+        "createDesktopShortcut": "always",
+        "createStartMenuShortcut": true,
+        "shortcutName": "Serviteca POS",
+        "runAfterFinish": true
+    }
+}

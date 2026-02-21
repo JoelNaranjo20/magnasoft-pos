@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@source "../../apps/shared";
+
+:root {
+  --background-light: #e2e8f0;
+  /* Slate-200 */
+  --background-dark: #101922;
+  --primary: #0d7ff2;
+  --foreground-light: #0f172a;
+  /* slate-900 */
+
+  /* Theme variables moved to root */
+  --color-primary: #0d7ff2;
+  --color-background-light: #f5f7f8;
+  --color-background-dark: #101922;
+  --font-display: 'Inter', sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: var(--background-dark);
+    --foreground: #e2e8f0;
+  }
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--background-light);
+  color: #0f172a;
+  /* Fallback for var(--foreground-light) */
+  color: var(--foreground-light);
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+}
