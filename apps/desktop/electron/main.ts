@@ -1,6 +1,67 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
+
+// Auto-updater configuration
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.allowDowngrade = false;
+
+function setupAutoUpdater() {
+    const isDev = process.env.NODE_ENV === 'development';
+    // Disable auto-updater in development mode
+    if (isDev) {
+        console.log('[Updater] Skipping auto-update check in development mode.');
+        return;
+    }
+
+    autoUpdater.on('checking-for-update', () => {
+        console.log('[Updater] Checking for updates...');
+        mainWindow?.webContents.send('update-status', { status: 'checking' });
+    });
+
+    autoUpdater.on('update-available', (info) => {
+        console.log('[Updater] Update available:', info.version);
+        mainWindow?.webContents.send('update-status', { status: 'available', version: info.version });
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        console.log('[Updater] App is up to date.');
+        mainWindow?.webContents.send('update-status', { status: 'not-available' });
+    });
+
+    autoUpdater.on('download-progress', (progress) => {
+        console.log(`[Updater] Downloading: ${Math.round(progress.percent)}%`);
+        mainWindow?.webContents.send('update-status', { status: 'downloading', percent: Math.round(progress.percent) });
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+        console.log('[Updater] Update downloaded:', info.version);
+        mainWindow?.webContents.send('update-status', { status: 'downloaded', version: info.version });
+        if (mainWindow) {
+            dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Actualización lista',
+                message: `La versión ${info.version} fue descargada. ¿Deseas reiniciar ahora para instalarla?`,
+                buttons: ['Reiniciar ahora', 'Después'],
+                defaultId: 0,
+                noLink: true
+            }).then(({ response }) => {
+                if (response === 0) {
+                    autoUpdater.quitAndInstall();
+                }
+            });
+        }
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.error('[Updater] Error:', err.message);
+        mainWindow?.webContents.send('update-status', { status: 'error', message: err.message });
+    });
+
+    autoUpdater.checkForUpdatesAndNotify();
+}
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -47,11 +108,11 @@ const createWindow = () => {
         },
     });
 
-    // Check if we are in dev mode (Vite typically runs on 5173)
+    // Check if we are in dev mode (Vite typically runs on 5180)
     const isDev = process.env.NODE_ENV === 'development';
 
     if (isDev) {
-        mainWindow.loadURL('http://localhost:5173');
+        mainWindow.loadURL('http://localhost:5180');
         mainWindow.webContents.openDevTools();
     } else {
         mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
@@ -62,6 +123,29 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 app.on('ready', () => {
     createWindow();
+    setupAutoUpdater();
+});
+
+// IPC: Allow renderer to manually check for updates
+ipcMain.handle('check-for-updates', async () => {
+    const isDev = process.env.NODE_ENV === 'development';
+    if (isDev) return { status: 'dev' };
+    try {
+        await autoUpdater.checkForUpdates();
+        return { status: 'ok' };
+    } catch (err: any) {
+        return { status: 'error', message: err.message };
+    }
+});
+
+// IPC: Get real app version from Electron (not hardcoded)
+ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
+});
+
+// IPC: Trigger quit and install update
+ipcMain.handle('quit-and-install', () => {
+    autoUpdater.quitAndInstall();
 });
 
 // Quit when all windows are closed, except on macOS.
@@ -80,18 +164,36 @@ app.on('activate', () => {
 });
 
 // IPC Handlers for persistent storage (bypassing localStorage issues)
+let inMemoryStorageCache: any = null;
+
+const loadStorageCache = () => {
+    if (inMemoryStorageCache) return inMemoryStorageCache;
+    try {
+        if (!fs.existsSync(storageFilePath)) {
+            inMemoryStorageCache = {};
+        } else {
+            const content = fs.readFileSync(storageFilePath, 'utf-8');
+            inMemoryStorageCache = content.trim() ? JSON.parse(content) : {};
+        }
+    } catch (e) {
+        console.warn('❌ [Storage] File corrupt or unreadable, resetting cache:', e);
+        inMemoryStorageCache = {};
+    }
+    return inMemoryStorageCache;
+};
+
+const saveStorageCache = () => {
+    try {
+        fs.writeFileSync(storageFilePath, JSON.stringify(inMemoryStorageCache, null, 2), 'utf-8');
+    } catch (e) {
+        console.error('❌ [Storage] Error writing to file:', e);
+    }
+};
+
 ipcMain.handle('storage-get', async (event, key: string) => {
     try {
-        console.log(`[Storage] Reading key '${key}' from:`, storageFilePath);
-        if (!fs.existsSync(storageFilePath)) return null;
-
-        const content = fs.readFileSync(storageFilePath, 'utf-8');
-        if (!content) return null;
-
-        const data = JSON.parse(content);
-        const value = data[key];
-        console.log(`[Storage] Value for '${key}':`, value);
-        return value || null;
+        const cache = loadStorageCache();
+        return cache[key] || null;
     } catch (error) {
         console.error('❌ [IPC] Error reading storage:', error);
         return null;
@@ -100,23 +202,9 @@ ipcMain.handle('storage-get', async (event, key: string) => {
 
 ipcMain.handle('storage-set', async (event, key: string, value: any) => {
     try {
-        console.log(`[Storage] Setting key '${key}' to:`, value);
-        let data: any = {};
-
-        if (fs.existsSync(storageFilePath)) {
-            try {
-                const content = fs.readFileSync(storageFilePath, 'utf-8');
-                if (content.trim()) {
-                    data = JSON.parse(content);
-                }
-            } catch (e) {
-                console.warn('[Storage] File corrupt or empty, resetting:', e);
-                data = {};
-            }
-        }
-
-        data[key] = value;
-        fs.writeFileSync(storageFilePath, JSON.stringify(data, null, 2), 'utf-8');
+        const cache = loadStorageCache();
+        cache[key] = value;
+        saveStorageCache(); // Write to disk synchronously 
         return true;
     } catch (error) {
         console.error('❌ [IPC] Error writing storage:', error);
@@ -126,16 +214,9 @@ ipcMain.handle('storage-set', async (event, key: string, value: any) => {
 
 ipcMain.handle('storage-remove', async (event, key: string) => {
     try {
-        if (!fs.existsSync(storageFilePath)) return true;
-
-        const content = fs.readFileSync(storageFilePath, 'utf-8');
-        let data: any = {};
-        if (content.trim()) {
-            data = JSON.parse(content);
-        }
-
-        delete data[key];
-        fs.writeFileSync(storageFilePath, JSON.stringify(data, null, 2), 'utf-8');
+        const cache = loadStorageCache();
+        delete cache[key];
+        saveStorageCache(); // Write to disk synchronously
         return true;
     } catch (error) {
         console.error('❌ [IPC] Error removing from storage:', error);

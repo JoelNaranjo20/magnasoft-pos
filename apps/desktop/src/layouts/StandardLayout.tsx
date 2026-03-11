@@ -1,9 +1,23 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@shared/store/useAuthStore';
+import { useState, useEffect } from 'react';
+import { ChangePasswordModal } from '../components/modals/ChangePasswordModal';
 
 export const StandardLayout = () => {
     const location = useLocation();
     const { business, signOut } = useAuthStore();
+    const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.key.toLowerCase() === 'u') {
+                e.preventDefault();
+                signOut();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [signOut]);
 
     const isActive = (path: string) => location.pathname === path;
 
@@ -38,9 +52,9 @@ export const StandardLayout = () => {
                 </nav>
 
                 <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-                    <button onClick={signOut} className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all">
-                        <span className="material-symbols-outlined">logout</span>
-                        Cerrar Sesión
+                    <button onClick={() => setIsChangePasswordOpen(true)} className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all font-medium">
+                        <span className="material-symbols-outlined">key</span>
+                        Cambiar Contraseña
                     </button>
                 </div>
             </aside>
@@ -49,6 +63,8 @@ export const StandardLayout = () => {
             <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900">
                 <Outlet />
             </main>
+
+            <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
         </div>
     );
 };

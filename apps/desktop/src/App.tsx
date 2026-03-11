@@ -16,9 +16,11 @@ import { ConfigPage } from './pages/admin/ConfigPage';
 import { SetupWizard } from './pages/setup/SetupWizard';
 import { DesktopSetup } from './pages/setup/DesktopSetup';
 import { LoginPage } from './pages/auth/LoginPage';
+import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { ApprovalPendingPage } from './pages/auth/ApprovalPendingPage';
 import { ConfigGuard } from './components/auth/ConfigGuard';
+import { UpdateNotification } from './components/UpdateNotification';
 
 // POS Components
 import { POSLayout } from './components/pos/POSLayout';
@@ -50,13 +52,15 @@ const ElectronTitleSync = () => {
     const { business } = useAuthStore();
 
     useEffect(() => {
-        const version = window.electronAPI?.getAppVersion?.() || '2.4.0';
-        const businessName = business?.name || 'Magnasoft';
-
-        document.title = `${businessName} - POS v${version}`;
-        if (window.electronAPI?.setAppName) {
-            window.electronAPI.setAppName(businessName);
-        }
+        const syncTitle = async () => {
+            const version = await window.electronAPI?.getAppVersion?.() || '2.4.0';
+            const businessName = business?.name || 'Magnasoft';
+            document.title = `${businessName} - POS v${version}`;
+            if (window.electronAPI?.setAppName) {
+                window.electronAPI.setAppName(businessName);
+            }
+        };
+        syncTitle();
     }, [business]);
 
     return null;
@@ -74,6 +78,10 @@ function App() {
     useEffect(() => {
         const verifyCashSession = async () => {
             const { cashSession, setCashSession } = useSessionStore.getState();
+            const { profile } = useAuthStore.getState();
+            const isOwner = profile?.id && business?.owner_id && profile.id === business.owner_id;
+            const isSuperAdmin = profile?.role === 'super_admin' || profile?.saas_role === 'super_admin';
+
             if (cashSession?.id) {
                 console.log('[POS] Verifying active cash session:', cashSession.id);
                 const { data, error } = await supabase
@@ -87,6 +95,30 @@ function App() {
                     setCashSession(null);
                 } else {
                     console.log('[POS] Cash session verified successfully.');
+                }
+            } else if (business?.id) {
+                // If local state is empty, check if there's actually an open session in the database
+                // This happens if local storage was cleared or user logged out and in
+                const { data, error } = await supabase
+                    .from('cash_sessions')
+                    .select('*')
+                    .eq('business_id', business.id)
+                    .eq('status', 'open')
+                    .order('opened_at', { ascending: false })
+                    .limit(1);
+
+                if (data && data.length > 0) {
+                    console.log('[POS] Found existing open cash session in database. Restoring silently.');
+                    const session = data[0];
+                    // Fetch worker role for store
+                    const { data: workerData } = await supabase
+                        .from('workers')
+                        .select('*, roles(name)')
+                        .eq('id', session.worker_id)
+                        .maybeSingle();
+
+                    const workerRole = workerData?.roles?.name || workerData?.role || null;
+                    setCashSession(session, workerRole, isOwner, isSuperAdmin);
                 }
             }
         };
@@ -133,6 +165,7 @@ function App() {
             <HashRouter>
                 <Routes>
                     <Route path="/login" element={<LoginPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
                     <Route path="*" element={<Navigate to="/login" replace />} />
                 </Routes>
             </HashRouter>
@@ -200,6 +233,7 @@ function App() {
     return (
         <HashRouter>
             <ElectronTitleSync />
+            <UpdateNotification />
             <Routes>
                 {/* Special case for pending approval check as well */}
                 <Route path="/approval-pending" element={<ApprovalPendingPage />} />

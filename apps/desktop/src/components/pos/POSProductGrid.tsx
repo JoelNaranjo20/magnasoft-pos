@@ -154,11 +154,11 @@ export const POSProductGrid = () => {
 
                 if (servicesError) throw servicesError;
 
-                const formattedProducts: ProductItem[] = (productsData || []).map(p => ({
+                const formattedProducts: ProductItem[] = (productsData || []).map((p: any) => ({
                     ...p, service_type: 'PRODUCT'
                 }));
 
-                const formattedServices: ProductItem[] = (servicesData || []).map(s => ({
+                const formattedServices: ProductItem[] = (servicesData || []).map((s: any) => ({
                     ...s, service_type: 'SERVICE'
                 }));
 

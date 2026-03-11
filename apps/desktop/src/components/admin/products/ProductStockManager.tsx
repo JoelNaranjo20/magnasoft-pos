@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
+import { useCategories } from '../../../hooks/useCategories';
 import { Pagination } from '../../ui/Pagination';
 import { IconSelector } from '../../ui/IconSelector';
 // import type { Database } from '../../../types/supabase';
@@ -15,6 +16,10 @@ export const ProductStockManager = () => {
     const [search, setSearch] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+
+    // Business & Categories
+    const businessId = useBusinessStore((state) => state.id);
+    const { categories, loading: loadingCategories } = useCategories(businessId);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -33,7 +38,7 @@ export const ProductStockManager = () => {
         cost_price: '',
         stock: '',
         barcode: '',
-        category: 'Productos',
+        category_id: '',
         icon: 'package'
     });
 
@@ -105,7 +110,7 @@ export const ProductStockManager = () => {
             cost_price: (product.cost_price || 0).toString(),
             stock: (product.stock || 0).toString(),
             barcode: product.barcode || '',
-            category: product.category || 'Productos',
+            category_id: product.category_id || '',
             icon: product.icon || 'package'
         });
         setIsEditing(true);
@@ -119,7 +124,7 @@ export const ProductStockManager = () => {
             cost_price: '0',
             stock: '0',
             barcode: search,
-            category: 'Productos',
+            category_id: '',
             icon: 'package'
         });
         setIsEditing(true);
@@ -135,7 +140,7 @@ export const ProductStockManager = () => {
             cost_price: parseFloat(formData.cost_price) || 0,
             stock: parseInt(formData.stock) || 0,
             barcode: formData.barcode || null,
-            category: formData.category || 'Productos',
+            category_id: formData.category_id || null,
             business_id: useBusinessStore.getState().id,
             updated_by: user?.id,
             icon: formData.icon
@@ -239,7 +244,7 @@ export const ProductStockManager = () => {
                                         <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">{product.name}</td>
                                         <td className="px-6 py-4">
                                             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-md">
-                                                {product.category || 'Productos'}
+                                                {categories.find(c => c.id === product.category_id)?.name || product.category || 'Productos'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-slate-500 font-mono text-xs">{product.barcode || '-'}</td>
@@ -406,13 +411,15 @@ export const ProductStockManager = () => {
                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Categoría</label>
                                         <select
                                             className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-primary font-bold"
-                                            value={formData.category}
-                                            onChange={e => setFormData({ ...formData, category: e.target.value })}
+                                            value={formData.category_id}
+                                            onChange={e => setFormData({ ...formData, category_id: e.target.value })}
                                         >
-                                            <option value="Lavado">🧼 Lavado</option>
-                                            <option value="Serviteca">🛞 Serviteca</option>
-                                            <option value="Mecánica">🔧 Mecánica</option>
-                                            <option value="Productos">🛒 Productos</option>
+                                            <option value="">🛒 Productos (General)</option>
+                                            {categories.map(cat => (
+                                                <option key={cat.id} value={cat.id}>
+                                                    📁 {cat.name}
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
 

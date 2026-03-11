@@ -49,7 +49,7 @@ export const AdminDashboard = () => {
 
     const fetchPendingUsers = async () => {
         try {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('account_status', 'pending');

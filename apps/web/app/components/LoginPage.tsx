@@ -38,7 +38,11 @@ export default function LoginPage() {
         } else {
             const result = await login(email, password);
             if (!result.success) {
-                setError(result.error || 'Credenciales incorrectas');
+                let errorMessage = result.error || 'Credenciales incorrectas';
+                if (errorMessage.includes('Invalid login credentials')) {
+                    errorMessage = 'Credenciales de acceso inválidas. Verifica tu correo y contraseña.';
+                }
+                setError(errorMessage);
             }
         }
         setLoading(false);

@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
+import { useAuthStore } from '@shared/store/useAuthStore';
+
 
 export const OpenSessionModal = () => {
     const navigate = useNavigate();
@@ -88,11 +90,28 @@ export const OpenSessionModal = () => {
 
             if (existingSessions && existingSessions.length > 0) {
                 const session = existingSessions[0];
+
+                // Fetch worker role for existing session
+                const { data: workerData } = await supabase
+                    .from('workers')
+                    .select('*, roles(name)')
+                    .eq('id', session.worker_id)
+                    .single();
+
+                const workerRole = workerData?.roles?.name || workerData?.role || null;
+
+                // Determine if user is owner
+                const { profile, business: authBusiness } = useAuthStore.getState();
+                const isOwner = profile?.id && authBusiness?.owner_id && profile.id === authBusiness.owner_id;
+                const isSuperAdmin = profile?.role === 'super_admin' || profile?.saas_role === 'super_admin';
+
+                setCashSession(session, workerRole, isOwner, isSuperAdmin);
+
                 alert(
                     `Ya hay una caja abierta.\n\n` +
                     `ID: ${session.id}\n` +
                     `Abierta: ${new Date(session.opened_at).toLocaleString()}\n\n` +
-                    `Debe cerrar la caja actual antes de abrir una nueva.`
+                    `Se ha restaurado la sesión del trabajador con rol: ${workerRole || 'Sin Rol'}`
                 );
                 setLoading(false);
                 return;
@@ -100,6 +119,13 @@ export const OpenSessionModal = () => {
 
             // 2. Create new session if no open session exists
             const startAmount = parseFloat(amount);
+            const selectedWorker = workers.find(w => w.id === selectedWorkerId);
+            const workerRole = selectedWorker?.roles?.name || selectedWorker?.role || null;
+
+            // Determine if user is owner
+            const { profile, business: authBusiness } = useAuthStore.getState();
+            const isOwner = profile?.id && authBusiness?.owner_id && profile.id === authBusiness.owner_id;
+            const isSuperAdmin = profile?.role === 'super_admin' || profile?.saas_role === 'super_admin';
 
             const { data, error } = await (supabase as any)
                 .from('cash_sessions')
@@ -115,7 +141,9 @@ export const OpenSessionModal = () => {
 
             if (error) throw error;
 
-            setCashSession(data);
+            setCashSession(data, workerRole, isOwner, isSuperAdmin);
+
+
         } catch (error: any) {
             console.error('Error opening session:', error);
             alert(`Error al abrir la caja: ${error.message || JSON.stringify(error)}`);

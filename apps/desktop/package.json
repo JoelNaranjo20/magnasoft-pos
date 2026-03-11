@@ -1,7 +1,13 @@
 {
-  "name": "magnasoft",
+  "name": "magnasoft-pos",
   "private": true,
-  "version": "1.0.7",
+  "version": "1.0.10",
+  "description": "Serviteca POS - Sistema de punto de venta",
+  "author": "JoelNaranjo20",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JoelNaranjo20/magnasoft-pos"
+  },
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -9,13 +15,15 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:compile": "tsc -p tsconfig.electron.json",
-    "electron:dev": "concurrently \"pnpm dev\" \"wait-on tcp:5173 && pnpm electron:compile && pnpm cross-env NODE_ENV=development electron .\"",
-    "electron:build": "pnpm build && pnpm electron:compile && electron-builder"
+    "electron:dev": "concurrently \"pnpm dev\" \"wait-on tcp:5180 && pnpm electron:compile && pnpm cross-env NODE_ENV=development electron .\"",
+    "electron:build": "pnpm build && pnpm electron:compile && electron-builder",
+    "electron:publish": "vite build && pnpm electron:compile && dotenv -e .env.local -- electron-builder --publish always"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^0.469.0",
     "node-machine-id": "^1.1.12",
     "react": "^19.2.0",
@@ -35,6 +43,7 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
+    "dotenv-cli": "^11.0.0",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "eslint": "^9.39.1",

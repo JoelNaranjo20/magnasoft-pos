@@ -7,7 +7,7 @@ import { Grid } from 'lucide-react';
 export const CategoryTabs = () => {
     // 1. Obtener datos
     const businessId = useBusinessStore(state => state.id);
-    const { categories, loading } = useCategories(businessId);
+    const { categories, loading } = useCategories(businessId || undefined);
     const { activeCategoryId, setActiveCategoryId } = useCartStore();
 
     if (loading) return <div className="h-14 bg-gray-50 animate-pulse w-full mb-2 rounded-lg" />;

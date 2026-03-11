@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '@shared/store/useAuthStore';
 
@@ -8,28 +8,95 @@ export const LoginPage = () => {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+
+    useEffect(() => {
+        const loadCredentials = async () => {
+            if (window.electronAPI) {
+                const svEmail = await window.electronAPI.storageGet('sv_login_email');
+                const svPass = await window.electronAPI.storageGet('sv_login_password');
+                if (svEmail) setEmail(svEmail as string);
+                if (svPass) setPassword(svPass as string);
+            } else {
+                const svEmail = localStorage.getItem('sv_login_email');
+                const svPass = localStorage.getItem('sv_login_password');
+                if (svEmail) setEmail(svEmail);
+                if (svPass) setPassword(svPass);
+            }
+        };
+        loadCredentials();
+    }, []);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setSuccessMsg('');
 
         try {
+            const cleanEmail = email.trim();
             const { data, error: authError } = await supabase.auth.signInWithPassword({
-                email,
+                email: cleanEmail,
                 password
             });
 
             if (authError) throw authError;
 
             if (data.user) {
+                // Persistent storage of credentials
+                if (window.electronAPI) {
+                    await window.electronAPI.storageSet('sv_login_email', cleanEmail);
+                    await window.electronAPI.storageSet('sv_login_password', password);
+                } else {
+                    localStorage.setItem('sv_login_email', cleanEmail);
+                    localStorage.setItem('sv_login_password', password);
+                }
+
                 // Successful login, update global state
                 await useAuthStore.getState().checkSession();
                 // The App interaction will automatically redirect due to !user becoming false
             }
         } catch (err: any) {
             console.error('Login error:', err);
-            setError(err.message || 'Error al iniciar sesión');
+            let message = '';
+            if (typeof err === 'string') {
+                message = err;
+            } else if (err?.message) {
+                message = err.message;
+            } else if (err?.error_description) {
+                message = err.error_description;
+            } else {
+                message = 'Error al iniciar sesión';
+            }
+
+            if (message.toLowerCase().includes('invalid login credentials')) {
+                message = 'Credenciales de acceso inválidas. Verifica tu correo y contraseña.';
+            }
+
+            setError(message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResetPassword = async () => {
+        if (!email) {
+            setError('Por favor, ingresa tu correo para enviar el enlace de recuperación.');
+            return;
+        }
+        setLoading(true);
+        setError('');
+        setSuccessMsg('');
+        try {
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: 'https://magnasoft-pos-web.vercel.app/reset-password'
+            });
+            if (resetError) throw resetError;
+            setSuccessMsg('Enlace enviado. Revisa tu bandeja de entrada o spam.');
+            setError('');
+        } catch (err: any) {
+            setError(err.message || 'No se pudo enviar el correo de recuperación.');
         } finally {
             setLoading(false);
         }
@@ -64,22 +131,48 @@ export const LoginPage = () => {
                                 className="w-full px-5 py-4 bg-slate-800/50 border border-slate-700 focus:border-sky-500 rounded-2xl outline-none transition-all text-white font-medium placeholder:text-slate-600"
                             />
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-1 relative">
                             <label className="block ml-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">Contraseña</label>
-                            <input
-                                type="password"
-                                required
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                placeholder="••••••••"
-                                className="w-full px-5 py-4 bg-slate-800/50 border border-slate-700 focus:border-sky-500 rounded-2xl outline-none transition-all text-white font-medium placeholder:text-slate-600"
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    required
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    className="w-full px-5 py-4 bg-slate-800/50 border border-slate-700 focus:border-sky-500 rounded-2xl outline-none transition-all text-white font-medium placeholder:text-slate-600 pr-12"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors flex items-center justify-center h-full"
+                                >
+                                    <span className="material-symbols-outlined">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                                </button>
+                            </div>
                         </div>
+                    </div>
+
+                    <div className="flex justify-end mt-2">
+                        <button
+                            type="button"
+                            onClick={handleResetPassword}
+                            disabled={loading}
+                            className="text-[11px] font-bold text-sky-400 hover:text-sky-300 transition-colors uppercase tracking-widest disabled:opacity-50"
+                        >
+                            ¿Cambiar Contraseña?
+                        </button>
                     </div>
 
                     {error && (
                         <div className="text-rose-500 text-center text-xs font-bold bg-rose-500/10 py-3 px-4 rounded-xl animate-shake">
                             {error}
+                        </div>
+                    )}
+
+                    {successMsg && (
+                        <div className="text-emerald-400 text-center text-xs font-bold bg-emerald-500/10 py-3 px-4 rounded-xl">
+                            {successMsg}
                         </div>
                     )}
 

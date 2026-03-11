@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
@@ -16,6 +17,17 @@ export const PrePOSLayout = ({ children }: { children?: React.ReactNode }) => {
     const navigate = useNavigate();
     const { name: businessName, logoUrl } = useBusinessStore();
     const { signOut } = useAuthStore();
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.key.toLowerCase() === 'u') {
+                e.preventDefault();
+                signOut();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [signOut]);
 
     const isActive = (path: string) => location.pathname === path;
 
@@ -71,13 +83,6 @@ export const PrePOSLayout = ({ children }: { children?: React.ReactNode }) => {
                     >
                         <span className="material-symbols-outlined !text-[18px]">point_of_sale</span>
                         <span className="hidden sm:inline">Caja / POS</span>
-                    </button>
-                    <button
-                        onClick={signOut}
-                        className="flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/10 rounded-lg transition-all text-xs font-bold"
-                    >
-                        <span className="material-symbols-outlined !text-[18px]">logout</span>
-                        <span className="hidden md:inline">Salir</span>
                     </button>
                 </div>
             </header>

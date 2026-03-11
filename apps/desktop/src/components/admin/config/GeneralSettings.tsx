@@ -44,6 +44,17 @@ export const GeneralSettings = () => {
     const [selectedPrinter, setSelectedPrinter] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Data Reset State
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [resetOptions, setResetOptions] = useState({
+        sales: false,
+        customers: false,
+        products: false,
+        workers: false
+    });
+    const [resetConfirmation, setResetConfirmation] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
+
     const availableModules = [
         { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', description: 'Vista general y estadísticas financieras.' },
         { id: 'sales', label: 'Ventas', icon: 'receipt_long', description: 'Historial detallado de todas las transacciones.' },
@@ -200,6 +211,50 @@ export const GeneralSettings = () => {
             alert('Error al guardar: ' + error.message);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleResetData = async () => {
+        if (resetConfirmation !== 'ELIMINAR') {
+            alert('Debes escribir la palabra ELIMINAR para confirmar.');
+            return;
+        }
+
+        const isDeleteAll = resetOptions.sales && resetOptions.customers && resetOptions.products && resetOptions.workers;
+
+        if (!resetOptions.sales && !resetOptions.customers && !resetOptions.products && !resetOptions.workers && !isDeleteAll) {
+            alert('Debes seleccionar al menos un módulo para eliminar.');
+            return;
+        }
+
+        setIsResetting(true);
+        try {
+            const businessId = useBusinessStore.getState().id;
+
+            const { error } = await supabase.rpc('reset_business_data_modules', {
+                p_business_id: businessId,
+                p_delete_sales: resetOptions.sales,
+                p_delete_customers: resetOptions.customers,
+                p_delete_products: resetOptions.products,
+                p_delete_workers: resetOptions.workers,
+                p_delete_all: isDeleteAll
+            });
+
+            if (error) throw error;
+
+            alert('Datos eliminados correctamente.');
+            setShowResetModal(false);
+            setResetConfirmation('');
+            setResetOptions({ sales: false, customers: false, products: false, workers: false });
+
+            // Opcional: recargar la página para limpiar estados globales cacheados
+            window.location.reload();
+
+        } catch (error: any) {
+            console.error('Error al reiniciar datos:', error);
+            alert('Error al reiniciar datos: ' + error.message);
+        } finally {
+            setIsResetting(false);
         }
     };
 
@@ -482,6 +537,27 @@ export const GeneralSettings = () => {
                 </p>
             </div >
 
+            {/* Zona Peligrosa (Data Reset) */}
+            <div className="border-t border-red-100 dark:border-red-900/30 pt-8 mt-8">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 bg-red-100 dark:bg-red-900/30 rounded-xl flex items-center justify-center text-red-600 dark:text-red-400">
+                            <span className="material-symbols-outlined !text-3xl">warning</span>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-red-600 dark:text-red-400">Zona Peligrosa</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Restablecimiento y limpieza de datos del negocio.</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setShowResetModal(true)}
+                        className="px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg font-bold text-sm transition-colors border border-red-200 dark:border-red-800"
+                    >
+                        Gestionar Limpieza de Datos
+                    </button>
+                </div>
+            </div>
+
             <div className="pt-8 mt-8 border-t border-slate-100 dark:border-slate-700/50">
                 <button
                     onClick={handleSave}
@@ -498,6 +574,120 @@ export const GeneralSettings = () => {
                     )}
                 </button>
             </div>
+
+            {/* Modal de Reset de Datos */}
+            {showResetModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700">
+                        <div className="p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="h-10 w-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center text-red-600 dark:text-red-400">
+                                    <span className="material-symbols-outlined">delete_forever</span>
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Limpiar Datos</h3>
+                            </div>
+
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                                Selecciona qué módulos deseas reiniciar. Esta acción es <strong>permanente e irreversible</strong>.
+                            </p>
+
+                            <div className="space-y-3 mb-6">
+                                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.sales}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, sales: e.target.checked })}
+                                        className="w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Ventas y Cajas</span>
+                                    </div>
+                                </label>
+
+                                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.customers}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, customers: e.target.checked })}
+                                        className="w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Directorio de Clientes</span>
+                                    </div>
+                                </label>
+
+                                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.products}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, products: e.target.checked })}
+                                        className="w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Catálogo de Productos</span>
+                                    </div>
+                                </label>
+
+                                <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.workers}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, workers: e.target.checked })}
+                                        className="w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Trabajadores (Excepto Dueño)</span>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <button
+                                onClick={() => setResetOptions({ sales: true, customers: true, products: true, workers: true })}
+                                className="w-full mb-6 py-2 border-2 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm"
+                            >
+                                Seleccionar Todo (Factory Reset)
+                            </button>
+
+                            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 mb-6">
+                                <label className="text-xs font-bold text-red-800 dark:text-red-200 mb-2 block">
+                                    Para confirmar, escribe "ELIMINAR"
+                                </label>
+                                <input
+                                    type="text"
+                                    value={resetConfirmation}
+                                    onChange={(e) => setResetConfirmation(e.target.value)}
+                                    placeholder="ELIMINAR"
+                                    className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-red-200 dark:border-red-800 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-slate-900 dark:text-white"
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowResetModal(false);
+                                        setResetConfirmation('');
+                                        setResetOptions({ sales: false, customers: false, products: false, workers: false });
+                                    }}
+                                    className="flex-1 py-3 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleResetData}
+                                    disabled={resetConfirmation !== 'ELIMINAR' || isResetting}
+                                    className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isResetting ? (
+                                        <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                    ) : (
+                                        'Confirmar Borrado'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

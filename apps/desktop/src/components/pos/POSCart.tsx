@@ -13,6 +13,7 @@ import { EditPriceModal } from '../modals/EditPriceModal';
 import { SimpleCustomerModal } from '../modals/SimpleCustomerModal';
 import { POSCustomerSection } from './POSCustomerSection';
 import { supabase } from '../../lib/supabase';
+import { useTableStore } from '../../store/useTableStore';
 import {
     Package, Scissors, Coffee, Shirt,
     Zap, Star, Gift, Tag, ShoppingBag, Briefcase,
@@ -71,12 +72,19 @@ export const POSCart = () => {
         selectedCustomer,
         selectedVehicle,
         customerSelectionSource,
-        setCustomer
+        setCustomer,
+        metadata,
+        setMetadata,
+        activeCartId
     } = useCartStore();
     const { business } = useAuthStore();
+    const isRestaurant = business?.business_type === 'restaurant';
     // Module-based feature flags — replaces hardcoded business_type checks
     const hasVehicles = useModule('vehicles');
     const hasCommissions = useModule('commissions');
+
+    // Restaurant: customer section collapsed by default, toggled via 'Opciones Avanzadas'
+    const [showCustomerSection, setShowCustomerSection] = useState(false);
 
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -213,11 +221,25 @@ export const POSCart = () => {
             }
         };
 
+        const handleSelectTable = (e: CustomEvent) => {
+            const { table } = e.detail;
+            if (table) {
+                // Belt-and-suspenders: ensure cart is switched to this table's cart
+                useCartStore.getState().setActiveCart(table.id);
+                setMetadata({
+                    table_id: table.id,
+                    table_name: table.name
+                });
+            }
+        };
+
         window.addEventListener('pos-search-plate', handleSearchPlate as EventListener);
         window.addEventListener('pos-add-to-cart-from-queue', handleAddToCartFromQueue as EventListener);
+        window.addEventListener('pos-select-table', handleSelectTable as EventListener);
         return () => {
             window.removeEventListener('pos-search-plate', handleSearchPlate as EventListener);
             window.removeEventListener('pos-add-to-cart-from-queue', handleAddToCartFromQueue as EventListener);
+            window.removeEventListener('pos-select-table', handleSelectTable as EventListener);
         };
     }, []);
 
@@ -311,8 +333,36 @@ export const POSCart = () => {
         }
     };
 
-    const handleCustomerSelect = (customer: Customer, vehicle: Vehicle | null, source: 'quick_search' | 'modal' = 'modal') => {
-        setCustomer(customer, vehicle, source);
+    const handleCustomerSelect = async (customer: Customer, vehicle: Vehicle | null, source: 'quick_search' | 'modal' = 'modal') => {
+        let finalVehicle = vehicle;
+
+        // Auto-fetch vehicle if they selected the customer by name instead of plate
+        if (hasVehicles && !vehicle && customer && customer.id !== 'anonymous') {
+            try {
+                const { data } = await supabase
+                    .from('vehicles')
+                    .select('*')
+                    .eq('customer_id', customer.id);
+
+                if (data && data.length === 1) {
+                    // Only one vehicle? Auto-select it
+                    finalVehicle = data[0];
+                } else if (data && data.length > 1) {
+                    // Multiple vehicles? We must ask the user which one they want
+                    // Set the customer but keep vehicle null, and open the vehicle selection modal
+                    setCustomer(customer, null, source);
+                    setSearchQuery('');
+                    setShowResults(false);
+                    setSearchResults([]);
+                    setIsCustomerModalOpen(true);
+                    return;
+                }
+            } catch (err) {
+                console.error("Error auto-fetching vehicle for customer:", err);
+            }
+        }
+
+        setCustomer(customer, finalVehicle, source);
         setSearchQuery('');
         setShowResults(false);
         setSearchResults([]);
@@ -326,6 +376,11 @@ export const POSCart = () => {
     };
 
     const handlePayment = () => {
+        // Restaurant: no customer required — go straight to payment
+        if (isRestaurant) {
+            setIsPaymentModalOpen(true);
+            return;
+        }
         // If no customer selected, open customer modal first
         if (!selectedCustomer) {
             setIsCustomerModalOpen(true);
@@ -414,7 +469,7 @@ export const POSCart = () => {
             : 'Vendedor / Responsable';
 
     return (
-        <aside className="w-[380px] xl:w-[420px] flex flex-col bg-surface-light dark:bg-surface-dark border-l border-slate-200 dark:border-slate-800 shadow-2xl z-30 relative">
+        <aside className="w-[350px] lg:w-[400px] xl:w-[450px] flex-none flex flex-col bg-surface-light dark:bg-surface-dark border-l border-slate-200 dark:border-slate-800 shadow-2xl z-30 relative">
             {hasVehicles ? (
                 <CustomerVehicleModal
                     isOpen={isCustomerModalOpen}
@@ -465,41 +520,116 @@ export const POSCart = () => {
                 />
             )}
 
-            {/* Customer Selector */}
-            <POSCustomerSection
-                selectedCustomer={customerSelectionSource === 'quick_search' ? selectedCustomer : null}
-                selectedVehicle={selectedVehicle}
-                searchQuery={searchQuery}
-                searchResults={searchResults}
-                showResults={showResults}
-                isSearching={isSearching}
-                last30DaysVisits={last30DaysVisits}
-                loyaltySettings={loyaltySettings}
-                onSearchChange={setSearchQuery}
-                onSearchKeyDown={handleSearchKeyDown}
-                onSearchFocus={() => searchResults.length > 0 && setShowResults(true)}
-                onResultClick={(result) => {
-                    if (result.type === 'customer') {
-                        handleCustomerSelect(result.data, null, 'quick_search');
-                    } else {
-                        handleCustomerSelect(result.data.customer, result.data, 'quick_search');
-                    }
-                    setShowResults(false);
-                    setSearchResults([]);
-                }}
-                onCloseResults={() => {
-                    setShowResults(false);
-                    setSearchResults([]);
-                }}
-                onCustomerSelect={handleCustomerSelect}
-                onClearCustomer={handleClearCustomer}
-                onOpenCustomerModal={() => setIsCustomerModalOpen(true)}
-                onQuickClient={handleQuickClient}
-                onOpenHistory={(tab) => {
-                    setHistoryTab(tab);
-                    setIsHistoryModalOpen(true);
-                }}
-            />
+            {/* ── RESTAURANT: Back-to-Patio header strip ── */}
+            {isRestaurant && metadata?.table_id && (
+                <div className="flex-none flex items-center justify-between px-4 py-2.5 bg-primary text-white animate-in slide-in-from-top duration-300">
+                    <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined !text-[20px]">table_restaurant</span>
+                        <div className="flex flex-col leading-tight">
+                            <span className="text-[9px] font-black uppercase tracking-[0.15em] opacity-75">Cuenta de</span>
+                            <span className="text-sm font-black">{metadata.table_name || 'Mesa'}</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => {
+                            window.dispatchEvent(new Event('pos-back-to-patio'));
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
+                    >
+                        <span className="material-symbols-outlined !text-[16px]">arrow_back</span>
+                        Volver al Patio
+                    </button>
+                </div>
+            )}
+
+            {/* ── RESTAURANT: Opciones Avanzadas toggle (customer section) ── */}
+            {isRestaurant ? (
+                <div className="flex-none">
+                    <button
+                        onClick={() => setShowCustomerSection(v => !v)}
+                        className="w-full flex items-center justify-between px-5 py-2 border-b border-slate-100 dark:border-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                    >
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                            {selectedCustomer ? `🧑 ${selectedCustomer.name}` : 'Vincular Cliente (Opcional)'}
+                        </span>
+                        <span className={`material-symbols-outlined !text-[18px] transition-transform ${showCustomerSection ? 'rotate-180' : ''}`}>expand_more</span>
+                    </button>
+                    {showCustomerSection && (
+                        <POSCustomerSection
+                            selectedCustomer={customerSelectionSource === 'quick_search' ? selectedCustomer : null}
+                            selectedVehicle={selectedVehicle}
+                            searchQuery={searchQuery}
+                            searchResults={searchResults}
+                            showResults={showResults}
+                            isSearching={isSearching}
+                            last30DaysVisits={last30DaysVisits}
+                            loyaltySettings={loyaltySettings}
+                            onSearchChange={setSearchQuery}
+                            onSearchKeyDown={handleSearchKeyDown}
+                            onSearchFocus={() => searchResults.length > 0 && setShowResults(true)}
+                            onResultClick={(result) => {
+                                if (result.type === 'customer') {
+                                    handleCustomerSelect(result.data, null, 'quick_search');
+                                } else {
+                                    handleCustomerSelect(result.data.customer, result.data, 'quick_search');
+                                }
+                                setShowResults(false);
+                                setSearchResults([]);
+                            }}
+                            onCloseResults={() => {
+                                setShowResults(false);
+                                setSearchResults([]);
+                            }}
+                            onCustomerSelect={handleCustomerSelect}
+                            onClearCustomer={handleClearCustomer}
+                            onOpenCustomerModal={() => setIsCustomerModalOpen(true)}
+                            onQuickClient={handleQuickClient}
+                            onOpenHistory={(tab) => {
+                                setHistoryTab(tab);
+                                setIsHistoryModalOpen(true);
+                            }}
+                        />
+                    )}
+                </div>
+            ) : (
+                /* ── NON-RESTAURANT: always-visible customer + table section ── */
+                <div className="flex flex-col gap-2">
+                    <POSCustomerSection
+                        selectedCustomer={customerSelectionSource === 'quick_search' ? selectedCustomer : null}
+                        selectedVehicle={selectedVehicle}
+                        searchQuery={searchQuery}
+                        searchResults={searchResults}
+                        showResults={showResults}
+                        isSearching={isSearching}
+                        last30DaysVisits={last30DaysVisits}
+                        loyaltySettings={loyaltySettings}
+                        onSearchChange={setSearchQuery}
+                        onSearchKeyDown={handleSearchKeyDown}
+                        onSearchFocus={() => searchResults.length > 0 && setShowResults(true)}
+                        onResultClick={(result) => {
+                            if (result.type === 'customer') {
+                                handleCustomerSelect(result.data, null, 'quick_search');
+                            } else {
+                                handleCustomerSelect(result.data.customer, result.data, 'quick_search');
+                            }
+                            setShowResults(false);
+                            setSearchResults([]);
+                        }}
+                        onCloseResults={() => {
+                            setShowResults(false);
+                            setSearchResults([]);
+                        }}
+                        onCustomerSelect={handleCustomerSelect}
+                        onClearCustomer={handleClearCustomer}
+                        onOpenCustomerModal={() => setIsCustomerModalOpen(true)}
+                        onQuickClient={handleQuickClient}
+                        onOpenHistory={(tab) => {
+                            setHistoryTab(tab);
+                            setIsHistoryModalOpen(true);
+                        }}
+                    />
+                </div>
+            )}
 
             {/* Cart Items List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent">

@@ -1,5 +1,5 @@
 {
-	"name": "magnasoft-monorepo",
+	"name": "magnasoft",
 	"version": "0.1.0",
 	"private": true,
 	"packageManager": "pnpm@10.2.0",

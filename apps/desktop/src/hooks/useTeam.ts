@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import type { Database } from '../types/supabase';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
-type Invitation = Database['public']['Tables']['invitations']['Row'];
+type Invitation = any;
 
 export const useTeam = () => {
     const [members, setMembers] = useState<Profile[]>([]);
@@ -34,7 +34,7 @@ export const useTeam = () => {
         setLoading(true);
         setError(null);
         try {
-            const { data, error: fetchError } = await supabase
+            const { data, error: fetchError } = await (supabase as any)
                 .from('invitations')
                 .select('*')
                 .order('created_at', { ascending: false });
@@ -67,7 +67,7 @@ export const useTeam = () => {
             // Generate a simple token (in a real app, this would be more secure)
             const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-            const { error: inviteError } = await (supabase.from('invitations') as any)
+            const { error: inviteError } = await (supabase as any).from('invitations')
                 .insert([{
                     email,
                     role,
@@ -93,7 +93,7 @@ export const useTeam = () => {
         setLoading(true);
         setError(null);
         try {
-            const { error: revokeError } = await supabase
+            const { error: revokeError } = await (supabase as any)
                 .from('invitations')
                 .delete()
                 .eq('id', id);

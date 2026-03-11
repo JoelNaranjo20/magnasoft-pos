@@ -4,6 +4,14 @@
     "directories": {
         "output": "release"
     },
+    "publish": [
+        {
+            "provider": "github",
+            "owner": "JoelNaranjo20",
+            "repo": "magnasoft-pos",
+            "releaseType": "release"
+        }
+    ],
     "files": [
         "dist/**/*",
         "dist-electron/**/*"

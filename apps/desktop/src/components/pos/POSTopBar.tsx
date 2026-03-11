@@ -172,11 +172,14 @@ export const POSTopBar = () => {
                                 )}
                             </div>
                             <div className="flex flex-col select-none">
-                                <span className="text-[10px] text-slate-400 font-black uppercase tracking-tighter leading-none">Administrador</span>
+                                <span className="text-[10px] text-slate-400 font-black uppercase tracking-tighter leading-none">
+                                    {useSessionStore.getState().workerRole || 'Administrador'}
+                                </span>
                                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200 leading-tight">
-                                    {user?.full_name || user?.email?.split('@')[0] || 'Administrador'}
+                                    {user?.full_name || user?.email?.split('@')[0] || 'Cajero'}
                                 </span>
                             </div>
+
                         </div>
 
                         {/* Queue Trigger - Only if module enabled */}

@@ -32,7 +32,6 @@ export const CloseSessionModal = () => {
     const [digitalCount, setDigitalCount] = useState(0);
     const [commissionsPaid, setCommissionsPaid] = useState(0);
     const [commissionsPending, setCommissionsPending] = useState(0);
-    const [baseToLeave, setBaseToLeave] = useState<number>(100000); // Default $100k
 
     // Fetch expected total and commissions
     useEffect(() => {
@@ -163,7 +162,7 @@ export const CloseSessionModal = () => {
             }
 
             // 2. Close session with ALL data in one update
-            const notesText = `[CERRADO POR: ${user?.name || user?.email || 'Admin'}] [BASE DEJADA: ${formatCurrency(baseToLeave)} | TRANSF: ${formatCurrency(manualDigitalAmount)} | DIFF: ${formatCurrency(digitalDifference)}] ${notes}`;
+            const notesText = `[CERRADO POR: ${user?.name || user?.email || 'Admin'}] [TRANSF: ${formatCurrency(manualDigitalAmount)} | DIFF: ${formatCurrency(digitalDifference)}] ${notes}`;
 
             const { error: sessionError } = await (supabase as any)
                 .from('cash_sessions')
@@ -185,7 +184,7 @@ export const CloseSessionModal = () => {
             }
 
             // 3. Automatically record the transfer in Central Cash
-            const netToTransfer = totalCounted - baseToLeave;
+            const netToTransfer = totalCounted;
             if (netToTransfer > 0) {
                 const { error: centralError } = await (supabase as any)
                     .from('central_cash_movements')
@@ -478,32 +477,11 @@ export const CloseSessionModal = () => {
                                 <span className="material-symbols-outlined text-primary/40 text-3xl">payments</span>
                             </div>
 
-                            {/* Card: Base to Leave for Tomorrow */}
-                            <div className="flex flex-col p-4 bg-slate-900 dark:bg-slate-800 text-white border rounded-xl border-slate-700 shadow-lg">
-                                <div className="flex justify-between items-center mb-3">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Base para Mañana</span>
-                                    <span className="material-symbols-outlined text-slate-500 text-sm">savings</span>
-                                </div>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-slate-500">$</span>
-                                    <input
-                                        type="number"
-                                        value={baseToLeave || ''}
-                                        onChange={(e) => setBaseToLeave(Number(e.target.value))}
-                                        className="w-full pl-8 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-primary font-black text-xl tabular-nums text-white"
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <p className="mt-2 text-[9px] font-bold text-slate-500 lowercase opacity-80 italic text-center">
-                                    este monto se queda en el cajón físico
-                                </p>
-                            </div>
-
                             {/* Card: Resulting Transfer to Central */}
                             <div className="flex items-center justify-between p-4 bg-emerald-500 text-white rounded-xl shadow-xl shadow-emerald-500/20 animate-in zoom-in-95 duration-300">
                                 <div className="flex flex-col">
                                     <span className="text-[10px] font-black uppercase tracking-wider opacity-80 leading-none mb-1">Entregar a Admin</span>
-                                    <span className="text-2xl font-black tabular-nums">{formatCurrency(totalCounted - baseToLeave)}</span>
+                                    <span className="text-2xl font-black tabular-nums">{formatCurrency(totalCounted)}</span>
                                 </div>
                                 <div className="size-10 rounded-lg bg-white/20 flex items-center justify-center">
                                     <span className="material-symbols-outlined !text-2xl">account_balance</span>

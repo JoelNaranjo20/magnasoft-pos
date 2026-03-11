@@ -6,13 +6,7 @@ import * as LucideIcons from 'lucide-react';
 
 type IconName = keyof typeof LucideIcons;
 
-interface KPIWidget {
-    type: 'kpi';
-    title: string;
-    icon: string;
-    value: number | string;
-    data?: any;
-}
+
 
 interface DashboardWidget {
     type: string;
@@ -33,8 +27,8 @@ export const DynamicOperationalWidgets = () => {
         const loadWidgets = async () => {
             setLoading(true);
             try {
-                const { data, error } = await supabase
-                    .rpc('get_dashboard_metrics', { p_business_id: businessId });
+                const { data, error } = await (supabase.rpc as any)
+                    ('get_dashboard_metrics', { p_business_id: businessId });
 
                 if (error) {
                     console.error('Error loading dashboard metrics:', error);
@@ -86,7 +80,7 @@ export const DynamicOperationalWidgets = () => {
 
     return (
         <div className="space-y-6">
-            {widgets.map((widget: KPIWidget, idx) => {
+            {widgets.map((widget: any, idx) => {
                 // Extract value from data or fallback to widget.value
                 let displayValue = widget.data ?? widget.value ?? 0;
 

@@ -67,11 +67,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     setLoading: (isLoading) => set({ isLoading }),
 
     checkSession: async () => {
-        console.log('[Auth] Starting checkSession with Safety Timeout (5s)...');
+        console.log('[Auth] Starting checkSession with Safety Timeout (15s)...');
         set({ isLoading: true });
 
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('AUTH_TIMEOUT')), 5000)
+            setTimeout(() => reject(new Error('AUTH_TIMEOUT')), 15000)
         );
 
         try {
@@ -96,12 +96,11 @@ export const useAuthStore = create<AuthState>((set) => ({
                     console.log('[Auth] Session found for user:', session.user.id);
                     set({ user: session.user, isAuthenticated: true });
 
-                    // Fetch Profile + Business in one query (Explicit Foreign Key)
-                    // This avoids RLS issues and ensures atomic data fetch
-                    console.log('[Auth] Fetching profile with business relation...');
-                    const { data: profile, error: profileError } = await supabase
+                    console.log('[Auth] Fetching profile...');
+                    // Step 1: Fetch Profile 
+                    const { data: profileData, error: profileError } = await supabase
                         .from('profiles')
-                        .select('*, business:business_id(*)')
+                        .select('*')
                         .eq('id', session.user.id)
                         .single();
 
@@ -110,24 +109,37 @@ export const useAuthStore = create<AuthState>((set) => ({
                         throw profileError;
                     }
 
-                    if (profile) {
+                    if (profileData) {
+                        const profile = profileData as any;
                         console.log('[Auth] Profile found:', profile.full_name, '| Role:', profile.role);
-
-
-                        // Extract business from the foreign key relation
-                        // TypeScript doesn't know about the nested relation, so we cast
-                        const business = (profile as any).business;
-
-                        // Set profile in store
                         set({ profile });
 
+                        // Step 2: Extract or fetch business
+                        let businessData = null;
+                        
+                        if (profile.business_id) {
+                            console.log(`[Auth] Fetching business with ID: ${profile.business_id}`);
+                            const { data: bData, error: bError } = await supabase
+                                .from('business')
+                                .select('*')
+                                .eq('id', profile.business_id)
+                                .single();
+                                
+                            if (!bError && bData) {
+                                businessData = bData;
+                            } else {
+                                console.warn('[Auth] Failed to fetch business separately:', bError);
+                            }
+                        }
+
                         // Set business if it exists
-                        if (business) {
+                        if (businessData) {
+                            const business = businessData as any;
                             console.log('[Auth] Business found:', business.name, '| Status:', business.status);
-                            set({ business: business as any });
+                            set({ business });
 
                             // Sync to LocalStorage
-                            if (isBrowser) {
+                            if (typeof window !== 'undefined') {
                                 localStorage.setItem('sv_business_id', business.id);
                                 if (business.name) localStorage.setItem('sv_business_name', business.name);
                                 if (business.business_type) localStorage.setItem('sv_business_type', business.business_type);
@@ -138,13 +150,13 @@ export const useAuthStore = create<AuthState>((set) => ({
                                 id: business.id,
                                 name: business.name || 'Empresa',
                                 businessType: business.business_type || 'general',
-                                logoUrl: (business as any).logo_url // Cast because Business interface might miss logo_url
+                                logoUrl: business.logo_url
                             });
 
                             // Trigger full fetch to load the config JSON and real-time listeners
                             useBusinessStore.getState().fetchBusinessProfile();
                         } else {
-                            console.log('[Auth] No business linked to this profile.');
+                            console.log('[Auth] No active business data found for this profile.');
                             set({ business: null });
                         }
                     }

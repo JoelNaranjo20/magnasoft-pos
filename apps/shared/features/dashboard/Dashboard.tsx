@@ -327,7 +327,7 @@ export const FinanceDashboard = () => {
         }
     };
 
-    const maxCount = Math.max(stats.totalItems, stats.carWashes, stats.products, stats.alignments, stats.balancing, stats.oilChanges, stats.mechanics, 1);
+    // Use config to conditionally render things
 
     if (configLoading || loading) {
         return (

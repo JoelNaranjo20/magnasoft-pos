@@ -4,7 +4,7 @@ import { LayoutDashboard, BarChart3, List } from 'lucide-react';
 
 export const DashboardSettings = () => {
     const { config, toggleWidget, loading } = useDashboardConfig();
-    const business = useBusinessStore(state => state.business);
+    const business = useBusinessStore((state: any) => state.business);
 
     if (loading) return <div className="h-40 bg-gray-50 animate-pulse rounded-xl" />;
 

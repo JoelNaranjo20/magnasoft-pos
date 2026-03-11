@@ -55,15 +55,12 @@ export const POSCustomerSection = ({
     const { business } = useAuthStore();
     const businessType = business?.business_type || 'retail'; // Kept for fallback labels
 
-    const [tableNumber, setTableNumber] = useState<string>('');
-
     // Module-based feature flags — replaces hardcoded business_type checks
     const hasVehicles = useModule('vehicles');
     const hasTables = useModule('tables');
 
     // UI feature flags
     const showVehicle = hasVehicles;
-    const showTable = hasTables;
     const isFrequentCustomer = last30DaysVisits >= 3;
 
     // Determine placeholder text based on active modules
@@ -201,24 +198,7 @@ export const POSCustomerSection = ({
 
 
 
-            {/* Table Input (Restaurant) */}
-            {showTable && (
-                <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">
-                        Número de Mesa
-                    </label>
-                    <input
-                        type="number"
-                        className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:border-primary outline-none transition-all shadow-sm"
-                        placeholder="Ej: 5"
-                        value={tableNumber}
-                        onChange={(e) => {
-                            setTableNumber(e.target.value);
-                            useCartStore.getState().setMetadata({ table_number: parseInt(e.target.value) || undefined });
-                        }}
-                    />
-                </div>
-            )}
+
 
             {/* Customer Tags */}
             {selectedCustomer && (
@@ -273,12 +253,7 @@ export const POSCustomerSection = ({
 
 
 
-                    {tableNumber && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[11px] font-bold border border-amber-100 dark:border-amber-800">
-                            <span className="material-symbols-outlined !text-[14px]">table_restaurant</span>
-                            Mesa {tableNumber}
-                        </span>
-                    )}
+
                 </div>
             )}
         </div>

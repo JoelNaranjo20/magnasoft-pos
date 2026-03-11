@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useCartStore } from '../../store/useCartStore';
+import { useTableStore } from '../../store/useTableStore';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
@@ -60,6 +61,7 @@ const DEFAULT_COMMISSION_RULES = {
 
 export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: PaymentModalProps) => {
     const { items, total, clearCart, globalWorkerId, metadata: cartMetadata } = useCartStore();
+    const clearTableCart = useCartStore(state => state.clearTableCart);
     const { cashSession, user } = useSessionStore();
     const { business } = useAuthStore();
     const businessType = business?.business_type || 'retail'; // Kept for analytics metadata
@@ -394,8 +396,6 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
             return;
         }
 
-        // === MODULE-BASED VALIDATIONS ===
-
         // Vehicles module: Require vehicle selection ONLY if selling services and not public client
         const hasServices = items.some(i => i.type === 'service');
         if (hasVehicles && hasServices && customer?.name !== 'Público General' && !vehicle?.id) {
@@ -449,8 +449,9 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                     } : {}),
 
                     // Restaurant-specific (table module)
-                    ...(businessType === 'restaurant' ? {
-                        table_number: cartMetadata?.table_number
+                    ...(businessType === 'restaurant' || cartMetadata?.table_id ? {
+                        table_id: cartMetadata?.table_id,
+                        table_name: cartMetadata?.table_name
                     } : {}),
 
                     // Quick sale (anonymous customer)
@@ -646,6 +647,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                 method: method,
                 received: method === 'cash' ? numericAmount : total,
                 change: change,
+                table: cartMetadata?.table_name
             };
 
             if (window.electronAPI) {
@@ -657,13 +659,29 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                 }).catch(console.error);
             }
 
+            // 6. Release Table if applicable
+            if (cartMetadata?.table_id) {
+                await (supabase as any).rpc('update_table_status', {
+                    p_table_id: cartMetadata.table_id,
+                    p_status: 'available'
+                });
+                // Ensure visual selection is cleared
+                useTableStore.getState().setSelectedTable(null);
+            }
+
             setSuccess(true);
 
             // Dispatch event to refresh product grid with updated stock
             window.dispatchEvent(new Event('saleCompleted'));
 
             setTimeout(() => {
-                clearCart();
+                // For table carts: remove the table's cart entry and switch back to default.
+                // For default cart (Carwash / Walk-in): just reset the default cart.
+                if (cartMetadata?.table_id) {
+                    clearTableCart(cartMetadata.table_id);
+                } else {
+                    clearCart();
+                }
                 onClose();
             }, 2000);
 
