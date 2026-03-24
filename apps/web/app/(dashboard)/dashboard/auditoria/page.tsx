@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/app/context/AuthContext';
 
 export default function SessionHistoryPage() {
+    const { profile } = useAuth();
     const [sessions, setSessions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -19,8 +21,9 @@ export default function SessionHistoryPage() {
     const [activeMovementType, setActiveMovementType] = useState<'income' | 'expense'>('expense');
 
     useEffect(() => {
+        if (!profile?.business_id) return;
         fetchSessions();
-    }, []);
+    }, [profile?.business_id]);
 
     const fetchSessions = async () => {
         setLoading(true);
@@ -28,6 +31,7 @@ export default function SessionHistoryPage() {
             const { data: sessionsData, error: sessionsError } = await supabase
                 .from('cash_sessions')
                 .select('*')
+                .eq('business_id', profile?.business_id)
                 .order('opened_at', { ascending: false });
 
             if (sessionsError) throw sessionsError;

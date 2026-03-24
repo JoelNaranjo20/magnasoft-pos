@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 export interface CashSession {
     id: string;
@@ -13,6 +14,7 @@ export interface CashSession {
 }
 
 export function useActiveSession() {
+    const { profile } = useAuth();
     const [activeSession, setActiveSession] = useState<CashSession | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -21,6 +23,7 @@ export function useActiveSession() {
             const { data, error } = await supabase
                 .from('cash_sessions')
                 .select('*, worker:workers(name)')
+                .eq('business_id', profile?.business_id)
                 .is('closed_at', null)
                 .order('opened_at', { ascending: false })
                 .limit(1)
@@ -36,8 +39,9 @@ export function useActiveSession() {
     };
 
     useEffect(() => {
+        if (!profile?.business_id) return;
         fetchActiveSession();
-    }, []);
+    }, [profile?.business_id]);
 
     return { activeSession, loading, refresh: fetchActiveSession };
 }

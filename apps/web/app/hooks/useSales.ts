@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 export interface Sale {
     id: string;
@@ -28,6 +29,7 @@ export interface SaleItem {
 }
 
 export function useSales(filters?: { dateRange?: { start: Date, end: Date }, sessionId?: string }) {
+    const { profile } = useAuth();
     const [sales, setSales] = useState<Sale[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any>(null);
@@ -57,6 +59,7 @@ export function useSales(filters?: { dateRange?: { start: Date, end: Date }, ses
                         services(price)
                     )
                 `)
+                .eq('business_id', profile.business_id)
                 .order('created_at', { ascending: false });
 
             let startStr = filters?.dateRange?.start.toISOString();
@@ -102,7 +105,7 @@ export function useSales(filters?: { dateRange?: { start: Date, end: Date }, ses
             });
 
             // 2. Fetch Movements for Abonos and Expenses
-            let movementsQuery = supabase.from('cash_movements').select('*');
+            let movementsQuery = supabase.from('cash_movements').select('*').eq('business_id', profile.business_id);
             if (startStr && endStr) {
                 movementsQuery = movementsQuery.gte('created_at', startStr).lte('created_at', endStr);
             }
@@ -149,8 +152,9 @@ export function useSales(filters?: { dateRange?: { start: Date, end: Date }, ses
     };
 
     useEffect(() => {
+        if (!profile?.business_id) return;
         fetchSales();
-    }, [filters?.sessionId, filters?.dateRange?.start?.toISOString(), filters?.dateRange?.end?.toISOString()]);
+    }, [filters?.sessionId, filters?.dateRange?.start?.toISOString(), filters?.dateRange?.end?.toISOString(), profile?.business_id]);
 
     return {
         sales,

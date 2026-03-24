@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 
 export type ViewPeriod = 'day' | 'week' | 'month';
 
@@ -48,6 +49,7 @@ export interface DashboardData {
 }
 
 export function useDashboardData() {
+    const { profile } = useAuth();
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<any>(null);
@@ -60,6 +62,7 @@ export function useDashboardData() {
             const { data: activeSession } = await supabase
                 .from('cash_sessions')
                 .select('*')
+                .eq('business_id', profile?.business_id)
                 .is('closed_at', null)
                 .order('opened_at', { ascending: false })
                 .limit(1)
@@ -104,6 +107,7 @@ export function useDashboardData() {
                         service:services(price)
                     )
                 `)
+                .eq('business_id', profile?.business_id)
                 .gte('created_at', startDate.toISOString())
                 .lte('created_at', endDate.toISOString())
                 .order('created_at', { ascending: false });
@@ -192,6 +196,7 @@ export function useDashboardData() {
             const { data: movementsData } = await supabase
                 .from('cash_movements')
                 .select('*')
+                .eq('business_id', profile?.business_id)
                 .gte('created_at', startDate.toISOString())
                 .lte('created_at', endDate.toISOString());
 
@@ -229,12 +234,14 @@ export function useDashboardData() {
             const { data: activeServicesData } = await supabase
                 .from('service_queue')
                 .select('id')
+                .eq('business_id', profile?.business_id)
                 .eq('status', 'waiting');
 
             // 6. Fetch recent sessions
             const { data: sessions } = await supabase
                 .from('cash_sessions')
                 .select('*, worker:workers(name)')
+                .eq('business_id', profile?.business_id)
                 .order('opened_at', { ascending: false })
                 .limit(5);
 
@@ -300,10 +307,11 @@ export function useDashboardData() {
     };
 
     useEffect(() => {
+        if (!profile?.business_id) return;
         fetchData();
         const interval = setInterval(fetchData, 60000);
         return () => clearInterval(interval);
-    }, [viewPeriod]);
+    }, [viewPeriod, profile?.business_id]);
 
     return { data, loading, error, viewPeriod, setViewPeriod, refresh: fetchData };
 }
