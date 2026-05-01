@@ -13,6 +13,7 @@ import { FinancePage } from './pages/FinancePage';
 import { CustomersPage } from './pages/CustomersPage';
 import { AuditPage } from './pages/admin/AuditPage';
 import { ConfigPage } from './pages/admin/ConfigPage';
+import { InventoryPage } from './pages/inventory/InventoryPage';
 import { SetupWizard } from './pages/setup/SetupWizard';
 import { DesktopSetup } from './pages/setup/DesktopSetup';
 import { LoginPage } from './pages/auth/LoginPage';
@@ -32,15 +33,14 @@ import { supabase } from './lib/supabase';
 
 // POS Route Helper
 const POSRoute = () => {
-    const cashSession = useSessionStore((state) => state.cashSession);
-    const isClosing = useSessionStore((state) => state.isClosing);
+    const { cashSession, isClosing, loading, hasHydrated } = useSessionStore();
     const location = useLocation();
     const showCommissions = location.pathname === '/pos/commissions';
 
     return (
         <div className="h-full flex flex-col">
             <POSLayout />
-            {!cashSession && <OpenSessionModal />}
+            {!cashSession && hasHydrated && !loading && <OpenSessionModal />}
             {isClosing && <CloseSessionModal />}
             {showCommissions && cashSession && <CommissionPaymentModal />}
         </div>
@@ -77,49 +77,59 @@ function App() {
     // 1.1 verification of active cash session (Hydration Check)
     useEffect(() => {
         const verifyCashSession = async () => {
-            const { cashSession, setCashSession } = useSessionStore.getState();
+            const { cashSession, setCashSession, setLoading } = useSessionStore.getState();
             const { profile } = useAuthStore.getState();
             const isOwner = profile?.id && business?.owner_id && profile.id === business.owner_id;
             const isSuperAdmin = profile?.role === 'super_admin' || profile?.saas_role === 'super_admin';
 
-            if (cashSession?.id) {
-                console.log('[POS] Verifying active cash session:', cashSession.id);
-                const { data, error } = await supabase
-                    .from('cash_sessions')
-                    .select('id, status')
-                    .eq('id', cashSession.id)
-                    .single();
+            setLoading(true);
+            try {
+                let validSessionId = cashSession?.id;
 
-                if (error || !data || data.status !== 'open') {
-                    console.warn('[POS] Stale or invalid cash session detected. Purging local state.');
-                    setCashSession(null);
-                } else {
-                    console.log('[POS] Cash session verified successfully.');
+                if (validSessionId) {
+                    console.log('[POS] Verifying active cash session:', validSessionId);
+                    const { data, error } = await supabase
+                        .from('cash_sessions')
+                        .select('id, status')
+                        .eq('id', validSessionId)
+                        .single();
+
+                    if (error || !data || data.status !== 'open') {
+                        console.warn('[POS] Stale or invalid cash session detected. Purging local state.');
+                        validSessionId = null; // Will trigger search in next block
+                    } else {
+                        console.log('[POS] Cash session verified successfully.');
+                    }
                 }
-            } else if (business?.id) {
-                // If local state is empty, check if there's actually an open session in the database
-                // This happens if local storage was cleared or user logged out and in
-                const { data, error } = await supabase
-                    .from('cash_sessions')
-                    .select('*')
-                    .eq('business_id', business.id)
-                    .eq('status', 'open')
-                    .order('opened_at', { ascending: false })
-                    .limit(1);
+                
+                if (!validSessionId && business?.id) {
+                    // If local state is empty or stale, check if there's actually an open session in the database
+                    const { data, error } = await supabase
+                        .from('cash_sessions')
+                        .select('*')
+                        .eq('business_id', business.id)
+                        .eq('status', 'open')
+                        .order('opened_at', { ascending: false })
+                        .limit(1);
 
-                if (data && data.length > 0) {
-                    console.log('[POS] Found existing open cash session in database. Restoring silently.');
-                    const session = data[0];
-                    // Fetch worker role for store
-                    const { data: workerData } = await supabase
-                        .from('workers')
-                        .select('*, roles(name)')
-                        .eq('id', session.worker_id)
-                        .maybeSingle();
+                    if (data && data.length > 0) {
+                        console.log('[POS] Found existing open cash session in database. Restoring silently.');
+                        const session = data[0];
+                        // Fetch worker role for store
+                        const { data: workerData } = await supabase
+                            .from('workers')
+                            .select('*, roles(name)')
+                            .eq('id', session.worker_id)
+                            .maybeSingle();
 
-                    const workerRole = workerData?.roles?.name || workerData?.role || null;
-                    setCashSession(session, workerRole, isOwner, isSuperAdmin);
+                        const workerRole = workerData?.roles?.name || workerData?.role || null;
+                        setCashSession(session, workerRole, isOwner, isSuperAdmin);
+                    } else {
+                        if (cashSession) setCashSession(null);
+                    }
                 }
+            } finally {
+                setLoading(false);
             }
         };
 
@@ -245,6 +255,7 @@ function App() {
                     <Route path="/finance" element={<ConfigGuard moduleId="finance"><FinancePage /></ConfigGuard>} />
                     <Route path="/customers" element={<ConfigGuard moduleId="customers"><CustomersPage /></ConfigGuard>} />
                     <Route path="/audit" element={<ConfigGuard moduleId="audit"><AuditPage /></ConfigGuard>} />
+                    <Route path="/inventory" element={<ConfigGuard moduleId="inventory"><InventoryPage /></ConfigGuard>} />
                     <Route path="/config" element={<ConfigGuard moduleId="config"><ConfigPage /></ConfigGuard>} />
                 </Route>
 

@@ -9,6 +9,7 @@ const navItems = [
     { path: '/finance', label: 'Finanzas', icon: 'attach_money' },
     { path: '/customers', label: 'Clientes', icon: 'group' },
     { path: '/audit', label: 'Auditoría', icon: 'verified_user' },
+    { path: '/inventory', label: 'Inventario', icon: 'category' },
     { path: '/config', label: 'Configuración', icon: 'settings' },
 ];
 

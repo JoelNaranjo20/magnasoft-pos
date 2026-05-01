@@ -16,6 +16,7 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
     const [phone, setPhone] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [loyaltyOptOut, setLoyaltyOptOut] = useState(false);
 
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
@@ -65,7 +66,10 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
                     phone: phone.trim() || null,
                     email: null,
                     loyalty_points: 0,
-                    total_visits: 0
+                    total_visits: 0,
+                    metadata: {
+                        loyalty_opt_out: loyaltyOptOut
+                    }
                 })
                 .select()
                 .single();
@@ -76,6 +80,7 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
             onClose();
             setName('');
             setPhone('');
+            setLoyaltyOptOut(false);
         } catch (err: any) {
             console.error('Error creating customer:', err);
             setError(err.message || 'Error al crear cliente');
@@ -227,6 +232,20 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
                                     value={phone}
                                     onChange={(e) => setPhone(e.target.value)}
                                 />
+                            </div>
+
+                            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <div className="flex-1">
+                                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">Sin Puntos de Fidelización</h4>
+                                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Marcar si es Cliente Mayorista o "Público General".</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setLoyaltyOptOut(!loyaltyOptOut)}
+                                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${loyaltyOptOut ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                >
+                                    <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${loyaltyOptOut ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </button>
                             </div>
 
                             <div className="flex gap-3 pt-2">

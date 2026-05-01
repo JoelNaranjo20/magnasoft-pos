@@ -32,7 +32,7 @@ export const SaleDetailsModal = ({ isOpen, onClose, sale }: SaleDetailsModalProp
                                     date: new Date(sale.created_at).toLocaleString(),
                                     saleId: sale.id.slice(0, 8),
                                     customer: sale.customer?.name || 'Cliente General',
-                                    vehicle: sale.vehicle ? `${sale.vehicle.license_plate}` : null,
+                                    vehicle: sale.vehicle ? `${sale.vehicle.license_plate}` : (sale.metadata?.quick_sale_reference || null),
                                     items: sale.items?.map(i => ({
                                         name: i.name,
                                         qty: i.quantity,
@@ -80,16 +80,16 @@ export const SaleDetailsModal = ({ isOpen, onClose, sale }: SaleDetailsModalProp
                                 {sale.customer?.name || 'Cliente General'}
                             </div>
                         </div>
-                        {sale.vehicle && (
+                        {(sale.vehicle || sale.metadata?.quick_sale_reference) && (
                             <div className="space-y-1">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vehículo</p>
                                 <div className="flex items-center gap-2">
                                     <div className="px-2 py-1 bg-slate-900 border-2 border-slate-700 rounded-lg text-xs font-black text-white flex flex-col items-center justify-center relative overflow-hidden min-w-[70px]">
                                         <div className="absolute top-0 left-0 right-0 h-1 bg-yellow-400"></div>
-                                        {sale.vehicle.license_plate}
+                                        {sale.vehicle?.license_plate || sale.metadata?.quick_sale_reference}
                                     </div>
                                     <span className="text-slate-500 text-xs font-medium uppercase">
-                                        {sale.vehicle.type === 'motorcycle' ? 'Moto' : 'Carro'}
+                                        {sale.vehicle ? (sale.vehicle.type === 'motorcycle' ? 'Moto' : 'Carro') : 'Vehículo (Rápido)'}
                                     </span>
                                 </div>
                             </div>
@@ -125,7 +125,12 @@ export const SaleDetailsModal = ({ isOpen, onClose, sale }: SaleDetailsModalProp
                                                 </div>
                                             </td>
                                             <td className="px-4 py-4 text-center font-bold">{item.quantity}</td>
-                                            <td className="px-4 py-4 text-right">${item.unit_price.toLocaleString()}</td>
+                                            <td className="px-4 py-4 text-right whitespace-nowrap">
+                                                ${(item.original_price || item.unit_price).toLocaleString()}
+                                                {(item.discount_amount || 0) > 0 && (
+                                                    <span className="text-xs text-amber-500 font-bold ml-1">(-${item.discount_amount.toLocaleString()})</span>
+                                                )}
+                                            </td>
                                             <td className="px-4 py-4 text-right font-black text-slate-900 dark:text-white">
                                                 ${item.total_price.toLocaleString()}
                                             </td>
@@ -142,6 +147,12 @@ export const SaleDetailsModal = ({ isOpen, onClose, sale }: SaleDetailsModalProp
                             <span>Subtotal</span>
                             <span>${sale.total_amount.toLocaleString()}</span>
                         </div>
+                        {(sale.total_discount || 0) > 0 && (
+                            <div className="flex justify-between w-full max-w-[200px] text-amber-500 font-bold text-sm">
+                                <span>Rebajas</span>
+                                <span>-${sale.total_discount.toLocaleString()}</span>
+                            </div>
+                        )}
                         <div className="flex justify-between w-full max-w-[200px] text-xl font-black text-slate-900 dark:text-white">
                             <span>Total</span>
                             <span className={sale.total_amount === 0 ? 'text-emerald-500' : ''}>

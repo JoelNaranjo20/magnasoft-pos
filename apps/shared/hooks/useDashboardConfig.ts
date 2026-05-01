@@ -6,12 +6,31 @@ export interface DashboardConfig {
     show_summary: boolean;
     show_sales_chart: boolean;
     show_recent_transactions: boolean;
+    pos_hide_all_items?: boolean;
+    
+    // Individual summary card visibility
+    show_card_ingresos: boolean;
+    show_card_ticket: boolean;
+    show_card_items: boolean;
+    show_card_clientes: boolean;
+    show_card_gastos: boolean;
+    show_card_promo: boolean;
+    
+    // Card styling
+    card_size?: 'small' | 'medium' | 'large';
 }
 
 const DEFAULT_CONFIG: DashboardConfig = {
     show_summary: true,
     show_sales_chart: true,
     show_recent_transactions: true,
+    show_card_ingresos: true,
+    show_card_ticket: true,
+    show_card_items: true,
+    show_card_clientes: true,
+    show_card_gastos: true,
+    show_card_promo: true,
+    card_size: 'large',
 };
 
 export const useDashboardConfig = () => {
@@ -77,5 +96,21 @@ export const useDashboardConfig = () => {
         }
     };
 
-    return { config, loading, toggleWidget };
+    const updateConfig = async (updates: Partial<DashboardConfig>) => {
+        if (!businessId) return;
+
+        const newConfig = { ...config, ...updates };
+        setConfig(newConfig);
+
+        try {
+            await (supabase as any)
+                .from('business')
+                .update({ dashboard_config: newConfig })
+                .eq('id', businessId);
+        } catch (err) {
+            console.error('Error saving dashboard config updates:', err);
+        }
+    };
+
+    return { config, loading, toggleWidget, updateConfig };
 };

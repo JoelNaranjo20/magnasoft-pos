@@ -6,12 +6,14 @@ export interface DashboardConfig {
     show_summary: boolean;
     show_sales_chart: boolean;
     show_recent_transactions: boolean;
+    pos_hide_all_items: boolean;
 }
 
 const DEFAULT_CONFIG: DashboardConfig = {
     show_summary: true,
     show_sales_chart: true,
     show_recent_transactions: true,
+    pos_hide_all_items: false,
 };
 
 export const useDashboardConfig = () => {

@@ -7,7 +7,8 @@ interface LoyaltySettingsData {
     points_per_visit: number;
     enabled: boolean;
     points_threshold: number;
-    reward_service_id: string;
+    reward_service_id: string; // legacy, kept for backward compat
+    reward_service_ids: string[]; // new: multiple rewards
 }
 
 export const LoyaltySettings = () => {
@@ -18,7 +19,8 @@ export const LoyaltySettings = () => {
         points_per_visit: 10,
         enabled: true,
         points_threshold: 50,
-        reward_service_id: ''
+        reward_service_id: '',
+        reward_service_ids: []
     });
 
     const fetchServices = async () => {
@@ -41,10 +43,17 @@ export const LoyaltySettings = () => {
                 .eq('setting_type', 'loyalty')
                 .maybeSingle();
 
-            if (data && data.value) {
+        if (data && data.value) {
+                const loaded = data.value as LoyaltySettingsData;
+                // Migrate legacy single reward_service_id → reward_service_ids
+                if (!loaded.reward_service_ids && loaded.reward_service_id) {
+                    loaded.reward_service_ids = [loaded.reward_service_id];
+                } else if (!loaded.reward_service_ids) {
+                    loaded.reward_service_ids = [];
+                }
                 setSettings({
                     ...settings,
-                    ...(data.value as LoyaltySettingsData)
+                    ...loaded
                 });
             }
         } catch (error) {
@@ -148,19 +157,39 @@ export const LoyaltySettings = () => {
                 <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
                         <span className="material-symbols-outlined text-[18px] text-indigo-500">inventory_2</span>
-                        Servicio otorgado como Recompensa
+                        Servicios ofrecidos como Recompensa
                     </label>
-                    <select
-                        value={settings.reward_service_id}
-                        onChange={(e) => setSettings({ ...settings, reward_service_id: e.target.value })}
-                        className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:border-indigo-500 outline-none font-bold text-lg appearance-none transition-all"
-                    >
-                        <option value="">Selecciona un servicio...</option>
-                        {services.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                    </select>
-                    <p className="text-xs text-slate-500 pl-1">Este servicio se agregará gratis al carrito cuando el cliente redima sus puntos.</p>
+                    <p className="text-xs text-slate-500 pl-1 mb-2">Selecciona uno o varios servicios que se agregarán gratis al carrito al canjear puntos.</p>
+                    <div className="max-h-48 overflow-y-auto border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
+                        {services.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic text-center py-4">No hay servicios activos disponibles.</p>
+                        ) : (
+                            services.map(s => (
+                                <label key={s.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.reward_service_ids?.includes(s.id) || false}
+                                        onChange={e => {
+                                            const current = settings.reward_service_ids || [];
+                                            setSettings({
+                                                ...settings,
+                                                reward_service_ids: e.target.checked
+                                                    ? [...current, s.id]
+                                                    : current.filter(id => id !== s.id)
+                                            });
+                                        }}
+                                        className="w-4 h-4 rounded accent-indigo-600"
+                                    />
+                                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{s.name}</span>
+                                </label>
+                            ))
+                        )}
+                    </div>
+                    {(settings.reward_service_ids?.length || 0) > 0 && (
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold pl-1">
+                            ✓ {settings.reward_service_ids.length} servicio{settings.reward_service_ids.length !== 1 ? 's' : ''} seleccionado{settings.reward_service_ids.length !== 1 ? 's' : ''}.
+                        </p>
+                    )}
                 </div>
 
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl flex gap-3">

@@ -61,10 +61,10 @@ export const FinancePage = () => {
             </div>
 
             <div className="mt-6">
-                {activeTab === 'payroll' && <PayrollPage />}
-                {activeTab === 'cash_sessions' && <CarteraHub />}
-                {activeTab === 'loans' && <WorkerLoans />}
-                {activeTab === 'central_cash' && <CentralCash />}
+                <div className={activeTab !== 'payroll' ? 'hidden' : ''}><PayrollPage /></div>
+                <div className={activeTab !== 'cash_sessions' ? 'hidden' : ''}><CarteraHub /></div>
+                <div className={activeTab !== 'loans' ? 'hidden' : ''}><WorkerLoans /></div>
+                <div className={activeTab !== 'central_cash' ? 'hidden' : ''}><CentralCash /></div>
             </div>
         </div>
     );

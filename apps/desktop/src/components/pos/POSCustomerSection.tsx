@@ -203,14 +203,14 @@ export const POSCustomerSection = ({
             {/* Customer Tags */}
             {selectedCustomer && (
                 <div className="mt-3 flex items-center gap-2 flex-wrap">
-                    {selectedCustomer.id === 'anonymous' ? (
+                    {selectedCustomer.id === 'anonymous' || selectedCustomer.name === 'Público General' ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500 text-white text-[11px] font-black border border-emerald-600 shadow-sm animate-in fade-in zoom-in duration-300">
                             <span className="material-symbols-outlined !text-[14px]">bolt</span>
-                            {isRetail ? 'PÚBLICO GENERAL' : 'VENTA RÁPIDA'}
+                            VENTA RÁPIDA – PÚBLICO GENERAL
                             <button
                                 onClick={onClearCustomer}
                                 className="ml-1 hover:text-white/70 transition-colors"
-                                title={isRetail ? 'Salir de Público General' : 'Salir de Venta Rápida'}
+                                title="Salir de Público General"
                             >
                                 <span className="material-symbols-outlined !text-[12px]">close</span>
                             </button>

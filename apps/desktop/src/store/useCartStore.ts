@@ -52,6 +52,9 @@ interface CartState {
     activeCategoryId: string | null;
     setActiveCategoryId: (categoryId: string | null) => void;
 
+    globalSearchTerm: string;
+    setGlobalSearchTerm: (term: string) => void;
+
     // --- Active-cart context switching ---
     setActiveCart: (cartId: string) => void;
 
@@ -72,6 +75,7 @@ interface CartState {
     removeItem: (cartId: string) => void;
     updateQuantity: (cartId: string, delta: number) => void;
     updatePrice: (cartId: string, newPrice: number) => void;
+    applyGlobalDiscount: (newTotal: number) => void;
     toggleCommission: (cartId: string) => void;
 
     // Clears the active cart (resets to empty for 'default', deletes for table carts)
@@ -88,6 +92,7 @@ export const useCartStore = create<CartState>((set, get) => ({
     activeCartId: DEFAULT_CART_ID,
     globalWorkerId: null,
     activeCategoryId: null,
+    globalSearchTerm: '',
 
     // ---------------------------------------------------------------------
     // Computed selectors — proxy into the active cart
@@ -132,6 +137,7 @@ export const useCartStore = create<CartState>((set, get) => ({
 
     setGlobalWorker: (workerId) => set({ globalWorkerId: workerId }),
     setActiveCategoryId: (categoryId) => set({ activeCategoryId: categoryId }),
+    setGlobalSearchTerm: (term) => set({ globalSearchTerm: term }),
 
     setMetadata: (data) => {
         const { carts, activeCartId } = get();
@@ -278,6 +284,48 @@ export const useCartStore = create<CartState>((set, get) => ({
         });
     },
 
+    applyGlobalDiscount: (newTotal) => {
+        const { carts, activeCartId } = get();
+        const cart = carts[activeCartId] ?? emptyCart();
+        const items = cart.items;
+
+        if (items.length === 0) return;
+
+        const currentTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        if (currentTotal === 0) return;
+
+        let remainingTotal = newTotal;
+        
+        const updatedItems = items.map((item, index) => {
+            // Ensure originalPrice is preserved for discount tracking in DB
+            const originalPrice = item.originalPrice !== undefined ? item.originalPrice : item.price;
+
+            if (index === items.length - 1) {
+                // Last item gets the exact remainder
+                const newPrice = remainingTotal / item.quantity;
+                return { ...item, price: newPrice, originalPrice };
+            } else {
+                // Calculate proportion
+                const itemTotal = item.price * item.quantity;
+                const ratio = itemTotal / currentTotal;
+                const portion = newTotal * ratio;
+                
+                const newPrice = portion / item.quantity;
+                remainingTotal -= portion;
+
+                return { ...item, price: newPrice, originalPrice };
+            }
+        });
+
+        const updatedCart: CartData = { ...cart, items: updatedItems, total: newTotal };
+
+        set({
+            carts: { ...carts, [activeCartId]: updatedCart },
+            items: updatedItems,
+            total: newTotal,
+        });
+    },
+
     toggleCommission: (cartId) => {
         const { carts, activeCartId } = get();
         const cart = carts[activeCartId] ?? emptyCart();
@@ -307,6 +355,7 @@ export const useCartStore = create<CartState>((set, get) => ({
                 customerSelectionSource: fresh.customerSelectionSource,
                 globalWorkerId: null,
                 activeCategoryId: null,
+                globalSearchTerm: '',
             });
         } else {
             // Delete the table cart entry and switch back to default

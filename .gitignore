@@ -1,4 +1,4 @@
-# dependencies
+﻿# dependencies
 node_modules/
 .pnp/
 .pnp.js
@@ -54,3 +54,6 @@ apps/desktop/out/
 
 # OSX
 .DS_Store
+.postgres-tools/
+.postgres-tools/
+

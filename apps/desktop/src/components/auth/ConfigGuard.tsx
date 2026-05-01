@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 
 interface ConfigGuardProps {
@@ -9,8 +8,8 @@ interface ConfigGuardProps {
 }
 
 export const ConfigGuard = ({ children, moduleId }: ConfigGuardProps) => {
-    const isConfigAuthenticated = useSessionStore((state) => state.isConfigAuthenticated);
-    const setConfigAuthenticated = useSessionStore((state) => state.setConfigAuthenticated);
+    // Local state: resets to false every time the component mounts (= every module visit)
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
     const protectedModules = useBusinessStore((state) => state.protectedModules);
 
     const isProtected = protectedModules.includes(moduleId);
@@ -36,9 +35,10 @@ export const ConfigGuard = ({ children, moduleId }: ConfigGuardProps) => {
             }
 
             if (pin === (businessInfo as any).pin) {
-                setConfigAuthenticated(true);
+                setIsAuthenticated(true);
             } else {
                 setError('PIN incorrecto.');
+                setPin('');
             }
         } catch (err: any) {
             setError(err.message || 'Error de validación.');
@@ -47,7 +47,7 @@ export const ConfigGuard = ({ children, moduleId }: ConfigGuardProps) => {
         }
     };
 
-    if (!isProtected || isConfigAuthenticated) {
+    if (!isProtected || isAuthenticated) {
         return <>{children}</>;
     }
 

@@ -39,20 +39,7 @@ function setupAutoUpdater() {
     autoUpdater.on('update-downloaded', (info) => {
         console.log('[Updater] Update downloaded:', info.version);
         mainWindow?.webContents.send('update-status', { status: 'downloaded', version: info.version });
-        if (mainWindow) {
-            dialog.showMessageBox(mainWindow, {
-                type: 'info',
-                title: 'Actualización lista',
-                message: `La versión ${info.version} fue descargada. ¿Deseas reiniciar ahora para instalarla?`,
-                buttons: ['Reiniciar ahora', 'Después'],
-                defaultId: 0,
-                noLink: true
-            }).then(({ response }) => {
-                if (response === 0) {
-                    autoUpdater.quitAndInstall();
-                }
-            });
-        }
+        // UI (UpdateNotification) handles the restart prompt — no OS dialog needed
     });
 
     autoUpdater.on('error', (err) => {

@@ -2,10 +2,21 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@shared/lib/supabase';
 import { SaleDetailsModal } from '@shared/components/modals/SaleDetailsModal';
 import { Pagination } from '@shared/components/ui/Pagination';
-import { format, subDays, startOfDay, endOfDay, startOfMonth } from 'date-fns';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale/es';
 import { BusinessEvolution } from '@shared/components/dashboard/BusinessEvolution';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
+
+interface CashSession {
+    id: string;
+    opened_at: string;
+    closed_at: string | null;
+    status: 'open' | 'closed';
+    opening_balance: number;
+    worker_id?: string;
+    workerName?: string;
+}
 
 interface Sale {
     id: string;
@@ -13,10 +24,15 @@ interface Sale {
     total_amount: number;
     payment_method: string;
     status: string;
+    cash_amount?: number;
+    card_amount?: number;
+    transfer_amount?: number;
+    credit_amount?: number;
     customer?: { name: string };
     vehicle?: { license_plate: string; type: string };
     worker?: { name: string };
     metadata?: any;
+    total_discount?: number;
     items?: { name: string; quantity: number; unit_price: number; total_price: number; service_type: string }[];
 }
 
@@ -24,19 +40,29 @@ export const SalesPage = () => {
     const [activeTab, setActiveTab] = useState<'history' | 'evolution'>('history');
     const cashSession = useSessionStore((state: any) => state.cashSession);
     const { businessType } = useBusinessStore();
-    const [filterMode, setFilterMode] = useState<'dates' | 'session'>(cashSession ? 'session' : 'dates');
     const [loading, setLoading] = useState(true);
+
+    // ── Turnos ───────────────────────────────────────────────────────────────
+    const [allSessions, setAllSessions] = useState<CashSession[]>([]);
+    const [sessionsLoading, setSessionsLoading] = useState(true);
+    const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+        cashSession?.id ?? null
+    );
+
+    // Sesión actualmente seleccionada (objeto completo)
+    const selectedSession = useMemo(
+        () => allSessions.find(s => s.id === selectedSessionId) ?? null,
+        [allSessions, selectedSessionId]
+    );
+
     const [sales, setSales] = useState<Sale[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
-    const [dateRange, setDateRange] = useState({
-        start: format(new Date(), 'yyyy-MM-dd'),
-        end: format(new Date(), 'yyyy-MM-dd')
-    });
     const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
     const [movements, setMovements] = useState<any[]>([]);
+    const [sessionOpeningBalance, setSessionOpeningBalance] = useState(0);
 
     // Column Configuration based on Business Type
     const columnConfig = useMemo(() => {
@@ -48,14 +74,14 @@ export const SalesPage = () => {
                         <div className="flex items-center gap-2 font-black text-slate-700 dark:text-slate-300">
                             {sale.customer?.name || 'Venta Rápida'}
                         </div>
-                        {sale.vehicle && (
+                        {(sale.vehicle || sale.metadata?.quick_sale_reference) && (
                             <div className="flex items-center gap-2">
                                 <div className="px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-[9px] font-black text-white relative flex items-center gap-1 shadow-sm">
                                     <span className="w-full h-0.5 bg-yellow-400 absolute top-0 left-0 right-0"></span>
-                                    {sale.vehicle.license_plate}
+                                    {sale.vehicle?.license_plate || sale.metadata?.quick_sale_reference}
                                 </div>
                                 <span className="material-symbols-outlined !text-[14px] text-slate-400">
-                                    {sale.vehicle.type === 'motorcycle' ? 'two_wheeler' : 'directions_car'}
+                                    {sale.vehicle ? (sale.vehicle.type === 'motorcycle' ? 'two_wheeler' : 'directions_car') : 'local_taxi'}
                                 </span>
                             </div>
                         )}
@@ -139,31 +165,74 @@ export const SalesPage = () => {
         return configs[businessType as keyof typeof configs] || configs.general;
     }, [businessType]);
 
-    useEffect(() => {
-        fetchSales();
-        fetchMovements();
-    }, [dateRange, filterMode]);
-
-    const fetchMovements = async () => {
+    // ── Cargar lista de turnos ───────────────────────────────────────────────
+    const fetchSessions = async () => {
+        setSessionsLoading(true);
         try {
             const businessId = useBusinessStore.getState().id;
             if (!businessId) return;
 
-            let query = supabase
-                .from('cash_movements')
-                .select('*')
-                .eq('business_id', businessId);
+            const { data: sessionsData, error } = await supabase
+                .from('cash_sessions')
+                .select('id, opened_at, closed_at, status, opening_balance, worker_id')
+                .eq('business_id', businessId)
+                .order('opened_at', { ascending: false });
 
-            if (filterMode === 'session' && cashSession) {
-                query = query.eq('session_id', cashSession.id);
-            } else {
-                query = query
-                    .gte('created_at', startOfDay(new Date(dateRange.start + 'T00:00:00')).toISOString())
-                    .lte('created_at', endOfDay(new Date(dateRange.end + 'T00:00:00')).toISOString());
+            if (error) throw error;
+
+            // Enriquecer con nombres de trabajadores
+            const workerIds = [...new Set((sessionsData || []).map((s: any) => s.worker_id).filter(Boolean))];
+            let workerMap: Record<string, string> = {};
+            if (workerIds.length > 0) {
+                const { data: workers } = await supabase
+                    .from('workers')
+                    .select('id, name')
+                    .in('id', workerIds);
+                workerMap = (workers || []).reduce((acc: any, w: any) => { acc[w.id] = w.name; return acc; }, {});
             }
 
-            const { data, error } = await query;
+            const enriched: CashSession[] = (sessionsData || []).map((s: any) => ({
+                ...s,
+                workerName: workerMap[s.worker_id] || undefined,
+            }));
 
+            setAllSessions(enriched);
+
+            // Preseleccionar turno activo si existe, sino el primero
+            if (!selectedSessionId) {
+                const active = enriched.find(s => s.status === 'open');
+                setSelectedSessionId(active?.id ?? enriched[0]?.id ?? null);
+            }
+        } catch (err) {
+            console.error('Error fetching sessions for filter:', err);
+        } finally {
+            setSessionsLoading(false);
+        }
+    };
+
+    useEffect(() => { fetchSessions(); }, []);
+
+    // Dispara la carga de datos cuando cambia el turno seleccionado
+    // O cuando allSessions carga por primera vez (length 0 → N)
+    useEffect(() => {
+        if (selectedSessionId && allSessions.length > 0) {
+            fetchSales();
+            fetchMovements();
+        }
+    }, [selectedSessionId, allSessions.length]);
+
+    // Mantiene el opening_balance sincronizado con el turno seleccionado
+    useEffect(() => {
+        setSessionOpeningBalance(selectedSession?.opening_balance ?? 0);
+    }, [selectedSession]);
+
+    const fetchMovements = async () => {
+        if (!selectedSessionId) return;
+        try {
+            const { data, error } = await supabase
+                .from('cash_movements')
+                .select('*')
+                .eq('session_id', selectedSessionId);
             if (error) throw error;
             setMovements(data || []);
         } catch (error) {
@@ -172,12 +241,13 @@ export const SalesPage = () => {
     };
 
     const fetchSales = async () => {
+        if (!selectedSessionId) return;
         setLoading(true);
         try {
             const businessId = useBusinessStore.getState().id;
             if (!businessId) return;
 
-            let query = supabase
+            const { data, error } = await supabase
                 .from('sales')
                 .select(`
                     *,
@@ -191,21 +261,13 @@ export const SalesPage = () => {
                     vehicle:vehicles(license_plate, type),
                     worker:workers(name)
                 `)
-                .eq('business_id', businessId);
-
-            if (filterMode === 'session' && cashSession) {
-                query = query.eq('session_id', cashSession.id);
-            } else {
-                query = query
-                    .gte('created_at', startOfDay(new Date(dateRange.start + 'T00:00:00')).toISOString())
-                    .lte('created_at', endOfDay(new Date(dateRange.end + 'T00:00:00')).toISOString());
-            }
-
-            const { data, error } = await query.order('created_at', { ascending: false });
+                .eq('business_id', businessId)
+                .eq('session_id', selectedSessionId)
+                .order('created_at', { ascending: false });
 
             if (error) throw error;
             setSales((data || []) as unknown as Sale[]);
-            setCurrentPage(1); // Reset to first page on new fetch
+            setCurrentPage(1);
         } catch (error) {
             console.error('Error fetching sales:', error);
         } finally {
@@ -237,35 +299,100 @@ export const SalesPage = () => {
     }, [sales, searchTerm]);
 
     const totalRevenue = useMemo(() => {
-        return filteredSales.reduce((acc, sale) => acc + (sale.total_amount || 0), 0);
+        // Same formula as Dashboard: cash + digital + abonos (credit excluded as not yet collected)
+        return filteredSales.reduce((acc, sale) => {
+            const tot = sale.total_amount || 0;
+            if (sale.payment_method === 'mixed') {
+                return acc + (sale.cash_amount || 0) + (sale.card_amount || 0) + (sale.transfer_amount || 0);
+            } else if (sale.payment_method === 'credit') {
+                return acc; // credit not counted as income yet
+            }
+            return acc + tot;
+        }, 0);
     }, [filteredSales]);
 
     const reconciliation = useMemo(() => {
         const totals = {
-            cash: 0,
-            digital: 0,
-            credit: 0,
-            abonos: 0,
-            expenses: 0
+            sales_cash: 0,
+            sales_digital: 0,
+            sales_credit: 0,
+            abonos_cash: 0,
+            abonos_digital: 0,
+            expenses: 0,
+            promociones: 0,
+            rebajas: 0,
+            canjes_net_cash: 0,
+            canjes_net_digital: 0,
         };
 
         filteredSales.forEach(sale => {
-            if (sale.payment_method === 'cash') totals.cash += sale.total_amount || 0;
-            else if (sale.payment_method === 'card' || sale.payment_method === 'transfer') totals.digital += sale.total_amount || 0;
-            else if (sale.payment_method === 'credit') totals.credit += sale.total_amount || 0;
+            const tot = sale.total_amount || 0;
+            totals.rebajas += (sale.total_discount || 0);
+            
+            // Calculate promotions for this sale (same logic as dashboard)
+            let salePromotions = 0;
+            sale.items?.forEach((item: any) => {
+                // Determine if this item was free (reward) and its original price is non-zero
+                if (item.unit_price === 0) {
+                     const originalPrice = item.service?.price || item.product?.price || 0;
+                     salePromotions += (originalPrice * (item.quantity || 1));
+                }
+            });
+            
+            totals.promociones += salePromotions;
+            
+            // Extract the promotions from the gross total_discount amount, so 'rebajas' 
+            // strictly reflects manual price edits/markdowns.
+            totals.rebajas -= salePromotions;
+            
+            // Ensure rebajas doesn't go below 0 due to floating point inaccuracies
+            if (totals.rebajas < 0) totals.rebajas = 0;
+
+            if (sale.payment_method === 'mixed') {
+                // Use precise sub-amounts for mixed payments
+                totals.sales_cash += sale.cash_amount || 0;
+                totals.sales_digital += (sale.card_amount || 0) + (sale.transfer_amount || 0);
+                totals.sales_credit += sale.credit_amount || 0;
+            } else if (sale.payment_method === 'cash') {
+                totals.sales_cash += tot;
+            } else if (sale.payment_method === 'card' || sale.payment_method === 'transfer') {
+                totals.sales_digital += tot;
+            } else if (sale.payment_method === 'credit') {
+                totals.sales_credit += tot;
+            }
         });
 
-        // Process movements (debt payments/abonos/expenses)
+        // Process movements (debt payments/abonos/expenses/canjes)
         movements.forEach(m => {
+            const desc = (m.description || '').toLowerCase();
+            const isCanje = desc.startsWith('[canje]');
+            
             if (m.type === 'expense') {
-                totals.expenses += m.amount || 0;
-            } else if (m.type === 'income') {
-                // Detect payment method from description (added by RPC)
-                const desc = (m.description || '').toLowerCase();
-                if (desc.includes('transferencia') || desc.includes('tarjeta')) {
-                    totals.digital += m.amount || 0;
+                if (!isCanje) {
+                    totals.expenses += m.amount || 0;
                 } else {
-                    totals.abonos += m.amount || 0;
+                    // Canje Out (Usually Cash)
+                    if (m.payment_method === 'cash' || !m.payment_method) {
+                        totals.canjes_net_cash -= (m.amount || 0);
+                    } else {
+                        totals.canjes_net_digital -= (m.amount || 0);
+                    }
+                }
+            } else if (m.type === 'income') {
+                if (!isCanje) {
+                    // Detect payment method for Abonos
+                    if (desc.includes('transferencia') || desc.includes('tarjeta') || m.payment_method === 'transfer' || m.payment_method === 'card') {
+                        totals.abonos_digital += m.amount || 0;
+                    } else {
+                        totals.abonos_cash += m.amount || 0;
+                    }
+                } else {
+                    // Canje In
+                    if (m.payment_method === 'transfer' || m.payment_method === 'card') {
+                        totals.canjes_net_digital += (m.amount || 0);
+                    } else {
+                        totals.canjes_net_cash += (m.amount || 0);
+                    }
                 }
             }
         });
@@ -273,9 +400,69 @@ export const SalesPage = () => {
         return totals;
     }, [filteredSales, movements]);
 
+    // ── Desglose por servicio/producto (como el cuaderno) ─────────────
+    const salesByService = useMemo(() => {
+        const map: Record<string, number> = {};
+        filteredSales.forEach(sale => {
+            sale.items?.forEach((item: any) => {
+                const name = (item.name || 'Otro').trim();
+                const qty = item.quantity || 1;
+                let amount = item.total_price || (item.unit_price * qty) || 0;
+
+                // Si fue redimido por fidelidad (precio 0), usar el precio original
+                if (item.unit_price === 0) {
+                    const originalPrice = item.service?.price || item.product?.price || 0;
+                    amount = originalPrice * qty;
+                }
+
+                map[name] = (map[name] || 0) + amount;
+            });
+        });
+        // Ordenar de mayor a menor
+        return Object.entries(map)
+            .sort(([, a], [, b]) => b - a)
+            .map(([name, total]) => ({ name, total }));
+    }, [filteredSales]);
+
+    // Detalle de gastos/salidas del turno
+    const expenseDetails = useMemo(() => {
+        const items: { label: string; amount: number; color: string }[] = [];
+
+        // Liquidaciones (pagos de comisiones)
+        const liquidaciones = movements
+            .filter(m => m.type === 'expense' && (m.description || '').toLowerCase().includes('pago de comisiones'))
+            .reduce((sum, m) => sum + (m.amount || 0), 0);
+        if (liquidaciones > 0) items.push({ label: 'Liquidaciones', amount: liquidaciones, color: 'text-amber-400' });
+
+        // Otros gastos
+        const otrosGastos = movements
+            .filter(m => m.type === 'expense' && !(m.description || '').toLowerCase().includes('pago de comisiones') && !(m.description || '').toLowerCase().startsWith('[canje]'))
+            .reduce((sum, m) => sum + (m.amount || 0), 0);
+        if (otrosGastos > 0) items.push({ label: 'Gastos', amount: otrosGastos, color: 'text-rose-400' });
+
+        // Transferencias recibidas
+        if (reconciliation.sales_digital > 0) items.push({ label: 'Transferencias', amount: reconciliation.sales_digital, color: 'text-indigo-400' });
+
+        // X Cobrar (Créditos/Fiado)
+        if (reconciliation.sales_credit > 0) items.push({ label: 'X Cobrar (Fiado)', amount: reconciliation.sales_credit, color: 'text-slate-400' });
+
+        // Descuentos/Rebajas
+        if (reconciliation.rebajas > 0) items.push({ label: 'Rebajas', amount: reconciliation.rebajas, color: 'text-amber-500' });
+
+        // Promos
+        if (reconciliation.promociones > 0) items.push({ label: 'Promociones', amount: reconciliation.promociones, color: 'text-purple-400' });
+
+        // Abonos recibidos
+        const totalAbonos = reconciliation.abonos_cash + reconciliation.abonos_digital;
+        if (totalAbonos > 0) items.push({ label: 'Abonos Recibidos', amount: totalAbonos, color: 'text-sky-400' });
+
+        return items;
+    }, [movements, reconciliation]);
+
     const cashFlowTotal = useMemo(() => {
-        return (reconciliation.cash + reconciliation.abonos) - reconciliation.expenses;
-    }, [reconciliation]);
+        const base = sessionOpeningBalance;
+        return base + (reconciliation.sales_cash + reconciliation.abonos_cash + reconciliation.canjes_net_cash) - reconciliation.expenses;
+    }, [reconciliation, sessionOpeningBalance]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
@@ -284,12 +471,13 @@ export const SalesPage = () => {
         currentPage * itemsPerPage
     );
 
-    const quickDateFilters = [
-        { label: 'Turno Actual', get: () => ({ start: format(new Date(), 'yyyy-MM-dd'), end: format(new Date(), 'yyyy-MM-dd') }) },
-        { label: 'Ayer', get: () => ({ start: format(subDays(new Date(), 1), 'yyyy-MM-dd'), end: format(subDays(new Date(), 1), 'yyyy-MM-dd') }) },
-        { label: '7 Días', get: () => ({ start: format(subDays(new Date(), 6), 'yyyy-MM-dd'), end: format(new Date(), 'yyyy-MM-dd') }) },
-        { label: 'Este Mes', get: () => ({ start: format(startOfMonth(new Date()), 'yyyy-MM-dd'), end: format(new Date(), 'yyyy-MM-dd') }) },
-    ];
+    // Helper: etiqueta de turno
+    const sessionLabel = (s: CashSession) => {
+        const openDate = new Date(s.opened_at);
+        const dateStr = format(openDate, "d 'de' MMMM", { locale: es });
+        const timeStr = format(openDate, 'HH:mm');
+        return { dateStr, timeStr };
+    };
 
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8 pb-32">
@@ -324,145 +512,249 @@ export const SalesPage = () => {
 
             {activeTab === 'history' ? (
                 <>
-                    {/* Filters & Stats Summary */}
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
-                        {/* Search & Dates */}
-                        <div className="lg:col-span-3 space-y-4">
-                            <div className="bg-white dark:bg-slate-800 rounded-3xl p-4 md:p-6 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-700 space-y-4 md:space-y-6">
-                                {/* Search and Reward Filter */}
-                                <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-                                    <div className="relative flex-1">
-                                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar placa, cliente..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-3 md:py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-bold text-slate-900 dark:text-white placeholder:text-slate-400 text-sm md:text-base"
-                                        />
-                                    </div>
+                    {/* ── Filtro por Turno ─────────────────────────────── */}
+                    <div className="w-full">
+                        <div className="bg-white dark:bg-slate-800 rounded-2xl px-4 py-3 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-700 flex flex-col gap-3">
+
+                            {/* Buscador */}
+                            <div className="relative">
+                                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 !text-[18px]">search</span>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar placa, cliente..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-bold text-slate-900 dark:text-white placeholder:text-slate-400 text-xs"
+                                />
+                            </div>
+
+                            {/* Selector de Turno */}
+                            <div className="flex flex-col gap-1.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                        <span className="material-symbols-outlined !text-[12px]">schedule</span>
+                                        Filtrar por Turno
+                                    </span>
+                                    <button
+                                        onClick={fetchSessions}
+                                        title="Actualizar turnos"
+                                        className="text-slate-400 hover:text-primary transition-colors p-0.5"
+                                    >
+                                        <span className="material-symbols-outlined !text-[14px]">refresh</span>
+                                    </button>
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
-                                    <div className="flex gap-2">
-                                        <div className="flex-1 space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Desde</label>
-                                            <input
-                                                type="date"
-                                                value={dateRange.start}
-                                                onChange={(e) => {
-                                                    setDateRange(prev => ({ ...prev, start: e.target.value }));
-                                                    setFilterMode('dates');
-                                                }}
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-bold text-slate-900 dark:text-white text-[11px]"
-                                            />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Hasta</label>
-                                            <input
-                                                type="date"
-                                                value={dateRange.end}
-                                                onChange={(e) => {
-                                                    setDateRange(prev => ({ ...prev, end: e.target.value }));
-                                                    setFilterMode('dates');
-                                                }}
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-bold text-slate-900 dark:text-white text-[11px]"
-                                            />
-                                        </div>
+                                {sessionsLoading ? (
+                                    <div className="flex items-center gap-2 py-2 text-slate-400">
+                                        <div className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+                                        <span className="text-[10px] font-bold">Cargando turnos...</span>
                                     </div>
-                                    <div className="flex flex-wrap gap-2 items-end">
-                                        {quickDateFilters.map((f) => (
-                                            <button
-                                                key={f.label}
-                                                onClick={() => {
-                                                    if (f.label === 'Turno Actual' && cashSession) {
-                                                        setFilterMode('session');
-                                                    } else {
-                                                        setDateRange(f.get());
-                                                        setFilterMode('dates');
-                                                    }
-                                                }}
-                                                className={`flex-1 md:flex-none px-3 py-2.5 md:px-4 md:py-3 rounded-xl text-[10px] md:text-xs font-black transition-all ${((f.label === 'Turno Actual' && filterMode === 'session') ||
-                                                    (f.label !== 'Turno Actual' && filterMode === 'dates' && dateRange.start === f.get().start && dateRange.end === f.get().end))
-                                                    ? 'bg-primary text-white shadow-lg shadow-primary/30'
-                                                    : 'bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300'
-                                                    }`}
-                                            >
-                                                {f.label}
-                                            </button>
-                                        ))}
-                                    </div>
+                                ) : allSessions.length === 0 ? (
+                                    <p className="text-[10px] text-slate-400 italic py-1">No hay turnos registrados.</p>
+                                ) : (
+                                    <select
+                                        value={selectedSessionId || ''}
+                                        onChange={(e) => setSelectedSessionId(e.target.value)}
+                                        className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all font-bold text-slate-900 dark:text-white text-xs appearance-none cursor-pointer"
+                                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
+                                    >
+                                        {/* Turno activo primero */}
+                                        {allSessions.filter(s => s.status === 'open').length > 0 && (
+                                            <optgroup label="⚡ Turno Activo">
+                                                {allSessions.filter(s => s.status === 'open').map(s => {
+                                                    const { dateStr, timeStr } = sessionLabel(s);
+                                                    return (
+                                                        <option key={s.id} value={s.id}>
+                                                            🟢 {dateStr} — Apertura {timeStr}{s.workerName ? ` — ${s.workerName}` : ''}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </optgroup>
+                                        )}
+                                        {/* Turnos cerrados */}
+                                        {allSessions.filter(s => s.status === 'closed').length > 0 && (
+                                            <optgroup label="📋 Turnos Anteriores">
+                                                {allSessions.filter(s => s.status === 'closed').map(s => {
+                                                    const { dateStr, timeStr } = sessionLabel(s);
+                                                    return (
+                                                        <option key={s.id} value={s.id}>
+                                                            {dateStr} — Apertura {timeStr}{s.workerName ? ` — ${s.workerName}` : ''}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </optgroup>
+                                        )}
+                                    </select>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Resumen del Turno ────────────── */}
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
+
+                        {/* Header */}
+                        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-primary !text-2xl">receipt_long</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">Resumen del Turno</h3>
+                                    <p className="text-[10px] text-slate-400 font-medium capitalize">
+                                        {selectedSession
+                                            ? format(new Date(selectedSession.opened_at), "EEEE d 'de' MMMM yyyy", { locale: es })
+                                            : 'Sin turno seleccionado'}
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Detailed Cash Flow Card - Premium Dark Theme */}
-                        <div className="bg-slate-900 dark:bg-slate-900/50 rounded-3xl p-7 shadow-2xl shadow-slate-900/20 text-white relative overflow-hidden group border border-white/5">
-                            <div className="absolute -right-4 -top-4 size-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all duration-700"></div>
-
-                            <div className="relative z-10 flex flex-col gap-6">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-black text-white flex items-center gap-2 uppercase tracking-wider">
-                                        <span className="material-symbols-outlined text-emerald-400 !text-xl">account_balance_wallet</span>
-                                        Caja de Efectivo
-                                    </h3>
-                                    <div className="text-right">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total en Caja</p>
-                                        <p className="text-3xl font-black text-emerald-400 tabular-nums leading-none tracking-tight">
-                                            ${cashFlowTotal.toLocaleString()}
-                                        </p>
-                                    </div>
+                        {/* Dos columnas */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-700">
+                            
+                            {/* ══ IZQUIERDA: Ventas del Turno (todo lo vendido) ══ */}
+                            <div className="p-5 flex flex-col">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="material-symbols-outlined text-primary !text-[16px]">shopping_basket</span>
+                                    <span className="text-[10px] font-black text-primary uppercase tracking-widest">Ventas del Turno</span>
+                                    <span className="text-[9px] font-bold text-slate-400 ml-auto">{filteredSales.length} ventas</span>
                                 </div>
 
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 py-5 border-y border-white/10">
-                                    <div className="col-span-1">
-                                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                            <span className="material-symbols-outlined !text-xs text-emerald-500/50">payments</span>
-                                            Ventas
-                                        </p>
-                                        <p className="text-sm font-black text-white">
-                                            +${reconciliation.cash.toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="col-span-1">
-                                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                            <span className="material-symbols-outlined !text-xs text-blue-500/50">point_of_sale</span>
-                                            Abonos
-                                        </p>
-                                        <p className="text-sm font-black text-white">
-                                            +${reconciliation.abonos.toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="col-span-2 md:col-span-1 pt-3 md:pt-0 border-t border-white/5 md:border-none">
-                                        <p className="text-[9px] font-black text-rose-400/80 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                            <span className="material-symbols-outlined !text-xs text-rose-500/50">upload</span>
-                                            Gastos
-                                        </p>
-                                        <p className="text-sm font-black text-rose-400">
-                                            -${reconciliation.expenses.toLocaleString()}
-                                        </p>
-                                    </div>
+                                <div className="space-y-0.5 flex-1 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                    {salesByService.length === 0 ? (
+                                        <p className="text-xs text-slate-400 italic py-6 text-center">Sin ventas en este turno</p>
+                                    ) : (
+                                        salesByService.map((item, i) => (
+                                            <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate mr-3 capitalize">{item.name}</span>
+                                                <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums whitespace-nowrap">= ${item.total.toLocaleString()}</span>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2">
-                                    <div className="flex flex-wrap gap-4 md:gap-6">
-                                        <div>
-                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Digital</p>
-                                            <p className="text-xs font-black text-indigo-400 tracking-tight">${reconciliation.digital.toLocaleString()}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Crédito</p>
-                                            <p className="text-xs font-black text-slate-400 tracking-tight">${reconciliation.credit.toLocaleString()}</p>
-                                        </div>
+                                {/* Venta Total */}
+                                {salesByService.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t-2 border-slate-900 dark:border-white px-2 flex items-center justify-between">
+                                        <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Venta Total</span>
+                                        <span className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
+                                            ${(reconciliation.sales_cash + reconciliation.sales_digital + reconciliation.sales_credit + reconciliation.promociones + reconciliation.rebajas).toLocaleString()}
+                                        </span>
                                     </div>
-                                    <div className="sm:text-right w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-none border-white/5">
-                                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Ventas Totales</p>
-                                        <p className="text-xs font-black text-white/60 tracking-tight">${totalRevenue.toLocaleString()}</p>
+                                )}
+                            </div>
+
+                            {/* ══ DERECHA: Conciliación ══ */}
+                            <div className="p-5 flex flex-col">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="material-symbols-outlined text-slate-500 !text-[16px]">calculate</span>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Conciliación</span>
+                                </div>
+
+                                <div className="space-y-0.5 flex-1">
+                                    {/* ── ENTRADAS (+) ── */}
+                                    <div className="px-2 py-1">
+                                        <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">+ Entradas</span>
                                     </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
+                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                            Ventas Efectivo
+                                        </span>
+                                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 tabular-nums">+${reconciliation.sales_cash.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
+                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                            Transferencias / Tarjeta
+                                        </span>
+                                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 tabular-nums">+${reconciliation.sales_digital.toLocaleString()}</span>
+                                    </div>
+                                    {(reconciliation.abonos_cash + reconciliation.abonos_digital) > 0 && (
+                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
+                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                                                Abonos Recibidos
+                                            </span>
+                                            <span className="text-xs font-black text-sky-600 dark:text-sky-400 tabular-nums">+${(reconciliation.abonos_cash + reconciliation.abonos_digital).toLocaleString()}</span>
+                                        </div>
+                                    )}
+
+                                    {/* ── SALIDAS (−) ── */}
+                                    <div className="px-2 py-1 mt-2">
+                                        <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">− Salidas</span>
+                                    </div>
+                                    {reconciliation.sales_credit > 0 && (
+                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
+                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+                                                Venta a Crédito
+                                            </span>
+                                            <span className="text-xs font-black text-orange-600 dark:text-orange-400 tabular-nums">−${reconciliation.sales_credit.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                    {(() => {
+                                        const liquidaciones = movements
+                                            .filter(m => m.type === 'expense' && (m.description || '').toLowerCase().includes('pago de comisiones'))
+                                            .reduce((sum, m) => sum + (m.amount || 0), 0);
+                                        return liquidaciones > 0 ? (
+                                            <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
+                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                    Liquidación Pagada
+                                                </span>
+                                                <span className="text-xs font-black text-amber-600 dark:text-amber-400 tabular-nums">−${liquidaciones.toLocaleString()}</span>
+                                            </div>
+                                        ) : null;
+                                    })()}
+                                    {reconciliation.expenses > 0 && (
+                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
+                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                Salidas de Caja
+                                            </span>
+                                            <span className="text-xs font-black text-rose-600 dark:text-rose-400 tabular-nums">−${reconciliation.expenses.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                    {reconciliation.rebajas > 0 && (
+                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
+                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                                Descuentos
+                                            </span>
+                                            <span className="text-xs font-black text-amber-600 dark:text-amber-400 tabular-nums">−${reconciliation.rebajas.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                    {reconciliation.promociones > 0 && (
+                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
+                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                                Promociones (Fidelidad)
+                                            </span>
+                                            <span className="text-xs font-black text-purple-600 dark:text-purple-400 tabular-nums">−${reconciliation.promociones.toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ── RESULTADO ── */}
+                                <div className="mt-3 pt-3 border-t-2 border-slate-900 dark:border-white">
+                                    <div className="px-2 flex items-center justify-between">
+                                        <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined !text-[18px]">account_balance_wallet</span>
+                                            Efectivo en Caja
+                                        </span>
+                                        <span className="text-xl font-black text-emerald-700 dark:text-emerald-400 tabular-nums">${cashFlowTotal.toLocaleString()}</span>
+                                    </div>
+                                    {sessionOpeningBalance > 0 && (
+                                        <p className="text-[9px] text-slate-400 font-bold px-2 mt-1">Incluye base de apertura: ${sessionOpeningBalance.toLocaleString()}</p>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
+
+
 
                     {/* Sales Table Wrapper */}
                     <div className="space-y-4">
@@ -521,13 +813,28 @@ export const SalesPage = () => {
                                                                         Programa Lealtad
                                                                     </span>
                                                                 )}
-                                                                <span className="text-[8px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700/50 px-1.5 py-0.5 rounded uppercase tracking-tighter">
-                                                                    {sale.payment_method === 'cash' ? 'Efectivo' :
-                                                                        sale.payment_method === 'card' ? 'Tarjeta' :
-                                                                            sale.payment_method === 'transfer' ? 'Transferencia' :
-                                                                                sale.payment_method === 'credit' ? 'Fiado' :
-                                                                                    sale.payment_method || '-'}
-                                                                </span>
+                                                                {sale.payment_method === 'mixed' ? (
+                                                                    <span className="inline-flex flex-col gap-0.5">
+                                                                        <span className="text-[8px] font-black text-violet-700 bg-violet-50 dark:bg-violet-900/30 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-violet-200 dark:border-violet-800 flex items-center gap-1">
+                                                                            <span className="material-symbols-outlined !text-[9px]">shuffle</span>
+                                                                            Mixto
+                                                                        </span>
+                                                                        {((sale.cash_amount || 0) > 0 || (sale.card_amount || 0) > 0 || (sale.transfer_amount || 0) > 0) && (
+                                                                            <span className="text-[8px] text-slate-400 font-bold leading-tight">
+                                                                                {(sale.cash_amount || 0) > 0 && <span className="mr-1">💵 ${(sale.cash_amount || 0).toLocaleString()}</span>}
+                                                                                {((sale.card_amount || 0) + (sale.transfer_amount || 0)) > 0 && <span>📲 ${((sale.card_amount || 0) + (sale.transfer_amount || 0)).toLocaleString()}</span>}
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[8px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700/50 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                                                                        {sale.payment_method === 'cash' ? '💵 Efectivo' :
+                                                                            sale.payment_method === 'card' ? '💳 Tarjeta' :
+                                                                                sale.payment_method === 'transfer' ? '📲 Transf.' :
+                                                                                    sale.payment_method === 'credit' ? '📋 Fiado' :
+                                                                                        sale.payment_method || '-'}
+                                                                    </span>
+                                                                )}
                                                                 {/* Status Badge */}
                                                                 <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-tighter border ${sale.status === 'completed' ? 'bg-emerald-100 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-800' :
                                                                     sale.status === 'cancelled' ? 'bg-rose-100 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:border-rose-800' :
@@ -542,8 +849,13 @@ export const SalesPage = () => {
                                                     </td>
                                                     <td className="px-8 py-5">
                                                         <span className={`text-lg font-black ${sale.total_amount === 0 ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>
-                                                            ${sale.total_amount?.toLocaleString()}
+                                                            ${(sale.total_amount + (sale.total_discount || 0)).toLocaleString()}
                                                         </span>
+                                                        {(sale.total_discount || 0) > 0 && (
+                                                            <span className="text-xs font-bold text-amber-500 ml-1">
+                                                                (-${sale.total_discount?.toLocaleString()})
+                                                            </span>
+                                                        )}
                                                     </td>
                                                     <td className="px-8 py-5 text-right">
                                                         <div className="flex flex-col items-end gap-0.5">
@@ -630,9 +942,16 @@ export const SalesPage = () => {
                                             <div className="pl-11 pt-2 flex justify-between items-center border-t border-slate-50 dark:border-slate-800/50">
                                                 <span className="text-[11px] font-bold text-slate-400">{format(new Date(sale.created_at), 'dd/MM/yyyy')}</span>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`text-lg font-black ${sale.total_amount === 0 ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>
-                                                        ${sale.total_amount?.toLocaleString()}
-                                                    </span>
+                                                    <div className="flex flex-col items-end gap-0.5">
+                                                        <span className={`text-lg leading-none font-black ${sale.total_amount === 0 ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>
+                                                            ${(sale.total_amount + (sale.total_discount || 0)).toLocaleString()}
+                                                        </span>
+                                                        {(sale.total_discount || 0) > 0 && (
+                                                            <span className="text-[10px] font-bold text-amber-500">
+                                                                (-${sale.total_discount?.toLocaleString()})
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <span className="material-symbols-outlined !text-[20px] text-slate-300">chevron_right</span>
                                                 </div>
                                             </div>

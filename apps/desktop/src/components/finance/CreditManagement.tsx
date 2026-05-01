@@ -34,6 +34,12 @@ export const CreditManagement = () => {
     const [selectedDebt, setSelectedDebt] = useState<DebtRecord | null>(null);
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
+    const [cashTarget, setCashTarget] = useState<'daily' | 'central'>('daily');
+
+    // Derived: whether the selected debt was created today
+    const isCreditFromToday = selectedDebt
+        ? new Date(selectedDebt.created_at).toDateString() === new Date().toDateString()
+        : false;
 
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [selectedCustomerForHistory, setSelectedCustomerForHistory] = useState<any>(null);
@@ -131,17 +137,25 @@ export const CreditManagement = () => {
             return;
         }
 
+        // Determine destination: daily cash or central cash
+        // - Credits from today: user chooses (cashTarget)
+        // - Credits from previous days: always central cash
+        const goToCentral = !isCreditFromToday || cashTarget === 'central';
+
+        console.log(`📅 CreditMgmt | isToday: ${isCreditFromToday} | target: ${cashTarget} | goToCentral: ${goToCentral}`);
+
         try {
             const { data: { user } } = await supabase.auth.getUser();
             console.log('👤 Current user for payment:', user?.id);
 
             // Call the database function to process the payment atomically
+            // If credit is from a previous day, don't link to daily cash session
             const { data, error } = await (supabase as any)
                 .rpc('process_debt_payment', {
                     p_debt_id: selectedDebt.id,
                     p_amount: amount,
                     p_payment_method: paymentMethod,
-                    p_cash_session_id: cashSession.id,
+                    p_cash_session_id: goToCentral ? null : cashSession.id,
                     p_notes: `Abono a deuda de ${selectedDebt.customer?.name || 'Cliente'}`
                 });
 
@@ -160,6 +174,25 @@ export const CreditManagement = () => {
             }
 
             console.log('✅ Payment processed successfully:', result);
+
+            // Register in Central Cash if needed
+            if (goToCentral) {
+                const { error: centralError } = await (supabase as any)
+                    .from('central_cash_movements')
+                    .insert({
+                        type: 'income',
+                        amount: amount,
+                        description: `Abono crédito - ${selectedDebt.customer?.name || 'Cliente'} (${new Date(selectedDebt.created_at).toLocaleDateString()})`,
+                        user_id: user?.id,
+                    });
+
+                if (centralError) {
+                    console.error('⚠️ Error registering in Central Cash:', centralError);
+                    // Non-blocking: payment already processed, just warn
+                } else {
+                    console.log('✅ Abono registered in Central Cash');
+                }
+            }
 
             // Close modal and reset form
             setShowPaymentModal(false);
@@ -384,6 +417,50 @@ export const CreditManagement = () => {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Cash Destination — shown when credit is from today */}
+                            {isCreditFromToday ? (
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 px-1">Destino del Abono</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => setCashTarget('daily')}
+                                            className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                                                cashTarget === 'daily'
+                                                    ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500 text-blue-600'
+                                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined !text-[18px]">point_of_sale</span>
+                                            <div className="text-left">
+                                                <p className="text-[9px] font-black uppercase tracking-widest leading-none">Caja Diaria</p>
+                                                <p className="text-[8px] font-bold opacity-60 mt-0.5">Sesión actual</p>
+                                            </div>
+                                        </button>
+                                        <button
+                                            onClick={() => setCashTarget('central')}
+                                            className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                                                cashTarget === 'central'
+                                                    ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500 text-indigo-600'
+                                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
+                                            }`}
+                                        >
+                                            <span className="material-symbols-outlined !text-[18px]">account_balance_wallet</span>
+                                            <div className="text-left">
+                                                <p className="text-[9px] font-black uppercase tracking-widest leading-none">Caja Central</p>
+                                                <p className="text-[8px] font-bold opacity-60 mt-0.5">Acumulado general</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 rounded-xl">
+                                    <span className="material-symbols-outlined text-indigo-500 !text-base">account_balance_wallet</span>
+                                    <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">
+                                        Crédito anterior → Caja Central automáticamente
+                                    </p>
+                                </div>
+                            )}
 
                             {!cashSession && (
                                 <p className="text-[10px] text-rose-500 font-bold text-center italic">

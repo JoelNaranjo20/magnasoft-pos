@@ -69,7 +69,7 @@ export function useCentralCash() {
             const { error } = await (supabase
                 .from('central_cash_movements' as any)
                 .insert({
-                    // business_id: businessId, // Auto-assigned by DB Trigger
+                    business_id: businessId,
                     type,
                     amount,
                     description,
@@ -92,7 +92,7 @@ export function useCentralCash() {
 
     useEffect(() => {
         fetchMovements();
-    }, []);
+    }, [businessId]);
 
     return {
         movements,

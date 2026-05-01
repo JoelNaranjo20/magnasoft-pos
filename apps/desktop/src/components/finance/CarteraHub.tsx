@@ -13,6 +13,7 @@ interface CombinedDebt {
     status: string;
     date: string;
     id_ref: string;
+    description?: string;
 }
 
 interface CombinedPayment {
@@ -34,8 +35,22 @@ export const CarteraHub = () => {
     const [selectedItem, setSelectedItem] = useState<CombinedDebt | null>(null);
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
+    const [cashTarget, setCashTarget] = useState<'daily' | 'central'>('daily');
+
+    // Derived: whether the selected item's credit was created today
+    const isCreditFromToday = selectedItem
+        ? new Date(selectedItem.date).toDateString() === new Date().toDateString()
+        : false;
 
     const [searchTerm, setSearchTerm] = useState('');
+
+    // --- New Manual Debt State ---
+    const [showNewDebtModal, setShowNewDebtModal] = useState(false);
+    const [newDebtAmount, setNewDebtAmount] = useState('');
+    const [newDebtNotes, setNewDebtNotes] = useState('');
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+    const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+    const [customerSearchResults, setCustomerSearchResults] = useState<{ id: string, name: string }[]>([]);
 
     // Pagination State
     const [pendingPage, setPendingPage] = useState(1);
@@ -52,6 +67,7 @@ export const CarteraHub = () => {
     });
 
     const cashSession = useSessionStore((state) => state.cashSession);
+    const businessId = useBusinessStore((state: any) => state.id);
 
     const [openTooltip, setOpenTooltip] = useState<string | null>(null);
 
@@ -61,7 +77,7 @@ export const CarteraHub = () => {
             // 1. Fetch Customer Debts
             const { data: customerDebts } = await (supabase as any)
                 .from('customer_debts')
-                .select('*, customer:customers(name)')
+                .select('*, customer:customers(name), sale:sales(sale_items(name))')
                 .neq('status', 'paid');
 
             // 2. Fetch Worker Loans
@@ -72,16 +88,23 @@ export const CarteraHub = () => {
 
             // 3. Combine Pending
             const combinedPendientes: CombinedDebt[] = [
-                ...(customerDebts || []).map((d: any) => ({
-                    id: d.id,
-                    type: 'customer' as const,
-                    name: d.customer?.name || 'Cliente',
-                    total_amount: d.amount,
-                    remaining_amount: d.remaining_amount,
-                    status: d.status,
-                    date: d.created_at,
-                    id_ref: d.sale_id?.slice(0, 8) || 'N/A'
-                })),
+                ...(customerDebts || []).map((d: any) => {
+                    let desc = d.notes || 'Crédito';
+                    if (d.sale && d.sale.sale_items && d.sale.sale_items.length > 0) {
+                        desc = d.sale.sale_items.map((i: any) => i.name).filter(Boolean).join(', ');
+                    }
+                    return {
+                        id: d.id,
+                        type: 'customer' as const,
+                        name: d.customer?.name || 'Cliente',
+                        total_amount: d.amount,
+                        remaining_amount: d.remaining_amount,
+                        status: d.status,
+                        date: d.created_at,
+                        id_ref: d.sale_id ? d.sale_id.split('-')[0] : 'MANUAL',
+                        description: desc
+                    };
+                }),
                 ...(workerLoans || []).map((l: any) => ({
                     id: l.id,
                     type: 'worker' as const,
@@ -90,7 +113,8 @@ export const CarteraHub = () => {
                     remaining_amount: l.amount - (l.total_paid || 0),
                     status: l.status,
                     date: l.created_at,
-                    id_ref: 'PRÉSTAMO'
+                    id_ref: 'PRESTAMO',
+                    description: l.notes || 'Préstamo / Adelanto'
                 }))
             ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -146,12 +170,15 @@ export const CarteraHub = () => {
 
                 const { data: movements } = await supabase
                     .from('cash_movements')
-                    .select('amount, type')
+                    .select('amount, type, payment_method')
                     .eq('session_id', cashSession.id);
 
                 (movements || []).forEach((m: any) => {
-                    if (m.type === 'income') incomes += m.amount;
-                    else expenses += m.amount;
+                    const isCash = !m.payment_method || m.payment_method === 'cash';
+                    if (isCash) {
+                        if (m.type === 'income') incomes += m.amount;
+                        else expenses += m.amount;
+                    }
                 });
             }
 
@@ -181,11 +208,69 @@ export const CarteraHub = () => {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [cashSession?.id]);
+
+    useEffect(() => {
+        if (!showNewDebtModal) return;
+        const searchCustomers = async () => {
+            if (customerSearchTerm.trim().length < 2) {
+                setCustomerSearchResults([]);
+                return;
+            }
+
+            const { data } = await supabase
+                .from('customers')
+                .select('id, name')
+                .eq('business_id', businessId)
+                .ilike('name', `%${customerSearchTerm.trim()}%`)
+                .order('name', { ascending: true })
+                .limit(20);
+
+            setCustomerSearchResults(data || []);
+        };
+        const timeoutId = setTimeout(searchCustomers, 300);
+        return () => clearTimeout(timeoutId);
+    }, [customerSearchTerm, showNewDebtModal, businessId]);
+
+    const handleCreateManualDebt = async () => {
+        if (!selectedCustomerId || !newDebtAmount || isNaN(parseFloat(newDebtAmount))) return;
+        
+        try {
+            const amount = parseFloat(newDebtAmount);
+            const { error } = await supabase.from('customer_debts').insert({
+                business_id: useBusinessStore.getState().id,
+                customer_id: selectedCustomerId,
+                amount: amount,
+                remaining_amount: amount,
+                notes: newDebtNotes || 'Fiado Manual',
+                status: 'pending'
+            });
+
+            if (error) throw error;
+
+            alert('Crédito registrado correctamente');
+            setShowNewDebtModal(false);
+            setNewDebtAmount('');
+            setNewDebtNotes('');
+            setSelectedCustomerId(null);
+            setCustomerSearchTerm('');
+            fetchData();
+        } catch (error) {
+            console.error('Error creating manual debt:', error);
+            alert('Error al registrar crédito manual');
+        }
+    };
 
     const handlePayment = async () => {
         if (!selectedItem || !paymentAmount || isNaN(parseFloat(paymentAmount))) return;
         const amount = parseFloat(paymentAmount);
+
+        // Determine destination: daily cash or central cash
+        // - Credits from today: user chooses (cashTarget)
+        // - Credits from previous days: always central cash
+        const goToCentral = selectedItem.type === 'customer' && (!isCreditFromToday || cashTarget === 'central');
+
+        console.log(`📅 CarteraHub | isToday: ${isCreditFromToday} | target: ${cashTarget} | goToCentral: ${goToCentral}`);
 
         try {
             if (selectedItem.type === 'customer') {
@@ -194,10 +279,30 @@ export const CarteraHub = () => {
                         p_debt_id: selectedItem.id,
                         p_amount: amount,
                         p_payment_method: paymentMethod,
-                        p_cash_session_id: cashSession?.id,
+                        p_cash_session_id: goToCentral ? null : cashSession?.id,
                         p_notes: `Abono desde Hub de Cartera`
                     });
                 if (error) throw error;
+
+                // Register in Central Cash if needed
+                if (goToCentral) {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    const { error: centralError } = await (supabase as any)
+                        .from('central_cash_movements')
+                        .insert({
+                            type: 'income',
+                            amount: amount,
+                            description: `Abono crédito - ${selectedItem.name} (${new Date(selectedItem.date).toLocaleDateString()})`,
+                            user_id: user?.id,
+                            business_id: useBusinessStore.getState().id,
+                        });
+
+                    if (centralError) {
+                        console.error('⚠️ Error registering in Central Cash:', centralError);
+                    } else {
+                        console.log('✅ Abono registered in Central Cash');
+                    }
+                }
             } else {
                 // Worker Loan Payment
                 // Worker Loan Payment (Always Cash/Payment)
@@ -353,6 +458,13 @@ export const CarteraHub = () => {
                             <span className="material-symbols-outlined !text-lg">history</span>
                             HISTORIAL DE PAGOS
                         </button>
+                        <button
+                            onClick={() => setShowNewDebtModal(true)}
+                            className="ml-4 flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-black transition-all bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 active:scale-95"
+                        >
+                            <span className="material-symbols-outlined !text-lg">post_add</span>
+                            NUEVO CRÉDITO
+                        </button>
                     </div>
                 </div>
 
@@ -363,8 +475,8 @@ export const CarteraHub = () => {
                                 <table className="w-full text-left">
                                     <thead className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                                         <tr>
-                                            <th className="px-4 py-4">Responsable</th>
-                                            <th className="px-4 py-4">Tipo</th>
+                                            <th className="px-4 py-4 w-[25%]">Responsable</th>
+                                            <th className="px-4 py-4 w-[35%]">Concepto</th>
                                             <th className="px-4 py-4">Fecha</th>
                                             <th className="px-4 py-4">Saldo Pendiente</th>
                                             <th className="px-4 py-4 text-right">Acción</th>
@@ -393,12 +505,17 @@ export const CarteraHub = () => {
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4">
-                                                        <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${item.type === 'customer'
-                                                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/10'
-                                                            : 'bg-amber-50 text-amber-600 dark:bg-amber-900/10'
-                                                            }`}>
-                                                            {item.type === 'customer' ? 'CLIENTE' : 'TRABAJADOR'}
-                                                        </span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300 max-w-[200px] truncate" title={item.description}>
+                                                                {item.description || 'N/A'}
+                                                            </span>
+                                                            <span className={`w-fit mt-1 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${item.type === 'customer'
+                                                                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/10'
+                                                                : 'bg-amber-50 text-amber-600 dark:bg-amber-900/10'
+                                                                }`}>
+                                                                {item.type === 'customer' ? 'CLIENTE' : 'TRABAJADOR'}
+                                                            </span>
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-4">
                                                         <span className="text-xs font-bold text-slate-500">
@@ -567,6 +684,52 @@ export const CarteraHub = () => {
                                 </div>
                             ) : null}
 
+                            {/* Cash Destination — only for customer credits */}
+                            {selectedItem.type === 'customer' && (
+                                isCreditFromToday ? (
+                                    <div>
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Destino del Abono</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                onClick={() => setCashTarget('daily')}
+                                                className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+                                                    cashTarget === 'daily'
+                                                        ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500 text-blue-600 dark:text-blue-400'
+                                                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
+                                                }`}
+                                            >
+                                                <span className="material-symbols-outlined !text-[20px]">point_of_sale</span>
+                                                <div className="text-left">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Diaria</p>
+                                                    <p className="text-[9px] font-bold opacity-60 mt-0.5">Sesión actual</p>
+                                                </div>
+                                            </button>
+                                            <button
+                                                onClick={() => setCashTarget('central')}
+                                                className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+                                                    cashTarget === 'central'
+                                                        ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
+                                                }`}
+                                            >
+                                                <span className="material-symbols-outlined !text-[20px]">account_balance_wallet</span>
+                                                <div className="text-left">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Central</p>
+                                                    <p className="text-[9px] font-bold opacity-60 mt-0.5">Acumulado general</p>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-3 p-4 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl">
+                                        <span className="material-symbols-outlined text-indigo-500 !text-xl">account_balance_wallet</span>
+                                        <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-tight">
+                                            Crédito anterior → Irá automáticamente a <span className="underline">Caja Central</span>
+                                        </p>
+                                    </div>
+                                )
+                            )}
+
                             {!cashSession && (
                                 <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100">
                                     <span className="material-symbols-outlined text-rose-500 !text-sm">warning</span>
@@ -582,6 +745,115 @@ export const CarteraHub = () => {
                                 className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed mt-4 uppercase tracking-widest text-sm"
                             >
                                 Confirmar Pago
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+
+            {/* New Manual Debt Modal */}
+            {showNewDebtModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 border border-white/10 overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+                        <div className="flex items-center justify-between mb-6 shrink-0">
+                            <div>
+                                <h3 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">Nuevo Crédito</h3>
+                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Creación manual</p>
+                            </div>
+                            <button onClick={() => setShowNewDebtModal(false)} className="h-10 w-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                                <span className="material-symbols-outlined text-xl">close</span>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+                            {/* Customer Search Section */}
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Cliente</label>
+                                {selectedCustomerId ? (
+                                    <div className="flex items-center justify-between p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-2xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 flex items-center justify-center font-black">
+                                                {customerSearchTerm.charAt(0).toUpperCase()}
+                                            </div>
+                                            <span className="font-bold text-slate-700 dark:text-indigo-100">{customerSearchTerm}</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => {
+                                                setSelectedCustomerId(null);
+                                                setCustomerSearchTerm('');
+                                            }}
+                                            className="text-xs font-black text-rose-500 hover:text-rose-600 uppercase"
+                                        >
+                                            Cambiar
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="relative group">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
+                                        <input
+                                            type="text"
+                                            value={customerSearchTerm}
+                                            onChange={(e) => setCustomerSearchTerm(e.target.value)}
+                                            placeholder="Buscar cliente registrado..."
+                                            className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-bold outline-none focus:border-indigo-500 transition-all"
+                                        />
+                                        {/* Dropdown always shows if there are results */}
+                                        {customerSearchResults.length > 0 && (
+                                            <div className="absolute top-14 left-0 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl z-50 custom-scrollbar">
+                                                {customerSearchResults.map(c => (
+                                                    <button
+                                                        key={c.id}
+                                                        onClick={() => {
+                                                            setSelectedCustomerId(c.id);
+                                                            setCustomerSearchTerm(c.name);
+                                                            setCustomerSearchResults([]);
+                                                        }}
+                                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2 border-b border-slate-50 dark:border-slate-700/50 last:border-0"
+                                                    >
+                                                        <span className="material-symbols-outlined text-slate-400 text-sm">person</span>
+                                                        <span className="font-bold text-sm text-slate-700 dark:text-slate-300">{c.name}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Monto de la Deuda</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-black text-xl">$</span>
+                                    <input
+                                        type="number"
+                                        value={newDebtAmount}
+                                        onChange={(e) => setNewDebtAmount(e.target.value)}
+                                        placeholder="0.00"
+                                        className="w-full pl-10 pr-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl font-black text-xl outline-none focus:border-indigo-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Concepto / Motivo</label>
+                                <textarea
+                                    value={newDebtNotes}
+                                    onChange={(e) => setNewDebtNotes(e.target.value)}
+                                    placeholder="Ej: Saldo anterior, Deuda no registrada..."
+                                    rows={2}
+                                    className="w-full p-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-medium outline-none focus:border-indigo-500 transition-all resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
+                            <button
+                                onClick={handleCreateManualDebt}
+                                disabled={!selectedCustomerId || !newDebtAmount}
+                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed uppercase tracking-widest text-sm"
+                            >
+                                Guardar Fiado
                             </button>
                         </div>
                     </div>

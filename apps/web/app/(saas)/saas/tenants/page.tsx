@@ -22,6 +22,20 @@ export default function SaasTenantsPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
+    // --- Reset Data Modal State ---
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [selectedResetTenant, setSelectedResetTenant] = useState<{ id: string, businessId: string, email: string, businessName: string } | null>(null);
+    const [resetOptions, setResetOptions] = useState({
+        sales: false,
+        cash: false,
+        customers: false,
+        workers: false,
+        products: false,
+        queue: false
+    });
+    const [resetConfirmation, setResetConfirmation] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
+
     useEffect(() => {
         fetchTenants();
     }, []);
@@ -70,6 +84,46 @@ export default function SaasTenantsPage() {
             ));
         } catch (error: any) {
             alert('Error updating status: ' + error.message);
+        }
+    };
+
+    const handleResetData = async () => {
+        if (!selectedResetTenant) return;
+        
+        if (resetConfirmation !== 'ELIMINAR') {
+            alert('Debes escribir la palabra ELIMINAR para confirmar.');
+            return;
+        }
+
+        if (!resetOptions.sales && !resetOptions.cash && !resetOptions.customers && !resetOptions.workers && !resetOptions.products && !resetOptions.queue) {
+            alert('Debes seleccionar al menos un módulo para limpiar.');
+            return;
+        }
+
+        setIsResetting(true);
+        try {
+            const { error } = await supabase.rpc('reset_business_data_modules', {
+                p_business_id: selectedResetTenant.businessId,
+                p_delete_sales: resetOptions.sales,
+                p_delete_cash: resetOptions.cash,
+                p_delete_customers: resetOptions.customers,
+                p_delete_workers: resetOptions.workers,
+                p_delete_products: resetOptions.products,
+                p_delete_queue: resetOptions.queue
+            });
+
+            if (error) throw error;
+
+            alert(`Datos limpiados correctamente para el negocio: ${selectedResetTenant.businessName}`);
+            setShowResetModal(false);
+            setResetConfirmation('');
+            setResetOptions({ sales: false, cash: false, customers: false, workers: false, products: false, queue: false });
+            setSelectedResetTenant(null);
+        } catch (error: any) {
+            console.error('Error al reiniciar datos:', error);
+            alert('Error al reiniciar datos: ' + error.message);
+        } finally {
+            setIsResetting(false);
         }
     };
 
@@ -159,19 +213,38 @@ export default function SaasTenantsPage() {
                                             {tenant.account_status === 'active' ? 'Activo' : 'Suspendido'}
                                         </span>
                                     </td>
-                                    <td className="px-8 py-5 text-right">
-                                        <button
-                                            onClick={() => toggleStatus(tenant.id, tenant.account_status, tenant.email)}
-                                            className={`p-2 rounded-xl transition-all ${tenant.account_status === 'active'
-                                                ? 'bg-rose-50 text-rose-500 hover:bg-rose-100 hover:scale-110'
-                                                : 'bg-emerald-50 text-emerald-500 hover:bg-emerald-100 hover:scale-110'
-                                                }`}
-                                            title={tenant.account_status === 'active' ? "Suspender Acceso" : "Reactivar Acceso"}
-                                        >
-                                            <span className="material-symbols-outlined">
-                                                {tenant.account_status === 'active' ? 'block' : 'refresh'}
-                                            </span>
-                                        </button>
+                                    <td className="px-8 py-5">
+                                        <div className="flex items-center justify-end gap-2">
+                                            {tenant.business && (
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedResetTenant({
+                                                            id: tenant.id,
+                                                            businessId: tenant.business!.id,
+                                                            email: tenant.email || '',
+                                                            businessName: tenant.business!.name
+                                                        });
+                                                        setShowResetModal(true);
+                                                    }}
+                                                    className="p-2 rounded-xl transition-all bg-amber-50 text-amber-500 hover:bg-amber-100 hover:scale-110"
+                                                    title="Limpiar Datos (Zona Peligrosa)"
+                                                >
+                                                    <span className="material-symbols-outlined">delete_sweep</span>
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => toggleStatus(tenant.id, tenant.account_status, tenant.email)}
+                                                className={`p-2 rounded-xl transition-all ${tenant.account_status === 'active'
+                                                    ? 'bg-rose-50 text-rose-500 hover:bg-rose-100 hover:scale-110'
+                                                    : 'bg-emerald-50 text-emerald-500 hover:bg-emerald-100 hover:scale-110'
+                                                    }`}
+                                                title={tenant.account_status === 'active' ? "Suspender Acceso" : "Reactivar Acceso"}
+                                            >
+                                                <span className="material-symbols-outlined">
+                                                    {tenant.account_status === 'active' ? 'block' : 'refresh'}
+                                                </span>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -179,6 +252,155 @@ export default function SaasTenantsPage() {
                     </table>
                 </div>
             </div>
+
+            {/* Modal de Limpieza de Datos (Solo SuperAdmin) */}
+            {showResetModal && selectedResetTenant && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-0">
+                    <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300"></div>
+                    
+                    <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom-8 sm:zoom-in-95 duration-300">
+                        {/* Header Rojo de Peligro */}
+                        <div className="p-6 bg-red-50 dark:bg-red-900/10 border-b border-red-100 dark:border-red-900/30 flex items-center gap-4">
+                            <div className="size-12 rounded-2xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                                <span className="material-symbols-outlined !text-[28px]">delete_forever</span>
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-slate-900 dark:text-white">Limpiar Datos</h3>
+                                <p className="text-sm font-medium text-red-600 dark:text-red-400">
+                                    Negocio: {selectedResetTenant.businessName}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="p-6">
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-100 dark:border-amber-900/30">
+                                ⚠️ Se borrarán permanentemente los datos seleccionados. El negocio y su configuración se conservarán.
+                            </p>
+
+                            <div className="grid grid-cols-1 gap-2 mb-6 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.sales}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, sales: e.target.checked })}
+                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                        Todas las ventas e ítems de venta
+                                    </span>
+                                </label>
+
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.cash}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, cash: e.target.checked })}
+                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                        Sesiones de caja y movimientos
+                                    </span>
+                                </label>
+
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.customers}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, customers: e.target.checked })}
+                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                        Clientes y vehículos
+                                    </span>
+                                </label>
+
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.workers}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, workers: e.target.checked })}
+                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                        Trabajadores y comisiones
+                                    </span>
+                                </label>
+
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.products}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, products: e.target.checked })}
+                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                        Productos y servicios
+                                    </span>
+                                </label>
+
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.queue}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, queue: e.target.checked })}
+                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                        Cola de servicio
+                                    </span>
+                                </label>
+                            </div>
+
+                            <button
+                                onClick={() => setResetOptions({ sales: true, cash: true, customers: true, workers: true, products: true, queue: true })}
+                                className="w-full mb-6 py-2.5 border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
+                            >
+                                Seleccionar Todo
+                            </button>
+
+                            <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-800">
+                                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 block uppercase tracking-wider">
+                                    Para confirmar, escribe "ELIMINAR"
+                                </label>
+                                <input
+                                    type="text"
+                                    value={resetConfirmation}
+                                    onChange={(e) => setResetConfirmation(e.target.value)}
+                                    placeholder="ELIMINAR"
+                                    className="w-full px-4 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-slate-900 dark:text-white font-mono uppercase transition-all"
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowResetModal(false);
+                                        setResetConfirmation('');
+                                        setResetOptions({ sales: false, cash: false, customers: false, workers: false, products: false, queue: false });
+                                    }}
+                                    className="flex-1 py-3.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleResetData}
+                                    disabled={resetConfirmation !== 'ELIMINAR' || isResetting}
+                                    className="flex-1 py-3.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm shadow-xl shadow-red-500/20"
+                                >
+                                    {isResetting ? (
+                                        <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                    ) : (
+                                        <>
+                                            <span className="material-symbols-outlined !text-[18px]">warning</span>
+                                            Confirmar Borrado
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -39,56 +39,67 @@ export const CloseSessionModal = () => {
             if (!cashSession) return;
             const businessId = useBusinessStore.getState().id;
 
-            // 1. Get cash sales for this session
+            // 1. Get cash and mixed sales for this session
             const { data: cashSales } = await (supabase as any)
                 .from('sales')
-                .select('total_amount')
+                .select('total_amount, cash_amount, payment_method')
                 .eq('session_id', cashSession.id)
                 .eq('business_id', businessId)
                 .eq('status', 'completed')
-                .eq('payment_method', 'cash');
+                .in('payment_method', ['cash', 'mixed']);
 
-            const cashSalesTotal = cashSales?.reduce((acc: number, sale: any) => acc + Number(sale.total_amount), 0) || 0;
+            const cashSalesTotal = cashSales?.reduce((acc: number, sale: any) => {
+                if (sale.payment_method === 'mixed') return acc + Number(sale.cash_amount || 0);
+                return acc + Number(sale.total_amount || 0);
+            }, 0) || 0;
 
-            // 2. Get cash movements (assuming all movements are cash for now)
+            // 2. Get all movements (cash, transfer, card)
             const { data: movements } = await supabase
                 .from('cash_movements')
-                .select('amount, type')
+                .select('amount, type, payment_method')
                 .eq('session_id', cashSession.id)
                 .eq('business_id', businessId);
 
-            const movementBalance = movements?.reduce((acc, mov) => {
-                return mov.type === 'income' ? acc + Number(mov.amount) : acc - Number(mov.amount);
-            }, 0) || 0;
+            // Separate movements by method
+            let cashMovementBalance = 0;
+            let digitalMovementBalance = 0;
 
-            // Expected Cash: Base + Cash Sales + Movements
-            setExpectedTotal((cashSession.start_amount || 0) + cashSalesTotal + movementBalance);
+            movements?.forEach(mov => {
+                const amt = Number(mov.amount);
+                const isIncome = mov.type === 'income';
+                
+                // If it's cash, affects physical money
+                if (mov.payment_method === 'cash') {
+                    cashMovementBalance += isIncome ? amt : -amt;
+                }
+                // If it's transfer/card, affects digital money (like in "Canje" favors)
+                else if (mov.payment_method === 'transfer' || mov.payment_method === 'card') {
+                    digitalMovementBalance += isIncome ? amt : -amt;
+                }
+            });
 
-            // 3. Get digital sales (card + transfer)
-            const { data: digitalSales } = await (supabase as any)
-                .from('sales')
-                .select('total_amount')
-                .eq('session_id', cashSession.id)
-                .eq('business_id', businessId)
-                .eq('status', 'completed')
-                .in('payment_method', ['card', 'transfer']);
-
-            const digitalSalesTotal = digitalSales?.reduce((acc: number, sale: any) => acc + Number(sale.total_amount), 0) || 0;
-
-            // 4. Get debt payments made by digital methods
-            const { data: digitalAbonos } = await (supabase as any)
+            // 4. Get ALL debt payments made in this session (cash, card, transfer)
+            const { data: debtPayments } = await (supabase as any)
                 .from('debt_payments')
-                .select('amount')
+                .select('amount, payment_method')
                 .eq('cash_session_id', cashSession.id)
-                .eq('business_id', businessId)
-                .in('payment_method', ['card', 'transfer']);
+                .eq('business_id', businessId);
 
-            const abonosTotal = digitalAbonos?.reduce((acc: number, abono: any) => acc + Number(abono.amount), 0) || 0;
+            let cashAbonosTotal = 0;
+            let digitalAbonosTotal = 0;
+            debtPayments?.forEach((dp: any) => {
+                const amt = Number(dp.amount);
+                if (dp.payment_method === 'cash') cashAbonosTotal += amt;
+                else digitalAbonosTotal += amt;
+            });
 
-            // DIGITAL SISTEMA = ONLY Digital Sales + Digital Abonos
-            const totalDigitalSistema = digitalSalesTotal + abonosTotal;
+            // Expected Cash: Base + Cash Sales + Cash Movements + Cash Abonos
+            setExpectedTotal((cashSession.opening_balance || 0) + cashSalesTotal + cashMovementBalance + cashAbonosTotal);
+
+            // DIGITAL SISTEMA = Digital Sales + Digital Abonos + Digital Movements (Favors)
+            const totalDigitalSistema = digitalSalesTotal + digitalAbonosTotal + digitalMovementBalance;
             setExpectedDigitalTotal(totalDigitalSistema);
-            setDigitalCount((digitalSales?.length || 0) + (digitalAbonos?.length || 0));
+            setDigitalCount((digitalSales?.length || 0) + (digitalAbonos?.length || 0) + (movements?.filter(m => m.payment_method === 'transfer' || m.payment_method === 'card').length || 0));
             setManualDigitalAmount(totalDigitalSistema); // Default to expected
 
             // 5. Get commission data for this session
@@ -398,9 +409,9 @@ export const CloseSessionModal = () => {
                                         <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Ganancia en Efectivo</span>
                                         <span className="material-symbols-outlined text-emerald-500 text-sm">trending_up</span>
                                     </div>
-                                    <span className="text-xl font-black text-emerald-600 dark:text-emerald-300">{formatCurrency(totalCounted - (cashSession?.start_amount || 0))}</span>
+                                    <span className="text-xl font-black text-emerald-600 dark:text-emerald-300">{formatCurrency(totalCounted - (cashSession?.opening_balance || 0))}</span>
                                     <p className="mt-1 text-[10px] text-emerald-600/70 dark:text-emerald-500/50 leading-tight">
-                                        Efectivo Final ({formatCurrency(totalCounted)}) - Base Inicial ({formatCurrency(cashSession?.start_amount || 0)})
+                                        Efectivo Final ({formatCurrency(totalCounted)}) - Base Inicial ({formatCurrency(cashSession?.opening_balance || 0)})
                                     </p>
                                 </div>
                             </div>
@@ -454,7 +465,7 @@ export const CloseSessionModal = () => {
                             <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/40 border rounded-xl border-slate-200 dark:border-slate-700">
                                 <div className="flex flex-col">
                                     <span className="text-[10px] font-black text-slate-400 uppercase">Base Inicial</span>
-                                    <span className="text-xl font-black text-slate-700 dark:text-slate-200 tabular-nums">{formatCurrency(cashSession?.start_amount || 0)}</span>
+                                    <span className="text-xl font-black text-slate-700 dark:text-slate-200 tabular-nums">{formatCurrency(cashSession?.opening_balance || 0)}</span>
                                 </div>
                                 <span className="material-symbols-outlined text-slate-300">account_balance_wallet</span>
                             </div>
@@ -477,16 +488,6 @@ export const CloseSessionModal = () => {
                                 <span className="material-symbols-outlined text-primary/40 text-3xl">payments</span>
                             </div>
 
-                            {/* Card: Resulting Transfer to Central */}
-                            <div className="flex items-center justify-between p-4 bg-emerald-500 text-white rounded-xl shadow-xl shadow-emerald-500/20 animate-in zoom-in-95 duration-300">
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-black uppercase tracking-wider opacity-80 leading-none mb-1">Entregar a Admin</span>
-                                    <span className="text-2xl font-black tabular-nums">{formatCurrency(totalCounted)}</span>
-                                </div>
-                                <div className="size-10 rounded-lg bg-white/20 flex items-center justify-center">
-                                    <span className="material-symbols-outlined !text-2xl">account_balance</span>
-                                </div>
-                            </div>
 
                             {/* Card: Difference */}
                             <div className={`p-5 rounded-xl border-2 transition-all ${difference < 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : difference > 0 ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'}`}>

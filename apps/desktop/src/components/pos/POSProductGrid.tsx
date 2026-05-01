@@ -2,8 +2,9 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useCartStore } from '../../store/useCartStore';
+import { useDashboardConfig } from '../../hooks/useDashboardConfig';
 import {
-    Search, Package, Scissors, Coffee, Shirt,
+    Package, Scissors, Coffee, Shirt,
     Zap, Star, Gift, Tag, ShoppingBag, Briefcase,
     Wrench, Car, PenTool, Smile
 } from 'lucide-react';
@@ -115,18 +116,24 @@ interface ProductItem {
     price: number;
     stock?: number;
     category_id?: string;
-    icon?: string; // Nuevo campo
+    icon?: string;
+    commission_percentage?: number | null;
+    metadata?: any;
     service_type: 'PRODUCT' | 'SERVICE';
 }
 
 export const POSProductGrid = () => {
     const [items, setItems] = useState<ProductItem[]>([]);
+    const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     const businessId = useBusinessStore(state => state.id);
-    const { addItem, activeCategoryId } = useCartStore();
+    const { addItem, activeCategoryId, globalSearchTerm } = useCartStore();
+    const { config: dashConfig } = useDashboardConfig();
+
+    const hideAllByDefault = dashConfig.pos_hide_all_items;
+    const hasFilter = !!activeCategoryId || (globalSearchTerm?.trim().length ?? 0) > 0;
 
     // --- Fetch Data ---
     useEffect(() => {
@@ -139,20 +146,32 @@ export const POSProductGrid = () => {
                 // A. Productos (Pedimos el icono)
                 const { data: productsData, error: productsError } = await supabase
                     .from('products')
-                    .select('id, name, price, stock, category_id, icon')
+                    .select('id, name, price, stock, category_id, icon, commission_percentage, metadata')
                     .eq('business_id', businessId)
                     .eq('active', true);
 
                 if (productsError) throw productsError;
 
-                // B. Servicios (Pedimos el icono)
+                // B. Servicios (Incluimos commission_percentage para cálculo de comisiones)
+                // IMPORTANTE: services almacena la categoría como nombre de texto en `category`,
+                // NO como UUID en category_id. Por eso pedimos ambos campos.
                 const { data: servicesData, error: servicesError } = await supabase
                     .from('services')
-                    .select('id, name, price, category_id, icon')
+                    .select('id, name, price, category_id, category, icon, commission_percentage, is_variable_price')
                     .eq('business_id', businessId)
                     .eq('active', true);
 
                 if (servicesError) throw servicesError;
+
+                // C. Categorías (para resolver el filtro de servicios por nombre)
+                // Usamos `as any` porque `categories` no está en los tipos generados de Supabase
+                const { data: categoriesData } = await (supabase as any)
+                    .from('categories')
+                    .select('id, name')
+                    .eq('business_id', businessId)
+                    .order('name');
+
+                setCategories(categoriesData || []);
 
                 const formattedProducts: ProductItem[] = (productsData || []).map((p: any) => ({
                     ...p, service_type: 'PRODUCT'
@@ -187,14 +206,33 @@ export const POSProductGrid = () => {
 
     // --- Filtros ---
     const filteredItems = useMemo(() => {
+        // Nombre de la categoría activa (fallback para servicios sin category_id)
+        const activeCategoryName = activeCategoryId
+            ? (categories.find(c => c.id === activeCategoryId)?.name ?? null)
+            : null;
+
         return items.filter(item => {
-            const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesCategory = activeCategoryId
-                ? item.category_id === activeCategoryId
-                : true;
+            const matchesSearch = !globalSearchTerm.trim() ||
+                item.name.toLowerCase().includes(globalSearchTerm.toLowerCase().trim());
+
+            let matchesCategory = true;
+            if (activeCategoryId) {
+                if (item.category_id) {
+                    // Tanto productos como servicios: comparar por UUID si está disponible
+                    matchesCategory = item.category_id === activeCategoryId;
+                } else if (item.service_type === 'SERVICE') {
+                    // Fallback solo para servicios sin category_id: comparar por nombre de categoría
+                    matchesCategory = !!(activeCategoryName &&
+                        (item as any).category?.toLowerCase().trim() === activeCategoryName.toLowerCase().trim());
+                } else {
+                    // Producto sin category_id → no pertenece a ninguna categoría
+                    matchesCategory = false;
+                }
+            }
+
             return matchesSearch && matchesCategory;
         });
-    }, [items, searchTerm, activeCategoryId]);
+    }, [items, categories, globalSearchTerm, activeCategoryId]);
 
     // --- Helper para renderizar icono ---
     const renderIcon = (iconName: string | undefined, type: string) => {
@@ -213,22 +251,24 @@ export const POSProductGrid = () => {
         );
     }
 
-    return (
-        <div className="flex flex-col h-full bg-gray-50 dark:bg-slate-900">
-            {/* Buscador Estilizado */}
-            <div className="p-4 sticky top-0 z-10 bg-gray-50/95 dark:bg-slate-900/95 backdrop-blur-sm">
-                <div className="relative max-w-2xl mx-auto">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <input
-                        type="text"
-                        placeholder="Buscar productos..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-white dark:bg-slate-800 border-0 shadow-sm ring-1 ring-gray-200 dark:ring-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-gray-700 dark:text-gray-200 placeholder:text-gray-400"
-                    />
+    // Cuando el ajuste "Ocultar productos/servicios en POS" está activo:
+    // mostrar pantalla vacía hasta que se seleccione categoría o se escriba algo.
+    if (hideAllByDefault && !hasFilter) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-slate-500 gap-4 select-none">
+                <div className="p-5 rounded-2xl bg-gray-100 dark:bg-slate-800">
+                    <Car size={48} className="opacity-40" />
+                </div>
+                <div className="text-center">
+                    <p className="font-semibold text-base text-gray-500 dark:text-slate-400">Selecciona una categoría</p>
+                    <p className="text-sm text-gray-400 dark:text-slate-500 mt-1">o escribe para buscar un servicio o producto</p>
                 </div>
             </div>
+        );
+    }
 
+    return (
+        <div className="flex flex-col h-full bg-gray-50 dark:bg-slate-900">
             {/* Grid de Tarjetas Premium */}
             <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
                 {filteredItems.length === 0 ? (
@@ -253,7 +293,7 @@ export const POSProductGrid = () => {
                                         }
                                     }}
                                     className={`
-                    relative group flex flex-col justify-between p-5 h-full min-h-[180px]
+                    relative group flex flex-col justify-between p-3 h-full min-h-[140px]
                     rounded-2xl overflow-hidden
                     transition-all duration-300 ease-out
                     select-none cursor-pointer
@@ -282,10 +322,10 @@ export const POSProductGrid = () => {
                                     )}
 
                                     {/* Icono Central con Efecto Glassmorphism */}
-                                    <div className="flex justify-center mb-4 mt-1">
+                                    <div className="flex justify-center mb-2 mt-1">
                                         <div className={`
-                      p-6 rounded-3xl transition-all duration-300 backdrop-blur-sm
-                      shadow-lg group-hover:shadow-xl group-hover:scale-110
+                      p-3 rounded-2xl transition-all duration-300 backdrop-blur-sm
+                      shadow-md group-hover:shadow-lg group-hover:scale-110
                       bg-gradient-to-br ${theme.icon.light} ${theme.icon.dark}
                     `}>
                                             {renderIcon(item.icon, item.service_type)}
@@ -293,13 +333,13 @@ export const POSProductGrid = () => {
                                     </div>
 
                                     {/* Información */}
-                                    <div className="text-center space-y-2 relative z-10">
-                                        <h3 className="font-bold text-gray-900 dark:text-white text-[15px] leading-snug line-clamp-2 h-10 flex items-center justify-center px-1 drop-shadow-sm">
+                                    <div className="text-center space-y-1 relative z-10">
+                                        <h3 className="font-bold text-gray-900 dark:text-white text-xs leading-snug line-clamp-2 h-8 flex items-center justify-center px-1 drop-shadow-sm">
                                             {item.name}
                                         </h3>
 
-                                        <div className={`pt-3 mt-2 rounded-xl ${theme.price.light} ${theme.price.dark} backdrop-blur-sm`}>
-                                            <p className={`text-xl font-black tracking-tight py-2 drop-shadow-sm`}>
+                                        <div className={`pt-1 mt-1 rounded-lg ${theme.price.light} ${theme.price.dark} backdrop-blur-sm`}>
+                                            <p className={`text-sm font-black tracking-tight py-1 drop-shadow-sm`}>
                                                 ${item.price.toLocaleString()}
                                             </p>
                                         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useActiveSession } from '../../hooks/useActiveSession';
+import { useAuth } from '../../context/AuthContext';
 
 interface RegisterAbonoModalProps {
     isOpen: boolean;
@@ -14,6 +15,7 @@ interface CustomerDebt {
     id: string;
     customer_id: string;
     remaining_amount: number;
+    created_at: string;
     customer: { name: string; phone: string };
 }
 
@@ -23,8 +25,16 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
     const [selectedDebtId, setSelectedDebtId] = useState('');
     const [amount, setAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('transfer');
+    const [cashTarget, setCashTarget] = useState<'daily' | 'central'>('daily');
     const [notes, setNotes] = useState('');
     const { activeSession, loading: loadingSession } = useActiveSession();
+    const { user, profile } = useAuth();
+
+    // Derived: selected debt and whether it's from today
+    const selectedDebt = debts.find(d => d.id === selectedDebtId) ?? null;
+    const isCreditFromToday = selectedDebt
+        ? new Date(selectedDebt.created_at).toDateString() === new Date().toDateString()
+        : false;
 
     useEffect(() => {
         if (isOpen) {
@@ -40,6 +50,7 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
                     id,
                     customer_id,
                     remaining_amount,
+                    created_at,
                     customer:customers(name, phone)
                 `)
                 .gt('remaining_amount', 0)
@@ -58,7 +69,6 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
         setLoading(true);
         try {
             const numAmount = parseFloat(amount);
-            const selectedDebt = debts.find(d => d.id === selectedDebtId);
 
             if (!selectedDebt) throw new Error('Deuda no encontrada');
             if (numAmount > selectedDebt.remaining_amount) {
@@ -66,11 +76,18 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
                 return;
             }
 
+            // Determine destination: daily cash or central cash
+            // - Credits from today: user chooses (cashTarget)
+            // - Credits from previous days: always central cash
+            const goToCentral = !isCreditFromToday || cashTarget === 'central';
+
+            console.log(`📅 Web Abono | isToday: ${isCreditFromToday} | target: ${cashTarget} | goToCentral: ${goToCentral}`);
+
             const { data, error } = await supabase.rpc('process_debt_payment', {
                 p_debt_id: selectedDebtId,
                 p_amount: numAmount,
                 p_payment_method: paymentMethod,
-                p_cash_session_id: activeSession.id,
+                p_cash_session_id: goToCentral ? null : activeSession.id,
                 p_notes: notes || `Abono de ${selectedDebt.customer.name} (Web)`
             });
 
@@ -78,6 +95,26 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
 
             const result = data?.[0];
             if (result?.success) {
+                // Register in Central Cash if needed
+                if (goToCentral) {
+                    const { data: { user: authUser } } = await supabase.auth.getUser();
+                    const { error: centralError } = await (supabase as any)
+                        .from('central_cash_movements')
+                        .insert({
+                            type: 'income',
+                            amount: numAmount,
+                            description: `Abono crédito - ${selectedDebt.customer.name} (${new Date(selectedDebt.created_at).toLocaleDateString()})`,
+                            user_id: authUser?.id,
+                            business_id: profile?.business_id,
+                        });
+
+                    if (centralError) {
+                        console.error('⚠️ Error registering in Central Cash:', centralError);
+                    } else {
+                        console.log('✅ Abono registered in Central Cash (web)');
+                    }
+                }
+
                 alert('Abono registrado con éxito');
                 onSuccess?.();
                 onClose();
@@ -176,6 +213,53 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
                             ))}
                         </div>
                     </div>
+
+                    {/* Cash Destination — shown when credit is from today */}
+                    {selectedDebt && isCreditFromToday && (
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Destino del Abono</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => setCashTarget('daily')}
+                                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+                                        cashTarget === 'daily'
+                                            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500 text-blue-600 dark:text-blue-400'
+                                            : 'bg-slate-50 dark:bg-slate-900/50 border-transparent text-slate-500 hover:border-slate-200'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined !text-[22px]">point_of_sale</span>
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Diaria</p>
+                                        <p className="text-[9px] font-bold opacity-60 mt-0.5">Sesión actual</p>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => setCashTarget('central')}
+                                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
+                                        cashTarget === 'central'
+                                            ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                                            : 'bg-slate-50 dark:bg-slate-900/50 border-transparent text-slate-500 hover:border-slate-200'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined !text-[22px]">account_balance_wallet</span>
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Central</p>
+                                        <p className="text-[9px] font-bold opacity-60 mt-0.5">Acumulado general</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Auto-destination badge for previous day credits */}
+                    {selectedDebt && !isCreditFromToday && (
+                        <div className="flex items-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl">
+                            <span className="material-symbols-outlined text-indigo-500 !text-lg">account_balance_wallet</span>
+                            <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-tight">
+                                Crédito anterior → Irá automáticamente a <span className="underline">Caja Central</span>
+                            </p>
+                        </div>
+                    )}
 
                     {/* Notes */}
                     <div className="space-y-2">

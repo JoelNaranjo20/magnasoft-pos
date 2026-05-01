@@ -614,9 +614,16 @@ export const WorkerPaymentCalculator = () => {
                                             commissions.slice((commissionsPage - 1) * ITEMS_PER_PAGE, commissionsPage * ITEMS_PER_PAGE).map(comm => (
                                                 <tr key={comm.id} className="hover:bg-slate-50 transition-colors">
                                                     <td className="px-4 py-3 text-slate-500">{new Date(comm.created_at).toLocaleDateString()}</td>
-                                                    <td className="px-4 py-3 font-medium">{comm.sale_item?.name || 'Varios'}</td>
+                                                    <td className="px-4 py-3 font-medium">
+                                                        {comm.service_type === 'tip' ? (
+                                                            <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                                                                <span className="material-symbols-outlined !text-[16px]">volunteer_activism</span>
+                                                                Propina
+                                                            </span>
+                                                        ) : (comm.sale_item?.name || 'Varios')}
+                                                    </td>
                                                     <td className="px-4 py-3 opacity-60">${comm.base_amount.toLocaleString()}</td>
-                                                    <td className="px-4 py-3 font-bold text-emerald-600">${comm.commission_amount.toLocaleString()}</td>
+                                                    <td className={`px-4 py-3 font-bold ${comm.service_type === 'tip' ? 'text-amber-600' : 'text-emerald-600'}`}>${comm.commission_amount.toLocaleString()}</td>
                                                     <td className="px-4 py-3 text-right">
                                                         <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${comm.status === 'paid' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
                                                             {comm.status === 'paid' ? 'Pagado' : 'Pendiente'}

@@ -3,6 +3,20 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { Pagination } from '../../ui/Pagination';
 import { CashMovementsModal } from '../../modals/CashMovementsModal';
+import { format, isSameDay } from 'date-fns';
+import { es } from 'date-fns/locale/es';
+
+// Devuelve etiqueta "Turno del d de MMMM" basada en la fecha de APERTURA
+const shiftLabel = (openedAt: string) => {
+    const d = new Date(openedAt);
+    return format(d, "d 'de' MMMM", { locale: es });
+};
+
+// True si la sesión cerró en un día diferente al de apertura
+const crossesMidnight = (openedAt: string, closedAt?: string | null) => {
+    if (!closedAt) return false;
+    return !isSameDay(new Date(openedAt), new Date(closedAt));
+};
 
 export const SessionHistory = () => {
     const [sessions, setSessions] = useState<any[]>([]);
@@ -161,39 +175,66 @@ export const SessionHistory = () => {
                     </div>
 
                     <div className={`overflow-y-auto custom-scrollbar flex-1 ${isSidebarCollapsed ? 'invisible opacity-0' : 'visible opacity-100 transition-opacity duration-300'}`}>
-                        {sessions.map((session) => (
-                            <div
-                                key={session.id}
-                                onClick={() => fetchSessionDetails(session.id)}
-                                className={`p-4 border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-700/30 ${selectedSessionId === session.id ? 'bg-primary/5 dark:bg-primary/10 border-l-4 border-l-primary' : ''
+                        {sessions.map((session) => {
+                            const midnight = crossesMidnight(session.opened_at, session.closed_at);
+                            return (
+                                <div
+                                    key={session.id}
+                                    onClick={() => fetchSessionDetails(session.id)}
+                                    className={`p-4 border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-700/30 ${
+                                        selectedSessionId === session.id
+                                            ? 'bg-primary/5 dark:bg-primary/10 border-l-4 border-l-primary'
+                                            : ''
                                     }`}
-                            >
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex flex-col">
-                                        <span className="font-bold text-slate-900 dark:text-white">{session.workerName}</span>
-                                        <span className="text-xs text-slate-500">{new Date(session.opened_at).toLocaleString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                                    </div>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${session.status === 'open'
-                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                                        }`}>
-                                        {session.status === 'open' ? 'EN CURSO' : 'CERRADO'}
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div className="flex flex-col">
-                                        <span className="text-slate-400">Apertura</span>
-                                        <span className="font-semibold text-slate-700 dark:text-slate-300">${session.opening_balance?.toLocaleString() || '0'}</span>
-                                    </div>
-                                    {session.status === 'closed' && (
-                                        <div className="flex flex-col text-right">
-                                            <span className="text-slate-400">Cierre</span>
-                                            <span className="font-semibold text-slate-700 dark:text-slate-300">${session.closing_balance?.toLocaleString() || '0'}</span>
+                                >
+                                    {/* Cabecera: nombre de turno + badge estado */}
+                                    <div className="flex justify-between items-start mb-1.5">
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="font-black text-slate-900 dark:text-white text-sm leading-tight">
+                                                Turno del {shiftLabel(session.opened_at)}
+                                            </span>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    Apertura {format(new Date(session.opened_at), 'HH:mm')}
+                                                </span>
+                                                {midnight && (
+                                                    <span className="text-[8px] font-black px-1 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                                        CIERRA DÍA SIGUIENTE
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ml-2 ${
+                                            session.status === 'open'
+                                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                                : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                                        }`}>
+                                            {session.status === 'open' ? 'EN CURSO' : 'CERRADO'}
+                                        </span>
+                                    </div>
+
+                                    {/* Cajero + balances */}
+                                    <div className="flex items-center justify-between text-[10px] mt-2">
+                                        <span className="text-slate-400 font-medium flex items-center gap-1">
+                                            <span className="material-symbols-outlined !text-[12px]">person</span>
+                                            {session.workerName}
+                                        </span>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex flex-col items-end">
+                                                <span className="text-slate-400">Base</span>
+                                                <span className="font-bold text-slate-700 dark:text-slate-300">${session.opening_balance?.toLocaleString() || '0'}</span>
+                                            </div>
+                                            {session.status === 'closed' && (
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-slate-400">Cierre</span>
+                                                    <span className="font-bold text-slate-700 dark:text-slate-300">${session.closing_balance?.toLocaleString() || '0'}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -214,8 +255,32 @@ export const SessionHistory = () => {
                             <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
                                 <div className="flex justify-between items-start mb-4">
                                     <div>
-                                        <h4 className="text-lg font-bold text-slate-900 dark:text-white">Resumen del Turno</h4>
-                                        <p className="text-sm text-slate-500">ID: {selectedSessionId.slice(0, 8)}</p>
+                                        <h4 className="text-lg font-bold text-slate-900 dark:text-white">
+                                            Turno del {sessionDetails?.session?.opened_at
+                                                ? format(new Date(sessionDetails.session.opened_at), "d 'de' MMMM yyyy", { locale: es })
+                                                : '—'}
+                                        </h4>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <p className="text-xs text-slate-400">
+                                                Apertura: {sessionDetails?.session?.opened_at
+                                                    ? format(new Date(sessionDetails.session.opened_at), 'HH:mm')
+                                                    : '—'}
+                                            </p>
+                                            {sessionDetails?.session?.closed_at && (
+                                                <>
+                                                    <span className="text-slate-300 dark:text-slate-600">•</span>
+                                                    <p className="text-xs text-slate-400">
+                                                        Cierre: {format(new Date(sessionDetails.session.closed_at), 'dd/MM HH:mm')}
+                                                    </p>
+                                                    {crossesMidnight(sessionDetails.session.opened_at, sessionDetails.session.closed_at) && (
+                                                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                                            CRUZÓ MEDIANOCHE
+                                                        </span>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-slate-300 dark:text-slate-600 mt-0.5">ID: {selectedSessionId.slice(0, 8)}</p>
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Recaudado</div>
@@ -411,7 +476,10 @@ export const SessionHistory = () => {
                                                         <td className="px-4 py-3 text-slate-500">{new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                                         <td className="px-4 py-3">
                                                             <div className="flex flex-col">
-                                                                <span className="font-semibold text-slate-700 dark:text-slate-300">{sale.customer_name || 'Venta Rápida'}</span>
+                                                                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                                                    {sale.metadata?.quick_sale_name || sale.customer_name || 'Venta Rápida'}
+                                                                    {sale.metadata?.quick_sale_reference ? ` - ${sale.metadata.quick_sale_reference}` : ''}
+                                                                </span>
                                                                 {sale.items && sale.items.length > 0 && (
                                                                     <span className="text-[10px] text-slate-400">{sale.items[0].name} {sale.items.length > 1 ? `+${sale.items.length - 1}` : ''}</span>
                                                                 )}
@@ -428,7 +496,14 @@ export const SessionHistory = () => {
                                                                             : 'Transferencia'}
                                                             </span>
                                                         </td>
-                                                        <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">${sale.total_amount.toLocaleString()}</td>
+                                                        <td className="px-4 py-3 text-right font-bold text-slate-900 dark:text-white">
+                                                            ${sale.total_amount.toLocaleString()}
+                                                            {(sale.total_discount || 0) > 0 && (
+                                                                <span className="block text-[10px] text-amber-500 font-bold mt-0.5">
+                                                                    (-${sale.total_discount.toLocaleString()})
+                                                                </span>
+                                                            )}
+                                                        </td>
                                                     </tr>
                                                 ))}
                                                 {sales.length === 0 && (
@@ -518,12 +593,19 @@ export const SessionHistory = () => {
                                                         <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">{comm.worker?.name}</td>
                                                         <td className="px-4 py-3">
                                                             <div className="flex flex-col">
-                                                                <span className="text-slate-700 dark:text-slate-300">{comm.sale_item?.name || 'Servicio'}</span>
+                                                                {comm.service_type === 'tip' ? (
+                                                                    <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold">
+                                                                        <span className="material-symbols-outlined !text-[16px]">volunteer_activism</span>
+                                                                        Propina
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-slate-700 dark:text-slate-300">{comm.sale_item?.name || 'Servicio'}</span>
+                                                                )}
                                                                 <span className="text-[10px] text-slate-400 uppercase tracking-tight">{comm.service_type}</span>
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-3 text-slate-500">${comm.base_amount.toLocaleString()}</td>
-                                                        <td className="px-4 py-3 text-right font-black text-emerald-600 dark:text-emerald-400">
+                                                        <td className={`px-4 py-3 text-right font-black ${comm.service_type === 'tip' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                                                             ${comm.commission_amount.toLocaleString()}
                                                             <span className="text-[10px] text-slate-400 ml-1">({comm.commission_percentage}%)</span>
                                                         </td>

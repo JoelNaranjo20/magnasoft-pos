@@ -17,18 +17,22 @@ CREATE TABLE IF NOT EXISTS public.restaurant_tables (
 ALTER TABLE public.restaurant_tables ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de Seguridad (RLS) usando get_my_business_id()
+DROP POLICY IF EXISTS "Users can select their business tables" ON public.restaurant_tables;
 CREATE POLICY "Users can select their business tables"
     ON public.restaurant_tables FOR SELECT
     USING (business_id = public.get_my_business_id() OR public.is_super_admin());
 
+DROP POLICY IF EXISTS "Users can insert their business tables" ON public.restaurant_tables;
 CREATE POLICY "Users can insert their business tables"
     ON public.restaurant_tables FOR INSERT
     WITH CHECK (business_id = public.get_my_business_id() OR public.is_super_admin());
 
+DROP POLICY IF EXISTS "Users can update their business tables" ON public.restaurant_tables;
 CREATE POLICY "Users can update their business tables"
     ON public.restaurant_tables FOR UPDATE
     USING (business_id = public.get_my_business_id() OR public.is_super_admin());
 
+DROP POLICY IF EXISTS "Users can delete their business tables" ON public.restaurant_tables;
 CREATE POLICY "Users can delete their business tables"
     ON public.restaurant_tables FOR DELETE
     USING (business_id = public.get_my_business_id() OR public.is_super_admin());

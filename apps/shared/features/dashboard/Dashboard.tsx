@@ -11,7 +11,7 @@ import { RewardDetailsModal } from '@shared/components/modals/RewardDetailsModal
 import { SalesSummaryModal } from '@shared/components/modals/SalesSummaryModal';
 import type { RewardDetail } from '../../components/modals/RewardDetailsModal';
 
-type ViewPeriod = 'day' | 'week' | 'month';
+type ViewPeriod = 'day' | 'yesterday' | 'week' | 'month';
 
 
 interface DashboardStats {
@@ -33,7 +33,7 @@ interface DashboardStats {
     creditSales: number;
     cashAbonos: number;
     digitalAbonos: number;
-    serviceBreakdown?: { name: string; count: number }[];
+    serviceBreakdown?: { name: string; count: number; revenue: number }[];
 }
 
 interface ChartDataEntry {
@@ -44,6 +44,7 @@ interface ChartDataEntry {
 export const FinanceDashboard = () => {
     const cashSession = useSessionStore((state: any) => state.cashSession);
     const { config, loading: configLoading } = useDashboardConfig(); // Use Hook
+    const businessType = useBusinessStore((state: any) => state.businessType);
     const [loading, setLoading] = useState(true);
     const [viewPeriod, setViewPeriod] = useState<ViewPeriod>('day');
 
@@ -107,6 +108,28 @@ export const FinanceDashboard = () => {
                     startDate = new Date(today.setHours(0, 0, 0, 0));
                     endDate.setHours(23, 59, 59, 999);
                 }
+            } else if (viewPeriod === 'yesterday') {
+                // Find the last closed session
+                const { data: lastSession } = await supabase
+                    .from('cash_sessions')
+                    .select('opened_at, closed_at')
+                    .eq('business_id', businessId)
+                    .eq('status', 'closed')
+                    .order('closed_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (lastSession) {
+                    startDate = new Date(lastSession.opened_at);
+                    endDate = new Date(lastSession.closed_at);
+                    endDate.setSeconds(endDate.getSeconds() + 1);
+                } else {
+                    // Fallback to calendar yesterday if no closed sessions exist
+                    const yesterday = new Date(today);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    startDate = new Date(yesterday.setHours(0, 0, 0, 0));
+                    endDate = new Date(yesterday.setHours(23, 59, 59, 999));
+                }
             } else if (viewPeriod === 'week') {
                 const day = today.getDay();
                 const diff = today.getDate() - day + (day === 0 ? -6 : 1);
@@ -128,7 +151,7 @@ export const FinanceDashboard = () => {
                     items:sale_items(
                         *,
                         product:products(price, name, category:categories(name)),
-                        service:services(price, name, category:categories(name))
+                        service:services(price, name, category)
                     )
                 `)
                 .eq('business_id', businessId)
@@ -148,13 +171,16 @@ export const FinanceDashboard = () => {
             let mechanics = 0;
             let totalItems = 0;
             let totalLostRevenue = 0;
+            let cashSales = 0;
+            let digitalSales = 0;
+            let creditSales = 0;
             const collectedRewards: RewardDetail[] = [];
 
             // Chart Data Preparation
             const chartMap = new Map<number, ChartDataEntry>();
 
             // Initialize chart keys based on period
-            if (viewPeriod === 'day') {
+            if (viewPeriod === 'day' || viewPeriod === 'yesterday') {
                 for (let i = 0; i < 24; i++) chartMap.set(i, { name: `${i}:00`, value: 0 });
             } else if (viewPeriod === 'week') {
                 const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -165,12 +191,32 @@ export const FinanceDashboard = () => {
             }
 
             sales?.forEach((sale: any) => {
-                income += sale.total_amount || 0;
+                const tot = sale.total_amount || 0;
+                if (sale.payment_method === 'mixed') {
+                    // Use precise sub-amounts for mixed payments
+                    const saleCash = sale.cash_amount || 0;
+                    const saleDigital = (sale.card_amount || 0) + (sale.transfer_amount || 0);
+                    const saleCredit = sale.credit_amount || 0;
+                    income += saleCash + saleDigital; // credit doesn't count as real income yet
+                    cashSales += saleCash;
+                    digitalSales += saleDigital;
+                    creditSales += saleCredit;
+                } else if (sale.payment_method === 'credit') {
+                    creditSales += tot;
+                    // credit doesn't add to income
+                } else if (sale.payment_method === 'cash') {
+                    income += tot;
+                    cashSales += tot;
+                } else {
+                    // card, transfer, etc.
+                    income += tot;
+                    digitalSales += tot;
+                }
 
                 // Chart Data Aggregation
                 const saleDate = new Date(sale.created_at);
                 let key: number;
-                if (viewPeriod === 'day') key = saleDate.getHours();
+                if (viewPeriod === 'day' || viewPeriod === 'yesterday') key = saleDate.getHours();
                 else if (viewPeriod === 'week') key = saleDate.getDay();
                 else key = saleDate.getDate();
 
@@ -225,29 +271,34 @@ export const FinanceDashboard = () => {
             let digitalAbonos = 0;
 
             movements.forEach(m => {
+                const desc = (m.description || '').toLowerCase();
+                const isCanje = desc.startsWith('[canje]');
+                if (isCanje) return; // Completely exclude Canjes from Dashboard operational metrics
+
                 if (m.type === 'expense') {
                     totalExpenses += m.amount || 0;
                 } else {
-                    const desc = (m.description || '').toLowerCase();
                     if (desc.includes('transferencia') || desc.includes('tarjeta')) {
                         digitalAbonos += m.amount || 0;
                     } else {
                         cashAbonos += m.amount || 0;
                     }
+
+                    // Add to chart data aggregation
+                    const mDate = new Date(m.created_at);
+                    let key: number;
+                    if (viewPeriod === 'day' || viewPeriod === 'yesterday') key = mDate.getHours();
+                    else if (viewPeriod === 'week') key = mDate.getDay();
+                    else key = mDate.getDate();
+
+                    if (chartMap.has(key)) {
+                        const entry = chartMap.get(key)!;
+                        entry.value += m.amount || 0;
+                    }
                 }
             });
 
-            // Calculate Sale Breakdowns
-            let cashSales = 0;
-            let digitalSales = 0;
-            let creditSales = 0;
-
-            sales?.forEach((sale: any) => {
-                const total = sale.total_amount || 0;
-                if (sale.payment_method === 'cash') cashSales += total;
-                else if (sale.payment_method === 'credit') creditSales += total;
-                else digitalSales += total;
-            });
+            // Calculate Sale Breakdowns (Merged into first loop)
 
             setMovements(movements.filter(m => m.type === 'expense'));
 
@@ -260,7 +311,7 @@ export const FinanceDashboard = () => {
             }
 
             // Service Breakdown Calculation
-            const serviceMap: Record<string, number> = {};
+            const serviceMap: Record<string, { count: number; revenue: number }> = {};
 
             sales?.forEach((sale: any) => {
                 sale.items?.forEach((item: any) => {
@@ -268,20 +319,26 @@ export const FinanceDashboard = () => {
                     if (item.service_id || !item.product_id) {
                         // Intentar obtener nombre del servicio, o de la categoría, o fallback
                         let name = item.service?.name || item.name || 'Servicio General';
+                        const qty = item.quantity || 1;
+                        const price = item.unit_price || 0;
 
                         // Normalizar nombres comunes si es necesario, o mantener exacto
                         // Por ahora mantenemos exacto para "linea por linea"
 
-                        if (!serviceMap[name]) serviceMap[name] = 0;
-                        serviceMap[name] += (item.quantity || 1);
+                        if (!serviceMap[name]) serviceMap[name] = { count: 0, revenue: 0 };
+                        serviceMap[name].count += qty;
+                        serviceMap[name].revenue += (qty * price);
                     }
                 });
             });
 
-            // Convert to array and sort
+            // Convert to array and sort by count (descending)
             const serviceBreakdown = Object.entries(serviceMap)
-                .map(([name, count]) => ({ name, count }))
+                .map(([name, data]) => ({ name, count: data.count, revenue: data.revenue }))
                 .sort((a, b) => b.count - a.count);
+
+            // True Total Income = Direct Sales (No Credit) + Received Abonos
+            income = income + cashAbonos + digitalAbonos;
 
             setStats({
                 income,
@@ -356,7 +413,7 @@ export const FinanceDashboard = () => {
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
 
                     <div className="flex p-1.5 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
-                        {['day', 'week', 'month'].map((p) => (
+                        {['day', 'yesterday', 'week', 'month'].map((p) => (
                             <button
                                 key={p}
                                 onClick={() => setViewPeriod(p as ViewPeriod)}
@@ -365,7 +422,7 @@ export const FinanceDashboard = () => {
                                     : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
                                     }`}
                             >
-                                {p === 'day' ? 'Turno Actual' : p === 'week' ? 'Semana' : 'Mes'}
+                                {p === 'day' ? 'Turno Actual' : p === 'yesterday' ? 'Turno Anterior' : p === 'week' ? 'Semana' : 'Mes'}
                             </button>
                         ))}
                     </div>
@@ -373,108 +430,162 @@ export const FinanceDashboard = () => {
             </div>
 
             <div className="space-y-6 md:space-y-8">
-                {/* Stats Grid - Controlled by config.show_summary, simplified for now to keep header stats always visible or user can toggle entire block, but user said 'Cards of totals (Top)'. Let's wrap it. */}
-                {config.show_summary && (
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+                {/* Stats Grid — controlado por config.show_summary */}
+                {config.show_summary && (() => {
+                    const visibleCards = [
+                        true, // Ingresos — siempre incluida en el conteo
+                        config.show_card_ticket !== false,
+                        config.show_card_items !== false,
+                        config.show_card_clientes !== false,
+                        true, // Gastos — siempre incluida en el conteo
+                        config.show_card_promo !== false,
+                    ].filter(Boolean).length;
 
-                        <div
-                            onClick={() => setIsSalesModalOpen(true)}
-                            className="bg-gradient-to-br from-emerald-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl md:rounded-3xl p-3 md:p-8 shadow-lg shadow-emerald-100/50 dark:shadow-none border border-emerald-200 dark:border-slate-700 cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-700 transition-all group"
-                        >
-                            <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-6">
-                                <div className="p-2 md:p-4 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg md:rounded-2xl group-hover:scale-110 transition-transform">
-                                    <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 !text-xl md:!text-3xl">payments</span>
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-[10px] md:text-sm text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Ingresos</p>
-                                    <div className="flex items-center gap-1">
-                                        <p className="text-[8px] md:text-xs text-slate-500 italic">{stats.transactions} ventas</p>
+                    return (
+                        <div className="space-y-4">
+                            <div
+                                className="grid gap-3"
+                                style={{ gridTemplateColumns: `repeat(${visibleCards}, minmax(0, 1fr))` }}
+                            >
+                                {(() => {
+                                    const size = config.card_size || 'large';
+                                    const sMap = {
+                                        small: { pad: 'p-3', iconPad: 'p-1.5', iconSz: '!text-lg', title: 'text-[9px]', sub: 'text-[9px] mb-1', val: 'text-lg' },
+                                        medium: { pad: 'p-4', iconPad: 'p-2', iconSz: '!text-xl', title: 'text-[10px]', sub: 'text-[9px] mb-1.5', val: 'text-xl' },
+                                        large: { pad: 'p-5', iconPad: 'p-3', iconSz: '!text-2xl', title: 'text-xs', sub: 'text-[9px] mb-2', val: 'text-xl md:text-2xl' }
+                                    }[size];
+
+                                    return (
+                                        <>
+                                            {/* Ingresos — siempre visible */}
+                                            <div
+                                                onClick={() => setIsSalesModalOpen(true)}
+                                                className={`bg-gradient-to-br from-emerald-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-emerald-100/50 dark:shadow-none border border-emerald-200 dark:border-slate-700 cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-700 transition-all group flex flex-col items-center text-center`}
+                                            >
+                                                <div className={`${sMap.iconPad} bg-emerald-100 dark:bg-emerald-900/30 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
+                                                    <span className={`material-symbols-outlined text-emerald-600 dark:text-emerald-400 ${sMap.iconSz}`}>payments</span>
+                                                </div>
+                                                <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Ingresos</p>
+                                                <p className={`${sMap.sub} text-slate-500 italic mt-0.5`}>{stats.transactions} ventas</p>
+                                                <p className={`${sMap.val} font-black text-slate-900 dark:text-white`}>${stats.income.toLocaleString()}</p>
+                                            </div>
+
+                                            {config.show_card_ticket !== false && (
+                                                <div className={`bg-gradient-to-br from-blue-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-blue-100/50 dark:shadow-none border border-blue-200 dark:border-slate-700 flex flex-col items-center text-center`}>
+                                                    <div className={`${sMap.iconPad} bg-blue-100 dark:bg-blue-900/30 rounded-xl mb-2`}>
+                                                        <span className={`material-symbols-outlined text-blue-600 dark:text-blue-400 ${sMap.iconSz}`}>receipt_long</span>
+                                                    </div>
+                                                    <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Ticket P.</p>
+                                                    <p className={`${sMap.sub} text-slate-500 mt-0.5`}>Promedio</p>
+                                                    <p className={`${sMap.val} font-black text-slate-900 dark:text-white`}>${Math.round(stats.avgTicket).toLocaleString()}</p>
+                                                </div>
+                                            )}
+
+                                            {config.show_card_items !== false && (
+                                                <div className={`bg-gradient-to-br from-amber-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-amber-100/50 dark:shadow-none border border-amber-200 dark:border-slate-700 flex flex-col items-center text-center`}>
+                                                    <div className={`${sMap.iconPad} bg-amber-100 dark:bg-amber-900/30 rounded-xl mb-2`}>
+                                                        <span className={`material-symbols-outlined text-amber-600 dark:text-amber-400 ${sMap.iconSz}`}>inventory_2</span>
+                                                    </div>
+                                                    <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Items</p>
+                                                    <p className={`${sMap.sub} text-slate-500 mt-0.5`}>Vendidos</p>
+                                                    <p className={`${sMap.val} font-black text-slate-900 dark:text-white`}>{stats.totalItems.toLocaleString()}</p>
+                                                </div>
+                                            )}
+
+                                            {config.show_card_clientes !== false && (
+                                                <div className={`bg-gradient-to-br from-purple-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-purple-100/50 dark:shadow-none border border-purple-200 dark:border-slate-700 flex flex-col items-center text-center`}>
+                                                    <div className={`${sMap.iconPad} bg-purple-100 dark:bg-purple-900/30 rounded-xl mb-2`}>
+                                                        <span className={`material-symbols-outlined text-purple-600 dark:text-purple-400 ${sMap.iconSz}`}>people</span>
+                                                    </div>
+                                                    <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Clientes</p>
+                                                    <p className={`${sMap.sub} text-slate-500 mt-0.5`}>Únicos</p>
+                                                    <p className={`${sMap.val} font-black text-slate-900 dark:text-white`}>{stats.uniqueCustomers.toLocaleString()}</p>
+                                                </div>
+                                            )}
+
+                                            {/* Gastos — siempre visible */}
+                                            <div
+                                                onClick={() => setIsMovementsModalOpen(true)}
+                                                className={`bg-gradient-to-br from-rose-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-rose-100/50 dark:shadow-none border border-rose-200 dark:border-slate-700 cursor-pointer hover:border-rose-400 dark:hover:border-rose-700 transition-all group flex flex-col items-center text-center`}
+                                            >
+                                                <div className={`${sMap.iconPad} bg-rose-100 dark:bg-rose-900/30 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
+                                                    <span className={`material-symbols-outlined text-rose-600 dark:text-rose-400 ${sMap.iconSz}`}>upload</span>
+                                                </div>
+                                                <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Gastos</p>
+                                                <p className={`${sMap.sub} text-slate-500 italic mt-0.5`}>Egresos</p>
+                                                <p className={`${sMap.val} font-black text-rose-600 dark:text-rose-400`}>${stats.expenses.toLocaleString()}</p>
+                                            </div>
+
+                                            {config.show_card_promo !== false && (
+                                                <div
+                                                    onClick={() => setIsRewardsModalOpen(true)}
+                                                    className={`bg-gradient-to-br from-fuchsia-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-fuchsia-100/50 dark:shadow-none border border-fuchsia-200 dark:border-slate-700 cursor-pointer hover:border-purple-400 dark:hover:border-purple-700 transition-all group flex flex-col items-center text-center`}
+                                                >
+                                                    <div className={`${sMap.iconPad} bg-purple-100 dark:bg-purple-900/30 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
+                                                        <span className={`material-symbols-outlined text-purple-600 dark:text-purple-400 ${sMap.iconSz}`}>redeem</span>
+                                                    </div>
+                                                    <p className={`${sMap.title} text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Promo</p>
+                                                    <p className={`${sMap.sub} text-slate-400 italic mt-0.5`}>Impacto</p>
+                                                    <p className={`${sMap.val} font-black text-purple-600 dark:text-purple-400`}>${stats.rewardCosts.toLocaleString()}</p>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* Analytics · Resumen Operativo (Only for Automotive) */}
+                            {businessType === 'automotive' && (
+                                <div className="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-700 p-4 shadow-sm">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-primary !text-lg">analytics</span>
+                                            <h3 className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest">Resumen Operativo</h3>
+                                        </div>
+                                        {(stats.serviceBreakdown?.length ?? 0) > 0 && (
+                                            <div className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-full px-3 py-1">
+                                                <span className="text-xs font-black">{stats.serviceBreakdown!.reduce((s, x) => s + x.count, 0)}</span>
+                                                <span className="text-[9px] font-semibold uppercase tracking-wider">Servicios Hoy</span>
+                                            </div>
+                                        )}
                                     </div>
+                                    {(stats.serviceBreakdown?.length ?? 0) === 0 ? (
+                                        <p className="text-xs text-slate-400 italic text-center py-3">Sin servicios registrados en este período.</p>
+                                    ) : (
+                                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                            {stats.serviceBreakdown!.map((svc, idx) => {
+                                                const total = stats.serviceBreakdown!.reduce((s, x) => s + x.count, 0);
+                                                const pct = total > 0 ? Math.round((svc.count / total) * 100) : 0;
+                                                const colors = [
+                                                    'from-emerald-50 border-emerald-200 text-emerald-600 dark:from-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400',
+                                                    'from-blue-50 border-blue-200 text-blue-600 dark:from-blue-900/20 dark:border-blue-800 dark:text-blue-400',
+                                                    'from-amber-50 border-amber-200 text-amber-600 dark:from-amber-900/20 dark:border-amber-800 dark:text-amber-400',
+                                                    'from-purple-50 border-purple-200 text-purple-600 dark:from-purple-900/20 dark:border-purple-800 dark:text-purple-400',
+                                                    'from-rose-50 border-rose-200 text-rose-600 dark:from-rose-900/20 dark:border-rose-800 dark:text-rose-400',
+                                                    'from-cyan-50 border-cyan-200 text-cyan-600 dark:from-cyan-900/20 dark:border-cyan-800 dark:text-cyan-400',
+                                                ];
+                                                const color = colors[idx % colors.length];
+                                                return (
+                                                    <div key={svc.name} className={`bg-gradient-to-br ${color} border rounded-xl p-3 flex flex-col gap-1`}>
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-70 truncate pr-1">{idx + 1}.</span>
+                                                            <span className="text-[9px] font-bold opacity-60">{pct}%</span>
+                                                        </div>
+                                                        <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-tight line-clamp-2" title={svc.name}>{svc.name}</p>
+                                                        <div className="mt-1 flex items-end justify-between">
+                                                            <p className="text-xl font-black leading-none">{svc.count}</p>
+                                                            <p className="text-[10px] font-bold opacity-80">${svc.revenue.toLocaleString()}</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                            <p className="text-xl md:text-4xl font-black text-slate-900 dark:text-white">${stats.income.toLocaleString()}</p>
+                            )}
                         </div>
-
-                        <div className="bg-gradient-to-br from-blue-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl md:rounded-3xl p-3 md:p-8 shadow-lg shadow-blue-100/50 dark:shadow-none border border-blue-200 dark:border-slate-700">
-                            <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-6">
-                                <div className="p-2 md:p-4 bg-blue-100 dark:bg-blue-900/30 rounded-lg md:rounded-2xl">
-                                    <span className="material-symbols-outlined text-blue-600 dark:text-blue-400 !text-xl md:!text-3xl">receipt_long</span>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] md:text-sm text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Ticket P.</p>
-                                    <p className="text-[8px] md:text-xs text-slate-500 tracking-tighter">Promedio</p>
-                                </div>
-                            </div>
-                            <p className="text-xl md:text-4xl font-black text-slate-900 dark:text-white">${Math.round(stats.avgTicket).toLocaleString()}</p>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-amber-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl md:rounded-3xl p-3 md:p-8 shadow-lg shadow-amber-100/50 dark:shadow-none border border-amber-200 dark:border-slate-700">
-                            <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-6">
-                                <div className="p-2 md:p-4 bg-amber-100 dark:bg-amber-900/30 rounded-lg md:rounded-2xl">
-                                    <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 !text-xl md:!text-3xl">inventory_2</span>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] md:text-sm text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Items</p>
-                                    <p className="text-[8px] md:text-xs text-slate-500 tracking-tighter">Vendidos</p>
-                                </div>
-                            </div>
-                            <p className="text-xl md:text-4xl font-black text-slate-900 dark:text-white">{stats.totalItems.toLocaleString()}</p>
-                        </div>
-
-                        <div className="bg-gradient-to-br from-purple-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl md:rounded-3xl p-3 md:p-8 shadow-lg shadow-purple-100/50 dark:shadow-none border border-purple-200 dark:border-slate-700">
-                            <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-6">
-                                <div className="p-2 md:p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg md:rounded-2xl">
-                                    <span className="material-symbols-outlined text-purple-600 dark:text-purple-400 !text-xl md:!text-3xl">people</span>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] md:text-sm text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Clientes</p>
-                                    <p className="text-[8px] md:text-xs text-slate-500 tracking-tighter">Únicos</p>
-                                </div>
-                            </div>
-                            <p className="text-xl md:text-4xl font-black text-slate-900 dark:text-white">{stats.uniqueCustomers.toLocaleString()}</p>
-                        </div>
-
-
-                        <div
-                            onClick={() => setIsMovementsModalOpen(true)}
-                            className="bg-gradient-to-br from-rose-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl md:rounded-3xl p-3 md:p-8 shadow-lg shadow-rose-100/50 dark:shadow-none border border-rose-200 dark:border-slate-700 cursor-pointer hover:border-rose-400 dark:hover:border-rose-700 transition-all group"
-                        >
-                            <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-6">
-                                <div className="p-2 md:p-4 bg-rose-100 dark:bg-rose-900/30 rounded-lg md:rounded-2xl group-hover:scale-110 transition-transform">
-                                    <span className="material-symbols-outlined text-rose-600 dark:text-rose-400 !text-xl md:!text-3xl">upload</span>
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-[10px] md:text-sm text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider">Gastos</p>
-                                    <div className="flex items-center gap-1">
-                                        <p className="text-[8px] md:text-xs text-slate-500 italic">Egresos</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <p className="text-xl md:text-4xl font-black text-rose-600 dark:text-rose-400">${stats.expenses.toLocaleString()}</p>
-                        </div>
-
-
-                        <div
-                            onClick={() => setIsRewardsModalOpen(true)}
-                            className="bg-gradient-to-br from-fuchsia-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl md:rounded-3xl p-4 md:p-8 shadow-lg shadow-fuchsia-100/50 dark:shadow-none border border-fuchsia-200 dark:border-slate-700 cursor-pointer hover:border-purple-400 dark:hover:border-purple-700 transition-all group"
-                        >
-                            <div className="flex items-center gap-3 md:gap-4 mb-3 md:mb-6">
-                                <div className="p-2 md:p-4 bg-purple-100 dark:bg-purple-900/30 rounded-lg md:rounded-2xl group-hover:scale-110 transition-transform">
-                                    <span className="material-symbols-outlined text-purple-600 dark:text-purple-400 !text-xl md:!text-3xl">redeem</span>
-                                </div>
-                                <div className="flex-1">
-                                    <p className="text-[10px] md:text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Promo</p>
-                                    <div className="flex items-center gap-1">
-                                        <p className="text-[8px] md:text-xs text-slate-400 italic">Impacto</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <p className="text-xl md:text-4xl font-black text-purple-600 dark:text-purple-400">${stats.rewardCosts.toLocaleString()}</p>
-                        </div>
-                    </div>
-                )}
-
-
+                    );
+                })()}
 
                 {/* POSICIÓN SUPERIOR: Ventas Recientes - Conditional */}
                 {config.show_recent_transactions && (
@@ -824,9 +935,10 @@ export const FinanceDashboard = () => {
                 <SalesSummaryModal
                     isOpen={isSalesModalOpen}
                     onClose={() => setIsSalesModalOpen(false)}
-                    sales={allSales}
+                    sales={allSales.filter(sale => sale.payment_method !== 'credit')}
+                    additionalIncome={stats.cashAbonos + stats.digitalAbonos}
                     title="Resumen de Ventas"
-                    subtitle={`Todas las ventas realizadas en el periodo: ${viewPeriod === 'day' ? 'Turno Actual' : viewPeriod === 'week' ? 'Esta Semana' : 'Este Mes'}`}
+                    subtitle={`Ventas cobradas en el periodo: ${viewPeriod === 'day' ? 'Turno Actual' : viewPeriod === 'yesterday' ? 'Turno Anterior' : viewPeriod === 'week' ? 'Esta Semana' : 'Este Mes'}`}
                     onSelectSale={(sale) => {
                         setIsSalesModalOpen(false);
                         setTimeout(() => setSelectedSale(sale), 300);

@@ -7,7 +7,8 @@ import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { useModule } from '../../hooks/useModule';
-import { useProductCommission, calculateProductCommission as calcProdComm } from '../../hooks/useProductCommission';
+import { useProductCommission } from '../../hooks/useProductCommission';
+import { ManualRewardModal } from './ManualRewardModal';
 import type { SaleMetadata } from '../../types/pos';
 
 declare global {
@@ -43,23 +44,25 @@ interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
     customer?: Customer | null;
-    vehicle?: Vehicle | null;
     workers: Worker[]; // Received from parent
+    quickSaleReference?: string;
 }
 
-type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit';
+type PaymentMethod = 'cash' | 'card' | 'transfer' | 'credit' | 'mixed';
 
-// Fallback commission rules (aligned with DEFAULT_SETTINGS in CommissionSettings.tsx)
-const DEFAULT_COMMISSION_RULES = {
-    car_wash: 40,
-    motorcycle_wash: 50,
-    mechanics: 40,
-    alignment: 12.5,
-    inventory_sales: 6,
-    other: 0
+const detectServiceType = (item: any, vehicleType?: string | null): string => {
+    if (item.type === 'product') return 'producto';
+    if (vehicleType) return vehicleType === 'motorcycle' ? 'moto' : 'carro';
+    
+    // Fallback: tratar de deducirlo del nombre
+    const name = item.name?.toLowerCase() || '';
+    if (name.includes('moto')) return 'moto';
+    if (name.includes('auto') || name.includes('carro')) return 'carro';
+    
+    return 'servicio';
 };
 
-export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: PaymentModalProps) => {
+export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quickSaleReference }: PaymentModalProps) => {
     const { items, total, clearCart, globalWorkerId, metadata: cartMetadata } = useCartStore();
     const clearTableCart = useCartStore(state => state.clearTableCart);
     const { cashSession, user } = useSessionStore();
@@ -75,20 +78,35 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
     const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+    const [isManualRewardModalOpen, setIsManualRewardModalOpen] = useState(false);
+
+    // Split (Mixto) payment amounts
+    const [splitAmounts, setSplitAmounts] = useState({ cash: '', transfer: '', card: '', credit: '' });
 
     // Settings state
     const [assignmentMode, setAssignmentMode] = useState<'general' | 'individual'>('general');
     const [generalWorkerId, setGeneralWorkerId] = useState<string>('');
     const [itemWorkers, setItemWorkers] = useState<Record<string, string>>({});
-    const [globalCommissions, setGlobalCommissions] = useState<any>(DEFAULT_COMMISSION_RULES);
     const [loyaltySettings, setLoyaltySettings] = useState<any>({ points_per_visit: 10, points_threshold: 50 });
-    const [rewardService, setRewardService] = useState<any>(null);
-    const [isRedeeming, setIsRedeeming] = useState(false);
+    const [rewardServices, setRewardServices] = useState<any[]>([]); // multiple rewards
+    const [redeemedServiceIds, setRedeemedServiceIds] = useState<Set<string>>(new Set()); // which services have been redeemed
     const [settingsLoaded, setSettingsLoaded] = useState(false);
     const [showCommissionWarnings, setShowCommissionWarnings] = useState(false);
 
-    // Product Commission Hook
-    const { serviceRate, productRate, calculateCommission: getProductCommission } = useProductCommission(useBusinessStore.getState().id);
+    // Tips (Propinas)
+    const [tipAmount, setTipAmount] = useState<string>('');
+    const [tipWorkerId, setTipWorkerId] = useState<string>('');
+    const [showTip, setShowTip] = useState(false);
+
+    // Transfer: editable received amount (may include tip)
+    const [transferAmount, setTransferAmount] = useState<string>('');
+    // Card: editable received amount
+    const [cardAmount, setCardAmount] = useState<string>('');
+
+    // Reactive businessId — re-fetches commissions if store loads after mount
+    const businessId = useBusinessStore(state => state.id);
+    // Product Commission Hook (uses Inventory hierarchy: product → subcategory → category)
+    const { calculateCommission: getProductCommission, refetch: refetchProductCommissions } = useProductCommission(businessId);
 
     useEffect(() => {
         if (isOpen) {
@@ -97,9 +115,15 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
             setError(null);
             setSuccess(false);
             setMethod('cash');
-            setIsRedeeming(false);
+            setRedeemedServiceIds(new Set());
             setSettingsLoaded(false);
             setShowCommissionWarnings(false);
+            setTipAmount('');
+            setTipWorkerId('');
+            setShowTip(false);
+            setSplitAmounts({ cash: '', transfer: '', card: '', credit: '' });
+            setTransferAmount(String(total));
+            setCardAmount(String(total));
 
             // Initialize worker assignments from cart
             const initialAssignments: Record<string, string> = {};
@@ -136,30 +160,16 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
 
             setShowPaymentConfirmation(false);
             fetchCommissionSettings();
+            
+            // Force refetch of product category commissions in case they were updated in Inventory
+            if (hasCommissions) {
+                refetchProductCommissions();
+            }
         }
     }, [isOpen]);
 
 
     const fetchCommissionSettings = async () => {
-        try {
-            const businessId = useBusinessStore.getState().id;
-            const { data } = await supabase
-                .from('business_settings')
-                .select('value')
-                .eq('business_id', businessId)
-                .eq('setting_type', 'commissions')
-                .maybeSingle();
-
-            if (data && data.value) {
-                setGlobalCommissions(data.value);
-            }
-        } catch (error) {
-            console.error('Error fetching global commissions:', error);
-        } finally {
-            setSettingsLoaded(true);
-        }
-
-        // Fetch Loyalty Settings
         try {
             const businessId = useBusinessStore.getState().id;
             const { data } = await supabase
@@ -172,81 +182,63 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
             if (data && data.value) {
                 setLoyaltySettings(data.value);
 
-                // Fetch Reward Service if configured
-                if (data.value.reward_service_id) {
-                    const { data: service } = await (supabase as any)
+                // Resolve reward_service_ids (new) or fallback to legacy reward_service_id
+                const ids: string[] = data.value.reward_service_ids?.length
+                    ? data.value.reward_service_ids
+                    : data.value.reward_service_id
+                        ? [data.value.reward_service_id]
+                        : [];
+
+                if (ids.length > 0) {
+                    const { data: services } = await (supabase as any)
                         .from('services')
                         .select('*')
-                        .eq('id', data.value.reward_service_id)
-                        .single();
-                    setRewardService(service);
+                        .in('id', ids);
+                    setRewardServices(services || []);
+                } else {
+                    setRewardServices([]);
                 }
             }
         } catch (error) {
             console.error('Error fetching loyalty settings:', error);
+        } finally {
+            setSettingsLoaded(true);
         }
     };
 
-    const handleRedeem = () => {
-        if (!rewardService) return;
+    const handleRedeem = (service: any) => {
+        if (!service) return;
+        const alreadyRedeemed = redeemedServiceIds.has(service.id);
 
-        // Check if already in cart as free
-        const alreadyRedeemed = items.find(i => i.id === rewardService.id && i.price === 0);
-        if (alreadyRedeemed) return;
-
-        // Find existing normal price item and decrement if needed
-        const existingNormalItem = items.find(i => i.id === rewardService.id && i.price > 0);
-        if (existingNormalItem) {
-            useCartStore.getState().updateQuantity(existingNormalItem.cartId, -1);
-        }
-
-        // Add to cart with $0 price
-        useCartStore.getState().addItem(rewardService, 'service', 0);
-        setIsRedeeming(true);
-
-        // If total is now 0, automatically set amount tendered
-        setTimeout(() => {
-            if (useCartStore.getState().total === 0) {
-                setAmountTendered('0');
+        if (alreadyRedeemed) {
+            // Un-redeem: remove the free item from cart
+            const freeItem = items.find(i => i.id === service.id && i.price === 0);
+            if (freeItem) {
+                useCartStore.getState().removeItem(freeItem.cartId);
             }
-        }, 100);
+            setRedeemedServiceIds(prev => {
+                const next = new Set(prev);
+                next.delete(service.id);
+                return next;
+            });
+        } else {
+            // Redeem: optionally decrement normal-price version
+            const existingNormalItem = items.find(i => 
+                (i.id === service.id || i.name.toLowerCase().trim() === service.name.toLowerCase().trim()) && i.price > 0
+            );
+            if (existingNormalItem) {
+                useCartStore.getState().updateQuantity(existingNormalItem.cartId, -1);
+            }
+            useCartStore.getState().addItem(service, 'service', 0);
+            setRedeemedServiceIds(prev => new Set([...prev, service.id]));
+        }
     };
 
+    // Points deducted = one threshold per redeemed service
+    const isRedeeming = redeemedServiceIds.size > 0;
 
 
-    const detectServiceType = (item: any, vehicleType?: string): string => {
-        const lower = (item.name || '').toLowerCase();
 
-        // 1. Identify washing by name
-        if (lower.includes('lavado') || lower.includes('wash')) {
-            return vehicleType === 'motorcycle' ? 'motorcycle_wash' : 'car_wash';
-        }
-
-        // 2. Identify heavy mechanics/alignment
-        if (lower.includes('alineacion') || lower.includes('alineación')) {
-            return 'alignment';
-        }
-
-        if (lower.includes('mecánica') || lower.includes('reparación') || lower.includes('mantenimiento') || lower.includes('mecanica')) {
-            return 'mechanics';
-        }
-
-        // 3. Identify products (Inventory)
-        if (item.type === 'product' || lower.includes('venta') || lower.includes('producto') || lower.includes('artículo')) {
-            return 'inventory_sales';
-        }
-
-        // 4. Fallback to other
-        return 'other';
-    };
-
-    const calculateCommission = (itemPrice: number, serviceType: string, predefinedPercentage?: number): number => {
-        const percentage = (predefinedPercentage !== undefined && predefinedPercentage > 0)
-            ? predefinedPercentage
-            : (globalCommissions[serviceType] || DEFAULT_COMMISSION_RULES[serviceType as keyof typeof DEFAULT_COMMISSION_RULES] || 0);
-
-        return (itemPrice * percentage) / 100;
-    };
 
     const getWorkerForItem = (itemId: string): string => {
         if (assignmentMode === 'general') {
@@ -257,8 +249,6 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
 
     const getTotalCommissions = (): number => {
         return items.reduce((sum, item) => {
-            if (!item.commissionEnabled) return sum; // Respect the toggle
-
             const workerId = getWorkerForItem(item.cartId);
             if (!workerId) return sum;
 
@@ -266,22 +256,23 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
             let commission = 0;
 
             if (item.type === 'product') {
-                // Apply productRate logic
-                // Prioritize item-specific percentage if existing, otherwise use productRate
-                // But user requirement says: "If PRODUCT -> Apply productRate".
-                // We'll stick to the hook's calculation which now uses productRate as global fallback
+                // Products always get commission if a worker is assigned
+                // commissionEnabled is for services (can be toggled off)
                 const { commissionAmount } = getProductCommission(item.originalItem || item, item.quantity);
                 commission = commissionAmount;
             } else {
-                // Service Logic
-                // Prioritize item-specific percentage
-                const predefinedPercentage = (item.originalItem as any)?.commission_percentage;
-
-                if (predefinedPercentage !== undefined && predefinedPercentage > 0) {
-                    commission = (baseAmount * predefinedPercentage) / 100;
+                // Services: respect the commissionEnabled toggle
+                if (!item.commissionEnabled) return sum;
+                const originalItem = item.originalItem as any;
+                const commType = originalItem?.commission_type || 'percentage';
+                if (commType === 'fixed') {
+                    const fixedAmount = originalItem?.commission_amount || 0;
+                    commission = fixedAmount * item.quantity;
                 } else {
-                    // Apply serviceRate from business config
-                    commission = (baseAmount * serviceRate) / 100;
+                    const predefinedPercentage = originalItem?.commission_percentage;
+                    if (predefinedPercentage !== undefined && predefinedPercentage > 0) {
+                        commission = (baseAmount * predefinedPercentage) / 100;
+                    }
                 }
             }
 
@@ -305,11 +296,15 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                 return appliedPercentage > 0;
             }
 
-            const predefinedPercentage = (item.originalItem as any)?.commission_percentage;
-
+            const originalItem = (item.originalItem as any);
+            const commType = originalItem?.commission_type || 'percentage';
+            if (commType === 'fixed') {
+                return (originalItem?.commission_amount || 0) > 0;
+            }
+            const predefinedPercentage = originalItem?.commission_percentage;
             const percentage = (predefinedPercentage !== undefined && predefinedPercentage > 0)
                 ? predefinedPercentage
-                : (globalCommissions[serviceType] || DEFAULT_COMMISSION_RULES[serviceType as keyof typeof DEFAULT_COMMISSION_RULES] || 0);
+                : 0;
 
             return percentage > 0;
         });
@@ -318,8 +313,11 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
     const itemsMissingWorker = getItemsRequiringWorker();
 
     const numericAmount = parseFloat(amountTendered.replace(/\./g, '')) || 0;
-    const change = method === 'cash' ? numericAmount - total : 0;
-    const canConfirm = (method === 'cash' ? numericAmount >= total : (method === 'credit' ? !!customer : true));
+    const numericTip = parseFloat(tipAmount) || 0;
+    const change = method === 'cash' ? numericAmount - total - numericTip : 0;
+    const mixedTotal = (parseFloat(splitAmounts.cash) || 0) + (parseFloat(splitAmounts.transfer) || 0) + (parseFloat(splitAmounts.card) || 0) + (parseFloat(splitAmounts.credit) || 0);
+    const mixedValid = method === 'mixed' ? Math.abs(mixedTotal - total) < 1 : true;
+    const canConfirm = method === 'cash' ? numericAmount >= total : method === 'credit' ? !!customer : method === 'mixed' ? mixedValid : true;
 
     const handleNumpad = (num: string) => {
         if (num === 'backspace') {
@@ -335,12 +333,17 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
 
     // Keyboard support for calculator
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (!isOpen || method !== 'cash') return;
+        if (!isOpen) return; // Only register when modal is actually open
 
-            // Ignore if focus is in a select or other input (though usually not many here)
-            if (e.target.tagName === 'INPUT' && !e.target.readOnly) return;
-            if (e.target.tagName === 'SELECT') return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (method !== 'cash') return;
+
+            // Let editable inputs and textareas handle their own key events
+            const tag = (e.target as HTMLElement).tagName;
+            const isEditable = (e.target as HTMLInputElement).readOnly === false;
+
+            if ((tag === 'INPUT' && isEditable) || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return;
+            if (tag === 'SELECT') return;
 
             if (e.key >= '0' && e.key <= '9') {
                 e.preventDefault();
@@ -404,11 +407,30 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
             return;
         }
 
-        // Commissions module: Require global worker assignment
-        if (hasCommissions && !globalWorkerId) {
-            setError('Debes asignar un Profesional/Responsable para completar la venta.');
-            setProcessing(false);
-            return;
+        // Commissions module: Require worker assignment depending on current mode
+        if (hasCommissions) {
+            const serviceItemsWithCommission = items.filter(item =>
+                item.commissionEnabled && item.type === 'service'
+            );
+
+            if (assignmentMode === 'general') {
+                // En modo general: debe haber un trabajador global seleccionado
+                if (!generalWorkerId) {
+                    setError('Debes asignar un Profesional/Responsable para completar la venta.');
+                    setProcessing(false);
+                    return;
+                }
+            } else {
+                // En modo individual: cada servicio con comisión habilitada debe tener su trabajador
+                const missingWorker = serviceItemsWithCommission.some(
+                    item => !itemWorkers[item.cartId]
+                );
+                if (missingWorker && serviceItemsWithCommission.length > 0) {
+                    setError('Debes asignar un trabajador a cada servicio para completar la venta.');
+                    setProcessing(false);
+                    return;
+                }
+            }
         }
 
         if (!bypassConfirmation && method !== 'cash' && !showPaymentConfirmation) {
@@ -431,13 +453,19 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                 customer_id: customer?.id === 'anonymous' ? null : (customer?.id || null),
                 vehicle_id: hasVehicles ? (vehicle?.id || null) : null,
                 total_amount: total,
+                total_discount: items.reduce((sum, i) => sum + (i.originalPrice ? (i.originalPrice - i.price) * i.quantity : 0), 0),
                 payment_method: method,
+                cash_amount: method === 'cash' ? total : method === 'mixed' ? (parseFloat(splitAmounts.cash) || 0) : 0,
+                transfer_amount: method === 'transfer' ? (parseFloat(transferAmount) || total) : method === 'mixed' ? (parseFloat(splitAmounts.transfer) || 0) : 0,
+                card_amount: method === 'card' ? (parseFloat(cardAmount) || total) : method === 'mixed' ? (parseFloat(splitAmounts.card) || 0) : 0,
+                credit_amount: method === 'credit' ? total : method === 'mixed' ? (parseFloat(splitAmounts.credit) || 0) : 0,
                 status: 'completed',
                 metadata: {
-                    business_type: businessType, // Kept for analytics/reporting
+                    business_type: businessType,
                     created_from: 'desktop_pos',
+                    tip_amount: parseFloat(tipAmount) || 0,
+                    tip_worker_id: tipWorkerId || null,
 
-                    // Vehicles module: include vehicle-related metadata
                     ...(hasVehicles ? {
                         mileage: null,
                         vehicle_notes: null
@@ -454,9 +482,10 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                         table_name: cartMetadata?.table_name
                     } : {}),
 
-                    // Quick sale (anonymous customer)
-                    ...(customer?.name === 'Público General' ? {
-                        quick_sale_name: 'Público General'
+                    // Quick sale (anonymous customer) or manually typed reference
+                    ...(customer?.name === 'Público General' || quickSaleReference ? {
+                        quick_sale_name: customer?.name === 'Público General' ? 'Público General' : undefined,
+                        quick_sale_reference: quickSaleReference
                     } : {})
                 } satisfies SaleMetadata
             };
@@ -483,6 +512,8 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                     service_id: item.type === 'service' ? item.id : null,
                     quantity: item.quantity,
                     unit_price: item.price,
+                    original_price: item.originalPrice || item.price,
+                    discount_amount: item.originalPrice ? (item.originalPrice - item.price) * item.quantity : 0,
                     total_price: item.price * item.quantity,
                     name: item.name,
                     worker_id: workerId || null,
@@ -520,13 +551,20 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                         percentage = result.appliedPercentage;
                         commission = result.commissionAmount;
                     } else {
-                        const predefinedPercentage = (cartItem?.originalItem as any)?.commission_percentage;
-                        // Use serviceRate if no predefined percentage
-                        percentage = predefinedPercentage !== undefined && predefinedPercentage > 0
-                            ? predefinedPercentage
-                            : serviceRate;
-
-                        commission = (baseAmount * percentage) / 100;
+                        const originalItem = (cartItem?.originalItem as any);
+                        const commType = originalItem?.commission_type || 'percentage';
+                        if (commType === 'fixed') {
+                            const fixedAmount = originalItem?.commission_amount || 0;
+                            commission = fixedAmount * item.quantity;
+                            percentage = 0;
+                        } else {
+                            const predefinedPercentage = originalItem?.commission_percentage;
+                            // Usar SOLO el porcentaje predefinido del servicio. Si no existe, es 0.
+                            percentage = predefinedPercentage !== undefined && predefinedPercentage > 0
+                                ? predefinedPercentage
+                                : 0;
+                            commission = (baseAmount * percentage) / 100;
+                        }
                     }
 
                     return {
@@ -550,6 +588,29 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                 if (commissionsError) console.error('Error creating commissions:', commissionsError);
             }
 
+            // 3.5 Save Tip as worker commission (if any)
+            const numericTip = parseFloat(tipAmount) || 0;
+            // Fallback: if no explicit tip worker was selected, use the general worker
+            const resolvedTipWorkerId = tipWorkerId || generalWorkerId;
+            if (numericTip > 0 && resolvedTipWorkerId) {
+                const { error: tipError } = await (supabase as any)
+                    .from('worker_commissions')
+                    .insert({
+                        sale_id: sale.id,
+                        worker_id: resolvedTipWorkerId,
+                        service_type: 'tip',
+                        base_amount: numericTip,
+                        commission_percentage: 100,
+                        commission_amount: numericTip,
+                        business_id: useBusinessStore.getState().id,
+                        status: 'pending'
+                    });
+                if (tipError) console.error('Error saving tip:', tipError);
+                else console.log(`✅ Tip saved: $${numericTip} → worker ${resolvedTipWorkerId}`);
+            } else if (numericTip > 0) {
+                console.warn('⚠️ Tip NOT saved: no worker assigned for the tip.');
+            }
+
             // 4. Update Stock (for products) - Using atomic RPC
             console.log(`📦 CHECKING STOCK DEDUCTION - Total items in cart: ${items.length}`);
             console.log('📦 Items breakdown:', items.map(i => ({ name: i.name, type: i.type, id: i.id, qty: i.quantity })));
@@ -571,8 +632,9 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                 }
             }
 
-            // 4.5. Update Customer Loyalty (Skip for Quick Client)
-            if (customer && customer.id !== 'anonymous' && customer.id !== '00000000-0000-0000-0000-000000000000') {
+            // 4.5. Update Customer Loyalty (Skip for Quick Client, "Público General", or explicitly opted out)
+            const customerMetadata = (customer as any)?.metadata || {};
+            if (customer && customer.id !== 'anonymous' && customer.name !== 'Público General' && customer.id !== '00000000-0000-0000-0000-000000000000' && !customerMetadata.loyalty_opt_out) {
                 const { data: currentCustomer } = await (supabase as any)
                     .from('customers')
                     .select('loyalty_points, total_visits')
@@ -582,10 +644,27 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                 const currentPoints = currentCustomer?.loyalty_points || 0;
                 const currentVisits = currentCustomer?.total_visits || 0;
 
-                // If redeemed, deduct threshold. Otherwise add visit points.
-                const pointsChange = isRedeeming
-                    ? -(loyaltySettings.points_threshold || 50)
-                    : (loyaltySettings.points_per_visit || 10);
+                // Restrict point accumulation rules:
+                // 1. If claiming a reward (digital or manual $0 inject), NO points are earned for this visit.
+                // 2. Only transactions containing a "car wash" ("lavado") are eligible for points.
+                const includesReward = isRedeeming || items.some(i => i.price === 0 && (i.originalPrice || 0) > 0);
+                const includesCarWash = items.some(i => {
+                    const name = (i.name || '').toLowerCase();
+                    const cat = (i.originalItem?.category || '').toLowerCase();
+                    return name.includes('lavado') || cat.includes('lavado') || (i as any).service_type === 'car_wash';
+                });
+
+                let pointsChange = 0;
+
+                if (includesReward) {
+                    // Deduct digital points if applicable. No visit points awarded.
+                    if (isRedeeming) {
+                        pointsChange = -(loyaltySettings.points_threshold || 50) * redeemedServiceIds.size;
+                    }
+                } else if (includesCarWash) {
+                    // Standard visit earning points
+                    pointsChange = (loyaltySettings.points_per_visit || 10);
+                }
 
                 await (supabase as any).from('customers').update({
                     loyalty_points: Math.max(0, currentPoints + pointsChange),
@@ -631,7 +710,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                 saleId: sale.id.slice(0, 8),
                 cashier: currentUser.full_name || 'Admin',
                 customer: customer?.name || 'Cliente General',
-                vehicle: vehicle ? `${vehicle.license_plate} (${vehicle.type === 'motorcycle' ? 'Moto' : 'Carro'})` : null,
+                vehicle: vehicle ? `${vehicle.license_plate} (${vehicle.type === 'motorcycle' ? 'Moto' : 'Carro'})` : (quickSaleReference ? `${quickSaleReference}` : null),
                 items: items.map(i => {
                     const workerId = getWorkerForItem(i.cartId);
                     const worker = workers.find(w => w.id === workerId);
@@ -644,6 +723,8 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                     };
                 }),
                 total: total,
+                tip: parseFloat(tipAmount) || 0,
+                tipWorker: tipWorkerId ? workers.find(w => w.id === tipWorkerId)?.name : null,
                 method: method,
                 received: method === 'cash' ? numericAmount : total,
                 change: change,
@@ -718,7 +799,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                             <p className="text-slate-500 text-center font-medium leading-relaxed mb-8">
                                 {method === 'credit'
                                     ? '¿Estás seguro que quieres abrir crédito a este cliente?'
-                                    : <>Asegúrate de haber recibido los <span className="font-bold text-slate-800 dark:text-white">${total.toLocaleString()}</span> mediante {method === 'card' ? 'Tarjeta' : 'Transferencia'} antes de finalizar.</>
+                                    : <>Asegúrate de haber recibido los <span className="font-bold text-slate-800 dark:text-white">${method === 'transfer' ? (parseFloat(transferAmount) || total).toLocaleString() : total.toLocaleString()}</span> mediante {method === 'card' ? 'Tarjeta' : 'Transferencia'} antes de finalizar.</>
                                 }
                             </p>
                             <div className="grid grid-cols-2 gap-4">
@@ -744,7 +825,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                     <div className="flex-none">
                         <div className="flex items-center justify-between mb-2">
                             <h2 className="text-2xl font-black text-slate-800 dark:text-white">Caja / Cobro</h2>
-                            {customer && rewardService && (customer.loyalty_points || 0) >= (loyaltySettings.points_threshold || 50) && !isRedeeming && (
+                            {customer && rewardServices.length > 0 && (customer.loyalty_points || 0) >= (loyaltySettings.points_threshold || 50) && !isRedeeming && (
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-purple-500/30 animate-pulse">
                                     <span className="material-symbols-outlined !text-[14px]">redeem</span>
                                     ¡PREMIO DISPONIBLE!
@@ -774,44 +855,72 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                             />
                         </div>
 
-                        {/* Loyalty Redemption - Improved to show configuration errors */}
+                        {/* Customer Manual Points Sync Button */}
+                        {customer && customer.id !== 'anonymous' && customer.name !== 'Público General' && (
+                            <div className="mb-4">
+                                <button
+                                    onClick={() => setIsManualRewardModalOpen(true)}
+                                    className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 hover:border-primary/50"
+                                >
+                                    <span className="material-symbols-outlined !text-[18px]">note_add</span>
+                                    Unificar Puntos Físicos en Papel
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Loyalty Redemption — Multi-reward */}
                         {customer && (customer.loyalty_points || 0) >= (loyaltySettings.points_threshold || 50) && (
                             <div className="mb-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                                {rewardService ? (
-                                    <button
-                                        onClick={handleRedeem}
-                                        disabled={isRedeeming || items.some(i => i.id === rewardService.id && i.price === 0)}
-                                        className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-all group relative overflow-hidden ${isRedeeming
-                                            ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-                                            : 'bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/10 dark:to-indigo-900/10 border-purple-200 dark:border-purple-800/50 text-purple-700 dark:text-purple-300 hover:border-purple-400 hover:shadow-md'}`}
-                                    >
-                                        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${isRedeeming ? 'bg-white/20' : 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'}`}>
-                                            <span className={`material-symbols-outlined !text-2xl ${!isRedeeming && 'animate-bounce'}`}>
-                                                {isRedeeming ? 'check_circle' : 'redeem'}
-                                            </span>
+                                {rewardServices.length > 0 ? (
+                                    <div className="rounded-2xl border-2 border-purple-200 dark:border-purple-800/50 overflow-hidden">
+                                        <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-b border-purple-100 dark:border-purple-800/30">
+                                            <span className="material-symbols-outlined !text-[18px] text-purple-600 dark:text-purple-400 animate-bounce">redeem</span>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">¡Recompensa Disponible!</span>
+                                            <span className="ml-auto text-[10px] font-black text-purple-500 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded-full">{customer.loyalty_points} Pts</span>
                                         </div>
-                                        <div className="flex-1 text-left">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-[10px] font-black uppercase tracking-[0.1em] ${isRedeeming ? 'text-white/80' : 'text-purple-500 dark:text-purple-400'}`}>
-                                                    {isRedeeming ? 'Premio Canjeado' : '¡Recompensa Disponible!'}
+                                        <div className="divide-y divide-purple-100 dark:divide-purple-900/30 bg-white dark:bg-slate-800/50">
+                                            {rewardServices.map(service => {
+                                                const redeemed = redeemedServiceIds.has(service.id);
+                                                return (
+                                                    <button
+                                                        key={service.id}
+                                                        onClick={() => handleRedeem(service)}
+                                                        className={`w-full flex items-center gap-3 px-4 py-3 transition-all group ${ redeemed
+                                                            ? 'bg-emerald-50 dark:bg-emerald-900/20'
+                                                            : 'hover:bg-purple-50/60 dark:hover:bg-purple-900/10'
+                                                        }`}
+                                                    >
+                                                        <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${
+                                                            redeemed
+                                                                ? 'bg-emerald-500 text-white'
+                                                                : 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                                                        }`}>
+                                                            <span className="material-symbols-outlined !text-xl">{redeemed ? 'check_circle' : 'redeem'}</span>
+                                                        </div>
+                                                        <div className="flex-1 text-left">
+                                                            <p className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase">{service.name}</p>
+                                                            <p className="text-[10px] font-medium text-slate-400">{redeemed ? 'Canjeado — toca para deshacer' : `Gratis por ${loyaltySettings.points_threshold} Pts`}</p>
+                                                        </div>
+                                                        <span className={`text-[10px] font-black px-2.5 py-1.5 rounded-xl border ${
+                                                            redeemed
+                                                                ? 'bg-emerald-500 text-white border-emerald-500'
+                                                                : 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
+                                                        }`}>
+                                                            {redeemed ? 'GRATIS ✓' : `${loyaltySettings.points_threshold} PTS`}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        {redeemedServiceIds.size > 0 && (
+                                            <div className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 border-t border-emerald-100 dark:border-emerald-800/30 flex items-center gap-2">
+                                                <span className="material-symbols-outlined !text-[14px] text-emerald-600">savings</span>
+                                                <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400">
+                                                    {redeemedServiceIds.size} recompensa{redeemedServiceIds.size !== 1 ? 's' : ''} canjeada{redeemedServiceIds.size !== 1 ? 's' : ''} — se descontarán {(loyaltySettings.points_threshold || 50) * redeemedServiceIds.size} Pts
                                                 </span>
-                                                {!isRedeeming && (
-                                                    <span className="flex h-2 w-2 rounded-full bg-purple-600 animate-ping"></span>
-                                                )}
                                             </div>
-                                            <div className="font-black text-sm uppercase flex items-baseline gap-1.5">
-                                                {isRedeeming
-                                                    ? (total === 0 ? 'VENTA TOTALMENTE GRATIS' : `AHORRAS EL 100% DE ${rewardService.name}`)
-                                                    : `REDIMIR ${rewardService.name}`}
-                                            </div>
-                                            {!isRedeeming && (
-                                                <p className="text-[10px] font-medium opacity-60 leading-none">Puntos suficientes para este beneficio ({customer.loyalty_points} Pts).</p>
-                                            )}
-                                        </div>
-                                        <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black border ${isRedeeming ? 'bg-white/20 border-white/30' : 'bg-white dark:bg-slate-800 border-purple-100 dark:border-purple-900 shadow-sm'}`}>
-                                            {isRedeeming ? 'GRATIS' : `${loyaltySettings.points_threshold} PTS`}
-                                        </div>
-                                    </button>
+                                        )}
+                                    </div>
                                 ) : (
                                     <div className="w-full flex items-center gap-3 p-3 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700/50 text-amber-800 dark:text-amber-200">
                                         <div className="h-11 w-11 rounded-xl bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center shrink-0">
@@ -819,13 +928,9 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                         </div>
                                         <div className="flex-1 text-left">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black uppercase tracking-[0.1em] text-amber-600 dark:text-amber-400">
-                                                    ACCIÓN REQUERIDA
-                                                </span>
+                                                <span className="text-[10px] font-black uppercase tracking-[0.1em] text-amber-600 dark:text-amber-400">ACCIÓN REQUERIDA</span>
                                             </div>
-                                            <div className="font-bold text-sm leading-tight">
-                                                Falta configurar premio
-                                            </div>
+                                            <div className="font-bold text-sm leading-tight">Falta configurar premio</div>
                                             <p className="text-[10px] opacity-80 leading-tight mt-0.5">
                                                 El cliente tiene puntos ({customer?.loyalty_points}) pero no has elegido qué servicio regalar. Ve a Configuración &gt; Fidelidad.
                                             </p>
@@ -836,12 +941,13 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                         )}
 
                         {/* Payment Methods */}
-                        <div className="grid grid-cols-4 gap-2 mb-4">
+                        <div className="grid grid-cols-5 gap-2 mb-4">
                             {[
                                 { id: 'cash', label: 'Efectivo', icon: 'payments' },
                                 { id: 'card', label: 'Tarjeta', icon: 'credit_card' },
                                 { id: 'transfer', label: 'Transf.', icon: 'account_balance' },
                                 { id: 'credit', label: 'Crédito', icon: 'assignment_return' },
+                                { id: 'mixed', label: 'Mixto', icon: 'shuffle' },
                             ].map((m) => (
                                 <button
                                     key={m.id}
@@ -856,6 +962,36 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                 </button>
                             ))}
                         </div>
+
+                        {/* Split payment inputs for 'Mixto' */}
+                        {method === 'mixed' && (
+                            <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Desglose de pago — Total: <span className="text-primary">${total.toLocaleString()}</span></p>
+                                {[
+                                    { key: 'cash', label: 'Efectivo', icon: 'payments', color: 'text-emerald-600' },
+                                    { key: 'transfer', label: 'Transferencia', icon: 'account_balance', color: 'text-blue-600' },
+                                    { key: 'card', label: 'Tarjeta', icon: 'credit_card', color: 'text-violet-600' },
+                                    { key: 'credit', label: 'Crédito / Fiado', icon: 'assignment_return', color: 'text-amber-600' },
+                                ].map(({ key, label, icon, color }) => (
+                                    <div key={key} className="flex items-center gap-2">
+                                        <span className={`material-symbols-outlined !text-[18px] shrink-0 ${color}`}>{icon}</span>
+                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-300 w-28 shrink-0">{label}</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            placeholder="0"
+                                            value={splitAmounts[key as keyof typeof splitAmounts]}
+                                            onChange={e => setSplitAmounts(prev => ({ ...prev, [key]: e.target.value }))}
+                                            className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold text-right focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                        />
+                                    </div>
+                                ))}
+                                <div className={`flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700 text-xs font-black ${Math.abs(mixedTotal - total) < 1 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                                    <span>Suma total:</span>
+                                    <span>${mixedTotal.toLocaleString()} {Math.abs(mixedTotal - total) < 1 ? '✓' : `(faltan $${(total - mixedTotal).toLocaleString()})`}</span>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Mandatory Commission Warning */}
                         {showCommissionWarnings && itemsMissingWorker.length > 0 && (
@@ -896,22 +1032,34 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                 <div className="space-y-3">
                                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2">Detalle de Items</h3>
                                     {items.map((item) => {
-                                        const serviceType = detectServiceType(item, vehicle?.type);
-                                        const predefinedPercentage = (item.originalItem as any)?.commission_percentage;
+                                        const originalItem = item.originalItem as any;
+                                        const predefinedPercentage = originalItem?.commission_percentage;
+                                        const commType = originalItem?.commission_type || 'percentage';
+                                        
                                         const basePrice = item.originalPrice || item.price;
                                         let percentage = 0;
                                         let commission = 0;
+                                        let isFixed = false;
 
                                         if (item.type === 'product') {
                                             const res = getProductCommission(item.originalItem || item, item.quantity);
                                             percentage = res.appliedPercentage;
+                                            isFixed = (res.appliedPercentage === 0 && res.commissionAmount > 0);
                                             commission = generalWorkerId ? res.commissionAmount : 0;
                                         } else {
-                                            percentage = predefinedPercentage !== undefined && predefinedPercentage > 0
-                                                ? predefinedPercentage
-                                                : serviceRate;
-                                            commission = generalWorkerId ? (basePrice * item.quantity * percentage) / 100 : 0;
+                                            if (commType === 'fixed') {
+                                                const fixedAmount = originalItem?.commission_amount || 0;
+                                                commission = generalWorkerId ? (fixedAmount * item.quantity) : 0;
+                                                isFixed = true;
+                                            } else {
+                                                percentage = predefinedPercentage !== undefined && predefinedPercentage > 0
+                                                    ? predefinedPercentage
+                                                    : 0;
+                                                commission = generalWorkerId ? (basePrice * item.quantity * percentage) / 100 : 0;
+                                            }
                                         }
+
+                                        const hasActiveCommissionConfig = isFixed ? (commission > 0 || (originalItem?.commission_amount || 0) > 0) : percentage > 0;
 
                                         return (
                                             <div key={item.cartId} className="p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center group hover:border-blue-200 transition-colors">
@@ -930,13 +1078,13 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                                             </span>
                                                         </div>
                                                     )}
-                                                    {!item.commissionEnabled && (
+                                                    {item.type === 'service' && !item.commissionEnabled && (
                                                         <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded flex items-center gap-1 justify-end">
                                                             <span className="material-symbols-outlined !text-[12px]">money_off</span>
                                                             SIN COMISIÓN
                                                         </span>
                                                     )}
-                                                    {showCommissionWarnings && settingsLoaded && !generalWorkerId && percentage > 0 && (
+                                                    {showCommissionWarnings && settingsLoaded && !generalWorkerId && hasActiveCommissionConfig && item.commissionEnabled !== false && (
                                                         <span className="text-[9px] font-black text-rose-500 bg-rose-50 dark:bg-rose-500/10 px-2 py-0.5 rounded flex items-center gap-1 justify-end animate-pulse">
                                                             <span className="material-symbols-outlined !text-[12px]">warning</span>
                                                             FALTA TRABAJADOR
@@ -947,28 +1095,89 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                         );
                                     })}
                                 </div>
+
+                                {/* Tip / Propina — Collapsible (al final) */}
+                                <div>
+                                    <button
+                                        type="button"
+                                        onClick={() => { const next = !showTip; setShowTip(next); if (!next) { setTipAmount(''); setTipWorkerId(''); } else if (!tipWorkerId && generalWorkerId) { setTipWorkerId(generalWorkerId); } }}
+                                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${
+                                            parseFloat(tipAmount) > 0
+                                                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                                                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <span className="material-symbols-outlined !text-[16px]">volunteer_activism</span>
+                                        {parseFloat(tipAmount) > 0
+                                            ? `Propina: $${parseFloat(tipAmount).toLocaleString()}${tipWorkerId ? ` → ${workers.find(w => w.id === tipWorkerId)?.name}` : ''}`
+                                            : 'Agregar Propina'
+                                        }
+                                        <span className="material-symbols-outlined !text-[14px] ml-auto">{showTip ? 'expand_less' : 'expand_more'}</span>
+                                    </button>
+
+                                    {showTip && (
+                                        <div className="mt-2 p-3 bg-amber-50/60 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/40 animate-in slide-in-from-top-2 duration-200">
+                                            <div className="flex gap-2">
+                                                <div className="relative flex-1">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 font-black text-sm pointer-events-none">$</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="100"
+                                                        placeholder="0"
+                                                        autoFocus
+                                                        value={tipAmount}
+                                                        onChange={(e) => setTipAmount(e.target.value)}
+                                                        className="w-full pl-7 pr-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-slate-800 dark:text-white text-sm transition-all"
+                                                    />
+                                                </div>
+                                                <select
+                                                    value={tipWorkerId}
+                                                    onChange={(e) => setTipWorkerId(e.target.value)}
+                                                    className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-sm text-slate-700 dark:text-slate-200 transition-all"
+                                                >
+                                                    <option value="">¿Para quién?</option>
+                                                    {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         ) : (
                             <div className="space-y-3 animate-in slide-in-from-left-4 duration-300">
                                 {items.map((item) => {
                                     const workerId = itemWorkers[item.cartId] || '';
                                     const serviceType = detectServiceType(item, vehicle?.type);
-                                    const predefinedPercentage = (item.originalItem as any)?.commission_percentage;
+                                    
+                                    const originalItem = item.originalItem as any;
+                                    const predefinedPercentage = originalItem?.commission_percentage;
+                                    const commType = originalItem?.commission_type || 'percentage';
                                     const basePrice = item.originalPrice || item.price;
 
                                     let percentage = 0;
                                     let commission = 0;
+                                    let isFixed = false;
 
                                     if (item.type === 'product') {
                                         const res = getProductCommission(item.originalItem || item, item.quantity);
                                         percentage = res.appliedPercentage;
+                                        isFixed = (res.appliedPercentage === 0 && res.commissionAmount > 0);
                                         commission = workerId ? res.commissionAmount : 0;
                                     } else {
-                                        percentage = predefinedPercentage !== undefined && predefinedPercentage > 0
-                                            ? predefinedPercentage
-                                            : serviceRate;
-                                        commission = workerId ? (basePrice * item.quantity * percentage) / 100 : 0;
+                                        if (commType === 'fixed') {
+                                            const fixedAmount = originalItem?.commission_amount || 0;
+                                            commission = workerId ? (fixedAmount * item.quantity) : 0;
+                                            isFixed = true;
+                                        } else {
+                                            percentage = predefinedPercentage !== undefined && predefinedPercentage > 0
+                                                ? predefinedPercentage
+                                                : 0;
+                                            commission = workerId ? (basePrice * item.quantity * percentage) / 100 : 0;
+                                        }
                                     }
+
+                                    const hasActiveCommissionConfig = isFixed ? (commission > 0 || (originalItem?.commission_amount || 0) > 0) : percentage > 0;
 
                                     return (
                                         <div key={item.cartId} className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:border-primary/30 transition-colors">
@@ -1004,11 +1213,11 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                                             ${commission.toLocaleString()}
                                                         </span>
                                                         <span className="text-[10px] font-bold text-slate-400 leading-none">
-                                                            ({percentage}%)
+                                                            {isFixed ? '(Fijo)' : `(${percentage}%)`}
                                                         </span>
                                                     </div>
                                                 )}
-                                                {!item.commissionEnabled && (
+                                                {item.type === 'service' && !item.commissionEnabled && (
                                                     <div className="flex flex-col items-end opacity-60">
                                                         <span className="text-[9px] uppercase font-black text-slate-400 tracking-tighter flex items-center gap-1">
                                                             <span className="material-symbols-outlined !text-[12px]">money_off</span>
@@ -1017,13 +1226,15 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                                         <span className="text-[10px] font-bold text-slate-400 leading-none">No genera comisión</span>
                                                     </div>
                                                 )}
-                                                {showCommissionWarnings && settingsLoaded && !workerId && percentage > 0 && (
+                                                {showCommissionWarnings && settingsLoaded && !workerId && hasActiveCommissionConfig && item.commissionEnabled !== false && (
                                                     <div className="flex flex-col items-end animate-pulse">
                                                         <span className="text-[9px] uppercase font-black text-rose-500 tracking-tighter flex items-center gap-1">
                                                             <span className="material-symbols-outlined !text-[12px]">warning</span>
                                                             Obligatorio
                                                         </span>
-                                                        <span className="text-[10px] font-bold text-rose-400 leading-none">Comisión {percentage}%</span>
+                                                        <span className="text-[10px] font-bold text-rose-400 leading-none">
+                                                            {isFixed ? 'Monto Fijo' : `Comisión ${percentage}%`}
+                                                        </span>
                                                     </div>
                                                 )}
                                             </div>
@@ -1036,11 +1247,25 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
 
                     {/* Overall Summary */}
                     <div className="flex-none mt-2 p-3 bg-slate-900 dark:bg-slate-800 rounded-2xl text-white shadow-xl shadow-slate-200 dark:shadow-none">
-                        <div className="flex justify-between items-center mb-2 opacity-70">
+                        <div className="flex justify-between items-center mb-1.5 opacity-70">
                             <span className="text-xs font-bold uppercase tracking-widest">Total Comisiones</span>
                             <span className="text-sm font-black text-emerald-400">+ ${getTotalCommissions().toLocaleString()}</span>
                         </div>
-                        <div className="flex justify-between items-end pt-2">
+                        {parseFloat(tipAmount) > 0 && (
+                            <div className="flex justify-between items-center mb-1.5">
+                                <span className="text-xs font-bold uppercase tracking-widest text-amber-400 flex items-center gap-1">
+                                    <span className="material-symbols-outlined !text-[14px]">volunteer_activism</span>
+                                    Propina
+                                </span>
+                                <span className="text-sm font-black text-amber-400">
+                                    + ${parseFloat(tipAmount).toLocaleString()}
+                                    {tipWorkerId && (
+                                        <span className="text-[10px] font-bold opacity-70 ml-1">→ {workers.find(w => w.id === tipWorkerId)?.name}</span>
+                                    )}
+                                </span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-end pt-2 border-t border-white/10">
                             <div className="flex flex-col">
                                 <span className="text-[10px] font-bold text-primary tracking-widest uppercase mb-0.5">Total Venta</span>
                                 <span className="text-2xl font-black leading-none">${total.toLocaleString()}</span>
@@ -1084,6 +1309,19 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                     <div className={`px-4 py-2 rounded-2xl font-black text-3xl transition-all ${change < 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600 scale-110 shadow-lg shadow-emerald-500/10'}`}>
                                         ${change.toLocaleString()}
                                     </div>
+                                    {change > 0 && (
+                                        <button
+                                            onClick={() => {
+                                                setTipAmount(change.toString());
+                                                setShowTip(true);
+                                                if (!tipWorkerId && generalWorkerId) setTipWorkerId(generalWorkerId);
+                                            }}
+                                            className="mt-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:border-amber-700/50 dark:text-amber-400 dark:hover:bg-amber-900/50 transition-colors text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm"
+                                        >
+                                            <span className="material-symbols-outlined !text-[14px]">volunteer_activism</span>
+                                            Dejar como Propina
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -1103,6 +1341,94 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                                 ))}
                             </div>
                         </>
+                    ) : (method === 'transfer' || method === 'card') ? (
+                        <div className="flex-1 flex flex-col gap-6 justify-center">
+                            {/* Amount input */}
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">
+                                    {method === 'transfer' ? 'Monto Recibido por Transferencia' : 'Monto Cobrado con Tarjeta'}
+                                </label>
+                                <div className="relative group">
+                                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 dark:text-slate-600 font-black text-3xl transition-colors group-focus-within:text-primary">$</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="1"
+                                        value={method === 'transfer' ? transferAmount : cardAmount}
+                                        onChange={(e) => method === 'transfer' ? setTransferAmount(e.target.value) : setCardAmount(e.target.value)}
+                                        className="w-full bg-white dark:bg-slate-900/50 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-4xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
+                                        placeholder={String(total)}
+                                    />
+                                </div>
+                                <div className="mt-3 flex items-center justify-between">
+                                    <span className="text-xs font-bold text-slate-400">Total de la venta: <span className="font-black text-slate-700 dark:text-slate-200">${total.toLocaleString()}</span></span>
+                                    {((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) > total && (
+                                        <button
+                                            onClick={() => {
+                                                const diff = ((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) - total;
+                                                setTipAmount(String(diff));
+                                                setShowTip(true);
+                                                if (!tipWorkerId && generalWorkerId) setTipWorkerId(generalWorkerId);
+                                            }}
+                                            className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:border-amber-700/50 dark:text-amber-400 transition-colors text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm"
+                                        >
+                                            <span className="material-symbols-outlined !text-[14px]">volunteer_activism</span>
+                                            Diferencia ${(((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) - total).toLocaleString()} como Propina
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Quick tip section for transfer */}
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={() => { const next = !showTip; setShowTip(next); if (!next) { setTipAmount(''); setTipWorkerId(''); } else if (!tipWorkerId && generalWorkerId) { setTipWorkerId(generalWorkerId); } }}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${
+                                        parseFloat(tipAmount) > 0
+                                            ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                                            : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined !text-[16px]">volunteer_activism</span>
+                                    {parseFloat(tipAmount) > 0
+                                        ? `Propina: $${parseFloat(tipAmount).toLocaleString()}${tipWorkerId ? ` → ${workers.find(w => w.id === tipWorkerId)?.name}` : ''}`
+                                        : 'Agregar Propina'
+                                    }
+                                    <span className="material-symbols-outlined !text-[14px] ml-auto">{showTip ? 'expand_less' : 'expand_more'}</span>
+                                </button>
+                                {showTip && (
+                                    <div className="mt-2 p-3 bg-amber-50/60 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/40 animate-in slide-in-from-top-2 duration-200">
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 font-black text-sm pointer-events-none">$</span>
+                                                <input
+                                                    type="number" min="0" step="100" placeholder="0" autoFocus
+                                                    value={tipAmount}
+                                                    onChange={(e) => setTipAmount(e.target.value)}
+                                                    className="w-full pl-7 pr-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-slate-800 dark:text-white text-sm transition-all"
+                                                />
+                                            </div>
+                                            <select
+                                                value={tipWorkerId}
+                                                onChange={(e) => setTipWorkerId(e.target.value)}
+                                                className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-sm text-slate-700 dark:text-slate-200 transition-all"
+                                            >
+                                                <option value="">¿Para quién?</option>
+                                                {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="text-center">
+                                <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <span className="material-symbols-outlined !text-5xl text-primary">{method === 'card' ? 'credit_card' : 'account_balance'}</span>
+                                </div>
+                                <p className="text-slate-400 text-xs font-medium italic">{method === 'card' ? 'Verifica que el datáfono haya aprobado el cobro antes de confirmar.' : 'Verifica el comprobante o notificación antes de confirmar.'}</p>
+                            </div>
+                        </div>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center">
                             <div className="h-32 w-32 bg-primary/10 rounded-full flex items-center justify-center mb-8 animate-bounce duration-1000">
@@ -1156,6 +1482,19 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers }: Pa
                     </div>
                 </div>
             </div>
+
+            <ManualRewardModal
+                isOpen={isManualRewardModalOpen}
+                onClose={() => setIsManualRewardModalOpen(false)}
+                customer={customer}
+                onSuccess={(newBalance) => {
+                    setIsManualRewardModalOpen(false);
+                    // Update local customer object to reflect new balance
+                    if (customer) {
+                        customer.loyalty_points = newBalance;
+                    }
+                }}
+            />
         </div >
     );
 };

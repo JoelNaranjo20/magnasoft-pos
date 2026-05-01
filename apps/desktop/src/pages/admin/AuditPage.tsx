@@ -38,11 +38,8 @@ export const AuditPage = () => {
 
             {/* Content Area */}
             <div className="p-8 h-[calc(100vh-100px)] flex flex-col">
-                {currentView === 'history' ? (
-                    <SessionHistory />
-                ) : (
-                    <MonthlyReportView />
-                )}
+                <div className={`h-full flex flex-col${currentView !== 'history' ? ' hidden' : ''}`}><SessionHistory /></div>
+                <div className={`h-full flex flex-col${currentView !== 'report' ? ' hidden' : ''}`}><MonthlyReportView /></div>
             </div>
         </>
     );

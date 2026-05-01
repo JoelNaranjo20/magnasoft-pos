@@ -106,7 +106,7 @@ export const CommissionPaymentModal = () => {
                     commission_percentage: comm.commission_percentage,
                     commission_amount: comm.commission_amount,
                     status: comm.status,
-                    sale_item_name: comm.sale_item?.name || 'Item eliminado',
+                    sale_item_name: comm.service_type === 'tip' ? 'Propina (Agradecimiento del cliente)' : (comm.sale_item?.name || 'Item eliminado'),
                 };
 
                 grouped[workerId].commissions.push(commissionData);

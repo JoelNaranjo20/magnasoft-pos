@@ -466,81 +466,37 @@ export async function changeBusinessType(businessId: string, newType: string, cu
     }
 }
 
-/**
- * purgeBusinessData
- * Deletes ALL operational data for a business (sales, sessions, workers, customers,
- * products, services, cash movements, etc.) but keeps the business record itself.
- * Uses service_role to bypass RLS.
- */
-export async function purgeBusinessData(businessId: string): Promise<{ success: boolean; error?: string; deleted?: Record<string, number> }> {
+export async function purgeBusinessData(
+    businessId: string,
+    options: {
+        sales?: boolean;
+        cash?: boolean;
+        customers?: boolean;
+        workers?: boolean;
+        products?: boolean;
+        queue?: boolean;
+    } = { sales: true, cash: true, customers: true, workers: true, products: true, queue: true }
+): Promise<{ success: boolean; error?: string; deleted?: Record<string, number> }> {
     try {
         if (!businessId) return { success: false, error: 'businessId requerido' };
 
-        const deleted: Record<string, number> = {};
+        // We use the same secure RPC we created for the explicit selective resets.
+        const { error } = await supabaseAdmin.rpc('reset_business_data_modules', {
+            p_business_id: businessId,
+            p_delete_sales: options.sales || false,
+            p_delete_cash: options.cash || false,
+            p_delete_customers: options.customers || false,
+            p_delete_workers: options.workers || false,
+            p_delete_products: options.products || false,
+            p_delete_queue: options.queue || false
+        });
 
-        // Helper to delete from a table and count rows
-        const purge = async (table: string, column = 'business_id') => {
-            const { count, error } = await supabaseAdmin
-                .from(table)
-                .delete({ count: 'exact' })
-                .eq(column, businessId);
-            if (error) throw new Error(`Error borrando ${table}: ${error.message}`);
-            deleted[table] = count ?? 0;
-        };
-
-        // Delete in dependency order (children before parents)
-        // 1. Sale items (depend on sales)
-        const { data: sales } = await supabaseAdmin
-            .from('sales')
-            .select('id')
-            .eq('business_id', businessId);
-
-        if (sales && sales.length > 0) {
-            const saleIds = sales.map((s: any) => s.id);
-            const { count: itemCount, error: itemError } = await supabaseAdmin
-                .from('sale_items')
-                .delete({ count: 'exact' })
-                .in('sale_id', saleIds);
-            if (itemError) throw new Error(`Error borrando sale_items: ${itemError.message}`);
-            deleted['sale_items'] = itemCount ?? 0;
+        if (error) {
+            console.error('[purgeBusinessData] Error invoking RPC:', error);
+            throw new Error(`Error en RPC: ${error.message}`);
         }
 
-        // 2. Commission records (depend on sales & workers)
-        await purge('commissions').catch(() => { deleted['commissions'] = 0; });
-
-        // 3. Sales
-        await purge('sales');
-
-        // 4. Cash movements
-        await purge('cash_movements');
-
-        // 5. Cash sessions
-        await purge('cash_sessions');
-
-        // 6. Service queue
-        await purge('service_queue').catch(() => { deleted['service_queue'] = 0; });
-
-        // 7. Vehicles (depend on customers)
-        await purge('vehicles').catch(() => { deleted['vehicles'] = 0; });
-
-        // 8. Customers
-        await purge('customers');
-
-        // 9. Inventory movements (FK → products AND workers, must go before both)
-        await purge('inventory_movements').catch(() => { deleted['inventory_movements'] = 0; });
-
-        // 10. Workers
-        await purge('workers');
-
-        // 11. Products & services
-        await purge('products');
-        await purge('services');
-
-        // 11. Business settings (loyalty, commissions config, etc.)
-        await purge('business_settings').catch(() => { deleted['business_settings'] = 0; });
-
-        console.log('[purgeBusinessData] Deleted:', deleted);
-        return { success: true, deleted };
+        return { success: true, deleted: { success: 1 } };
     } catch (error: any) {
         console.error('[purgeBusinessData] Error:', error);
         return { success: false, error: error.message || 'Unknown error' };

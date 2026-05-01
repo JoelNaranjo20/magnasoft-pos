@@ -31,6 +31,8 @@ export const ServiceForm = ({ serviceToEdit, onSuccess, onCancel }: ServiceFormP
         code: '',
         active: true,
         commission_percentage: 0,
+        commission_type: 'percentage' as 'percentage' | 'fixed',
+        commission_amount: 0,
         is_variable_price: false,
         icon: 'scissors'
     });
@@ -71,6 +73,8 @@ export const ServiceForm = ({ serviceToEdit, onSuccess, onCancel }: ServiceFormP
                 code: serviceToEdit.code,
                 active: serviceToEdit.active,
                 commission_percentage: (serviceToEdit as any).commission_percentage || 0,
+                commission_type: (serviceToEdit as any).commission_type || 'percentage',
+                commission_amount: (serviceToEdit as any).commission_amount || 0,
                 is_variable_price: serviceToEdit.is_variable_price || false,
                 icon: (serviceToEdit as any).icon || 'scissors'
             });
@@ -86,8 +90,11 @@ export const ServiceForm = ({ serviceToEdit, onSuccess, onCancel }: ServiceFormP
             ...formData,
             code: formData.code === '' ? null : formData.code,
             description: formData.description === '' ? null : formData.description,
+            commission_percentage: formData.commission_type === 'percentage' ? parseFloat(formData.commission_percentage) || 0 : 0,
+            commission_type: formData.commission_type,
+            commission_amount: formData.commission_type === 'fixed' ? parseFloat(formData.commission_amount) || 0 : 0,
             business_id: businessId,
-            updated_by: user?.id, // Track who modified the record
+            updated_by: user?.id,
         };
 
         try {
@@ -182,21 +189,71 @@ export const ServiceForm = ({ serviceToEdit, onSuccess, onCancel }: ServiceFormP
                     />
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Liquidación Trabajador (%)</label>
-                    <div className="relative">
-                        <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="100"
-                            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all pr-10"
-                            value={formData.commission_percentage}
-                            onChange={(e) => setFormData({ ...formData, commission_percentage: parseFloat(e.target.value) || 0 })}
-                        />
-                        <span className="absolute right-3 top-2 text-slate-400 font-bold">%</span>
+                <div className="col-span-2 space-y-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Comisión por Venta</label>
+                    {/* Tipo selector */}
+                    <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-lg">
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, commission_type: 'percentage' })}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-black transition-all ${
+                                formData.commission_type === 'percentage'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-600'
+                            }`}
+                        >
+                            <span className="material-symbols-outlined !text-sm">percent</span>
+                            Porcentaje
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, commission_type: 'fixed' })}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md text-xs font-black transition-all ${
+                                formData.commission_type === 'fixed'
+                                    ? 'bg-emerald-500 text-white shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-600'
+                            }`}
+                        >
+                            <span className="material-symbols-outlined !text-sm">payments</span>
+                            Monto Fijo ($)
+                        </button>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">Porcentaje que recibe el trabajador por este servicio.</p>
+
+                    {/* Campo condicional */}
+                    {formData.commission_type === 'percentage' ? (
+                        <div className="relative">
+                            <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                className="w-full px-3 py-2 pr-10 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                                value={formData.commission_percentage === 0 ? '' : formData.commission_percentage}
+                                onChange={(e) => setFormData({ ...formData, commission_percentage: e.target.value })}
+                                placeholder="Ej: 50"
+                            />
+                            <span className="absolute right-3 top-2 text-slate-400 font-black">%</span>
+                        </div>
+                    ) : (
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 font-black">$</span>
+                            <input
+                                type="number"
+                                step="100"
+                                min="0"
+                                className="w-full pl-7 pr-3 py-2 border border-emerald-300 dark:border-emerald-700 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all font-mono"
+                                value={formData.commission_amount === 0 ? '' : formData.commission_amount}
+                                onChange={(e) => setFormData({ ...formData, commission_amount: e.target.value })}
+                                placeholder="Ej: 5000"
+                            />
+                        </div>
+                    )}
+                    <p className="text-[10px] text-slate-500">
+                        {formData.commission_type === 'percentage'
+                            ? 'Porcentaje del precio del servicio que recibe el trabajador.'
+                            : `💰 El trabajador recibe exactamente $${parseFloat(formData.commission_amount || '0').toLocaleString()} por cada vez que se vende este servicio.`
+                        }
+                    </p>
                 </div>
 
                 <div className="col-span-2">

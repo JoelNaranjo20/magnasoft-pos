@@ -36,11 +36,11 @@ export const WorkerLoans = () => {
 
     const cashSession = useSessionStore((state) => state.cashSession);
     const user = useSessionStore((state) => state.user);
+    const businessId = useBusinessStore((state) => state.id);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const businessId = useBusinessStore.getState().id;
 
             // Fetch Loans
             const { data: loansData, error: loansError } = await (supabase as any)
@@ -76,7 +76,7 @@ export const WorkerLoans = () => {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [businessId]);
 
     const handleCreateLoan = async () => {
         if (!newLoan.worker_id || !newLoan.amount) return;

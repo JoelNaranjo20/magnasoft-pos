@@ -14,7 +14,8 @@ export const CustomerEditModal = ({ isOpen, onClose, customer, onSuccess }: Cust
         name: '',
         phone: '',
         email: '',
-        loyalty_points: 0
+        loyalty_points: 0,
+        loyalty_opt_out: false
     });
 
     useEffect(() => {
@@ -23,7 +24,9 @@ export const CustomerEditModal = ({ isOpen, onClose, customer, onSuccess }: Cust
                 name: customer.name || '',
                 phone: customer.phone || '',
                 email: customer.email || '',
-                loyalty_points: customer.loyalty_points || 0
+                loyalty_points: customer.loyalty_points || 0,
+                // Handle both missing metadata and explicitly set metadata
+                loyalty_opt_out: customer.metadata?.loyalty_opt_out || false
             });
         }
     }, [customer]);
@@ -40,7 +43,11 @@ export const CustomerEditModal = ({ isOpen, onClose, customer, onSuccess }: Cust
                     name: formData.name,
                     phone: formData.phone,
                     email: formData.email,
-                    loyalty_points: formData.loyalty_points
+                    loyalty_points: formData.loyalty_points,
+                    metadata: {
+                        ...(customer.metadata || {}),
+                        loyalty_opt_out: formData.loyalty_opt_out
+                    }
                 })
                 .eq('id', customer.id);
 
@@ -106,6 +113,20 @@ export const CustomerEditModal = ({ isOpen, onClose, customer, onSuccess }: Cust
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             className="w-full px-5 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl focus:border-primary outline-none text-slate-900 dark:text-white font-medium"
                         />
+                    </div>
+
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <div className="flex-1">
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">Desactivar Puntos de Fidelización</h4>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">Si está activo, este cliente no acumulará puntos (ideal para Público General o ventas masivas).</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, loyalty_opt_out: !prev.loyalty_opt_out }))}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formData.loyalty_opt_out ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}
+                        >
+                            <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${formData.loyalty_opt_out ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
                     </div>
 
                     <div className="flex gap-3 pt-4">

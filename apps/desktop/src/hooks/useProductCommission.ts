@@ -1,136 +1,161 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-/**
- * Pure utility function to calculate product commission with hierarchical logic
- * 
- * Priority:
- * 1. Product-specific commission (if not null)
- * 2. Global/business default commission
- * 3. Fallback to 0
- * 
- * @param price - Product unit price
- * @param quantity - Quantity sold
- * @param productCommission - Product-specific commission percentage (nullable)
- * @param globalCommission - Business default commission percentage
- * @returns Object with commission amount, applied percentage, and source
- */
-export function calculateProductCommission(
-    price: number,
-    quantity: number,
-    globalCommission: number
-): {
-    commissionAmount: number;
-    appliedPercentage: number;
-    source: 'product' | 'global' | 'none';
-} {
-    const baseAmount = price * quantity;
-
-    // Use Global commission only (product-specific overrides removed at user request)
-    if (globalCommission > 0) {
-        const commissionAmount = (baseAmount * globalCommission) / 100;
-        return {
-            commissionAmount,
-            appliedPercentage: globalCommission,
-            source: 'global'
-        };
-    }
-
-    // Priority 3: No commission
-    return {
-        commissionAmount: 0,
-        appliedPercentage: 0,
-        source: 'none'
-    };
-}
-
 interface Product {
     id: string;
     commission_percentage?: number | null;
+    commission_type?: 'percentage' | 'fixed' | null;
+    commission_amount?: number | null;
     price: number;
+    category_id?: string | null;
+    metadata?: any;
+}
+
+interface CategoryMap {
+    [id: string]: {
+        commission_percentage?: number | null;
+        commission_type?: 'percentage' | 'fixed' | null;
+        commission_amount?: number | null;
+        parent_id?: string | null;
+    };
 }
 
 interface UseProductCommissionResult {
-    serviceRate: number;
-    productRate: number;
     loading: boolean;
     calculateCommission: (product: Product, quantity: number) => {
         commissionAmount: number;
         appliedPercentage: number;
-        source: 'product' | 'global' | 'none';
+        source: 'product' | 'subcategory' | 'category' | 'none';
     };
+    refetch: () => Promise<void>;
 }
 
 /**
- * React hook to manage product commission calculations
- * Fetches the global default commission rate and provides a calculation function
- * 
- * @param businessId - Current business ID
- * @returns Object with global commission rate, loading state, and calculation function
+ * React hook to calculate product commissions using the inventory hierarchy:
+ *   Product-specific → Subcategory → Category → No commission
+ *
+ * Supports two commission types:
+ *   - 'percentage': standard % of the sale price × quantity
+ *   - 'fixed': exact dollar amount per unit sold (quantity multiplied)
  */
 export function useProductCommission(businessId: string): UseProductCommissionResult {
-    const [rates, setRates] = useState<{ serviceRate: number; productRate: number }>({
-        serviceRate: 50.0,
-        productRate: 10.0
-    });
+    const [categoriesMap, setCategoriesMap] = useState<CategoryMap>({});
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
+    const fetchData = async () => {
         if (!businessId) {
             setLoading(false);
             return;
         }
+        
+        try {
+            // Fetch all categories for this business (includes subcategories via parent_id)
+            const { data: catsData, error: cError } = await (supabase as any)
+                .from('categories')
+                .select('id, parent_id, commission_percentage, commission_type, commission_amount')
+                .eq('business_id', businessId);
 
-        const fetchCommissions = async () => {
-            try {
-                // Determine available columns. Based on logs, default_commission might be missing in some environments
-                // We'll perform a safer fetch or handle the 400 error
-                const { data, error } = await supabase
-                    .from('business')
-                    .select('id, default_product_commission')
-                    .eq('id', businessId)
-                    .single();
-
-                if (error) {
-                    // If even this fails, we use hardcoded defaults
-                    console.warn('Error fetching commission rates (falling back to defaults):', error.message);
-                    setRates({
-                        serviceRate: 50.0,
-                        productRate: 10.0
-                    });
-                    return;
-                }
-
-                if (data) {
-                    const businessData = data as any;
-                    setRates({
-                        // Fallback serviceRate to 50% if column is missing (it's not in the select above for safety)
-                        serviceRate: 50.0,
-                        productRate: Number(businessData.default_product_commission) || 10.0
-                    });
-                }
-            } catch (err) {
-                console.error('Unexpected error fetching commission rates:', err);
-            } finally {
-                setLoading(false);
+            if (!cError && catsData) {
+                const map: CategoryMap = {};
+                catsData.forEach((c: any) => {
+                    map[c.id] = {
+                        commission_percentage: c.commission_percentage !== null ? Number(c.commission_percentage) : null,
+                        commission_type: c.commission_type || 'percentage',
+                        commission_amount: c.commission_amount !== null ? Number(c.commission_amount) : null,
+                        parent_id: c.parent_id
+                    };
+                });
+                setCategoriesMap(map);
             }
-        };
+        } catch (err) {
+            console.error('Error fetching category commission data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
-        fetchCommissions();
+    useEffect(() => {
+        fetchData();
     }, [businessId]);
 
     const calculateCommission = (product: Product, quantity: number) => {
-        return calculateProductCommission(
-            product.price,
-            quantity,
-            rates.productRate
-        );
+        const baseAmount = product.price * quantity;
+
+        // 1. Product-specific commission (highest priority)
+        const prodType = product.commission_type || 'percentage';
+        if (prodType === 'fixed' && product.commission_amount !== null && product.commission_amount !== undefined && product.commission_amount >= 0) {
+            return {
+                commissionAmount: product.commission_amount * quantity,
+                appliedPercentage: 0,
+                source: 'product' as const
+            };
+        }
+        if (prodType === 'percentage' && product.commission_percentage !== undefined && product.commission_percentage !== null) {
+            return {
+                commissionAmount: (baseAmount * product.commission_percentage) / 100,
+                appliedPercentage: product.commission_percentage,
+                source: 'product' as const
+            };
+        }
+
+        // 2. Resolve the category/subcategory the product belongs to.
+        const directCategoryId = product.metadata?.subcategory_id || product.category_id;
+        const directCategory = directCategoryId ? categoriesMap[directCategoryId] : null;
+
+        if (directCategory) {
+            // Priority 2a: The mapped category itself has a commission
+            const catType = directCategory.commission_type || 'percentage';
+            if (catType === 'fixed' && directCategory.commission_amount !== null && directCategory.commission_amount !== undefined && directCategory.commission_amount >= 0) {
+                const isSubcat = !!directCategory.parent_id;
+                return {
+                    commissionAmount: directCategory.commission_amount * quantity,
+                    appliedPercentage: 0,
+                    source: isSubcat ? 'subcategory' as const : 'category' as const
+                };
+            }
+            if (catType === 'percentage' && directCategory.commission_percentage !== null && directCategory.commission_percentage !== undefined) {
+                const rate = directCategory.commission_percentage;
+                const isSubcat = !!directCategory.parent_id;
+                return {
+                    commissionAmount: (baseAmount * rate) / 100,
+                    appliedPercentage: rate,
+                    source: isSubcat ? 'subcategory' as const : 'category' as const
+                };
+            }
+
+            // Priority 2b: The mapped category is a subcategory but lacks a commission. 
+            // Fall back to its parent category.
+            if (directCategory.parent_id) {
+                const parentCategory = categoriesMap[directCategory.parent_id];
+                if (parentCategory) {
+                    const parentType = parentCategory.commission_type || 'percentage';
+                    if (parentType === 'fixed' && parentCategory.commission_amount !== null && parentCategory.commission_amount !== undefined && parentCategory.commission_amount >= 0) {
+                        return {
+                            commissionAmount: parentCategory.commission_amount * quantity,
+                            appliedPercentage: 0,
+                            source: 'category' as const
+                        };
+                    }
+                    if (parentType === 'percentage' && parentCategory?.commission_percentage !== null && parentCategory?.commission_percentage !== undefined) {
+                        const rate = parentCategory.commission_percentage;
+                        return {
+                            commissionAmount: (baseAmount * rate) / 100,
+                            appliedPercentage: rate,
+                            source: 'category' as const
+                        };
+                    }
+                }
+            }
+        }
+
+        // 3. No commission configured at any level
+        return {
+            commissionAmount: 0,
+            appliedPercentage: 0,
+            source: 'none' as const
+        };
     };
 
-    return {
-        serviceRate: rates.serviceRate,
-        productRate: rates.productRate,
-        loading,
-        calculateCommission
-    };
+    return { loading, calculateCommission, refetch: fetchData };
 }
+

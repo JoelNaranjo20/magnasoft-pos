@@ -67,21 +67,39 @@ export const CashMovementsModal: React.FC<CashMovementsModalProps> = ({
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {filteredMovements.map((mov) => (
+                            {filteredMovements.map((mov) => {
+                                const isCanje = (mov.description || '').toLowerCase().startsWith('[canje]');
+                                return (
                                 <div
                                     key={mov.id}
-                                    className={`flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-700/50 hover:border-${isIncome ? 'emerald' : 'rose'}-200 dark:hover:border-${isIncome ? 'emerald' : 'rose'}-900/30 transition-all group`}
+                                    className={`flex items-center justify-between p-4 rounded-2xl border transition-all group ${
+                                        isCanje
+                                            ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/50'
+                                            : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-700/50'
+                                    }`}
                                 >
                                     <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-xl ${isIncome ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-500'} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${
+                                            isCanje
+                                                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600'
+                                                : isIncome ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-500'
+                                        }`}>
                                             <span className="material-symbols-outlined !text-2xl">
-                                                {isIncome ? 'trending_up' : 'trending_down'}
+                                                {isCanje ? 'currency_exchange' : isIncome ? 'trending_up' : 'trending_down'}
                                             </span>
                                         </div>
                                         <div>
+                                            {isCanje && (
+                                                <span className="inline-flex items-center gap-1 text-[8px] font-black text-amber-700 bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded uppercase tracking-tighter border border-amber-200 dark:border-amber-800 mb-1">
+                                                    <span className="material-symbols-outlined !text-[10px]">swap_horiz</span>
+                                                    Canje / Favor
+                                                </span>
+                                            )}
                                             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-0.5">Concepto:</p>
                                             <p className="font-bold text-slate-800 dark:text-slate-200 capitalize text-sm mb-1">
-                                                {mov.description || (isIncome ? 'Ingreso sin descripción' : 'Egreso sin descripción')}
+                                                {isCanje
+                                                    ? (mov.description || '').replace(/^\[Canje\]\s*/i, '')
+                                                    : (mov.description || (isIncome ? 'Ingreso sin descripción' : 'Egreso sin descripción'))}
                                             </p>
                                             {mov.reason && mov.reason !== mov.description && (
                                                 <p className="text-xs text-slate-500 italic mb-1">"{mov.reason}"</p>
@@ -98,12 +116,13 @@ export const CashMovementsModal: React.FC<CashMovementsModalProps> = ({
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className={`text-lg font-black ${isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                        <p className={`text-lg font-black ${isCanje ? 'text-amber-600 dark:text-amber-400' : isIncome ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                                             {isIncome ? '+' : '-'}${mov.amount.toLocaleString()}
                                         </p>
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { CustomerHistoryModal } from '../../modals/CustomerHistoryModal';
 import { CustomerEditModal } from './CustomerEditModal';
+import { CustomerVehicleManagerModal } from './CustomerVehicleManagerModal';
 import { Pagination } from '../../ui/Pagination';
 
 export const CustomerManager = () => {
@@ -11,8 +12,10 @@ export const CustomerManager = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCustomerForHistory, setSelectedCustomerForHistory] = useState<any>(null);
     const [selectedCustomerForEdit, setSelectedCustomerForEdit] = useState<any>(null);
+    const [selectedCustomerForVehicles, setSelectedCustomerForVehicles] = useState<any>(null);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -66,6 +69,11 @@ export const CustomerManager = () => {
     const handleEdit = (customer: any) => {
         setSelectedCustomerForEdit(customer);
         setIsEditModalOpen(true);
+    };
+
+    const handleManageVehicles = (customer: any) => {
+        setSelectedCustomerForVehicles(customer);
+        setIsVehicleModalOpen(true);
     };
 
     return (
@@ -153,6 +161,13 @@ export const CustomerManager = () => {
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-2 text-slate-400">
                                                 <button
+                                                    onClick={() => handleManageVehicles(customer)}
+                                                    className="p-2 hover:text-indigo-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                                    title="Gestionar Vehículos"
+                                                >
+                                                    <span className="material-symbols-outlined text-[20px]">directions_car</span>
+                                                </button>
+                                                <button
                                                     onClick={() => handleEdit(customer)}
                                                     className="p-2 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
                                                     title="Editar Cliente"
@@ -195,6 +210,12 @@ export const CustomerManager = () => {
                 onClose={() => setIsEditModalOpen(false)}
                 customer={selectedCustomerForEdit}
                 onSuccess={fetchCustomers}
+            />
+
+            <CustomerVehicleManagerModal
+                isOpen={isVehicleModalOpen}
+                onClose={() => setIsVehicleModalOpen(false)}
+                customer={selectedCustomerForVehicles}
             />
         </div>
     );

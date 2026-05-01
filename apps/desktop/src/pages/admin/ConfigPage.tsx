@@ -4,11 +4,10 @@ import { WorkerManager } from '../../components/admin/workers/WorkerManager';
 import { LoyaltySettings } from '../../components/admin/config/LoyaltySettings';
 import { GeneralSettings } from '../../components/admin/config/GeneralSettings';
 import { DiscountSettings } from '../../components/admin/config/DiscountSettings';
-import { CommissionSettings } from '../../components/admin/config/CommissionSettings';
 import { CategoriesSettings } from '../../components/admin/config/CategoriesSettings';
 import { RoleManager } from '../../components/admin/config/RoleManager';
 
-type Tab = 'general' | 'services' | 'workers' | 'products' | 'loyalty' | 'commissions' | 'rebajas' | 'roles' | 'categories';
+type Tab = 'general' | 'services' | 'workers' | 'products' | 'loyalty' | 'rebajas' | 'roles' | 'categories';
 
 export const ConfigPage = () => {
     const [activeTab, setActiveTab] = useState<Tab>('general');
@@ -79,18 +78,7 @@ export const ConfigPage = () => {
                         <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full" />
                     )}
                 </button>
-                <button
-                    onClick={() => setActiveTab('commissions')}
-                    className={`px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap relative ${activeTab === 'commissions'
-                        ? 'text-primary'
-                        : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-                        }`}
-                >
-                    Liquidación
-                    {activeTab === 'commissions' && (
-                        <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-t-full" />
-                    )}
-                </button>
+
                 <button
                     onClick={() => setActiveTab('rebajas')}
                     className={`px-6 py-3 font-medium text-sm transition-colors whitespace-nowrap relative ${activeTab === 'rebajas'
@@ -134,9 +122,7 @@ export const ConfigPage = () => {
                     <WorkerManager />
                 )}
 
-                {activeTab === 'commissions' && (
-                    <CommissionSettings />
-                )}
+
 
                 {activeTab === 'rebajas' && (
                     <DiscountSettings />

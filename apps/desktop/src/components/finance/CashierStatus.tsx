@@ -12,7 +12,10 @@ export const CashierStatus = () => {
         cardSales: 0,
         pendingCredits: 0,
         incomes: 0,
-        expenses: 0
+        cashIncomes: 0,
+        expenses: 0,
+        cashExpenses: 0,
+        totalDiscounts: 0
     });
     const [sessionItems, setSessionItems] = useState<{
         credits: any[],
@@ -31,30 +34,46 @@ export const CashierStatus = () => {
                 // 1. Fetch Sales for this session
                 const { data: sales } = await (supabase as any)
                     .from('sales')
-                    .select('id, total_amount, payment_method')
+                    .select('id, total_amount, payment_method, total_discount, cash_amount, transfer_amount, card_amount, credit_amount')
                     .eq('session_id', cashSession.id)
                     .eq('status', 'completed');
 
                 const summary = (sales || []).reduce((acc: any, sale: any) => {
                     acc.total += sale.total_amount;
-                    if (sale.payment_method === 'cash') acc.cash += sale.total_amount;
+                    acc.discount += (sale.total_discount || 0);
+                    if (sale.payment_method === 'mixed') {
+                        // Use the individual columns for accurate breakdown
+                        acc.cash += (sale.cash_amount || 0);
+                        acc.transfer += (sale.transfer_amount || 0);
+                        acc.card += (sale.card_amount || 0);
+                        acc.credit += (sale.credit_amount || 0);
+                    } else if (sale.payment_method === 'cash') acc.cash += sale.total_amount;
                     else if (sale.payment_method === 'credit') acc.credit += sale.total_amount;
                     else if (sale.payment_method === 'card') acc.card += sale.total_amount;
                     else if (sale.payment_method === 'transfer') acc.transfer += sale.total_amount;
                     return acc;
-                }, { total: 0, cash: 0, credit: 0, card: 0, transfer: 0 });
+                }, { total: 0, cash: 0, credit: 0, card: 0, transfer: 0, discount: 0 });
 
                 // 2. Fetch Cash Movements
-                const { data: movements } = await supabase
+                const { data: movements } = await (supabase as any)
                     .from('cash_movements')
-                    .select('id, amount, type, description')
+                    .select('id, amount, type, description, payment_method')
                     .eq('session_id', cashSession.id);
 
                 const movs = (movements || []).reduce((acc: any, m: any) => {
-                    if (m.type === 'income') acc.incomes += m.amount;
-                    else acc.expenses += m.amount;
+                    const isCanje = (m.description || '').toLowerCase().startsWith('[canje]');
+                    
+                    if (m.type === 'income') {
+                        if (!isCanje) acc.incomes += m.amount;
+                        // Transfer-tagged incomes from canjes contribute to the digital balance
+                        if (m.payment_method === 'transfer' || m.payment_method === 'card') acc.transferMovements += m.amount;
+                        else acc.cashIncomes += m.amount; // only cash-tagged incomes go to physical cash
+                    } else {
+                        if (!isCanje) acc.expenses += m.amount;
+                        if (m.payment_method === 'cash' || !m.payment_method) acc.cashExpenses += m.amount;
+                    }
                     return acc;
-                }, { incomes: 0, expenses: 0 });
+                }, { incomes: 0, expenses: 0, transferMovements: 0, cashIncomes: 0, cashExpenses: 0 });
 
                 // 3. Fetch specific items for this session to list them
                 // We fetch debts where sale_id belongs to this session
@@ -78,16 +97,32 @@ export const CashierStatus = () => {
                     .select('*, worker:workers(name)')
                     .in('id', loanIds.length > 0 ? loanIds : ['00000000-0000-0000-0000-000000000000']);
 
+                // 3.5 Fetch Debt Payments (Abonos) for this session
+                const { data: debtPayments } = await (supabase as any)
+                    .from('debt_payments')
+                    .select('amount, payment_method')
+                    .eq('cash_session_id', cashSession.id);
+
+                let cashAbonos = 0;
+                let digitalAbonos = 0;
+                (debtPayments || []).forEach((dp: any) => {
+                    if (dp.payment_method === 'cash') cashAbonos += dp.amount;
+                    else digitalAbonos += dp.amount;
+                });
+
                 // For simplicity first iteration:
                 setStats({
-                    totalSales: summary.total,
+                    totalSales: summary.total + cashAbonos + digitalAbonos, // Add abonos to global tracking if relevant, but definitely add to specific ones
                     cashSales: summary.cash,
                     creditSales: summary.credit,
                     cardSales: summary.card,
-                    transferSales: summary.transfer,
-                    pendingCredits: actualPendingCredits, // Now uses actual remaining amounts
-                    incomes: movs.incomes,
-                    expenses: movs.expenses
+                    transferSales: summary.transfer + movs.transferMovements + digitalAbonos,
+                    pendingCredits: actualPendingCredits,
+                    incomes: movs.incomes + cashAbonos + digitalAbonos,
+                    cashIncomes: movs.cashIncomes + cashAbonos, // Ensure cash drawer total includes cash abonos
+                    expenses: movs.expenses,
+                    cashExpenses: movs.cashExpenses,
+                    totalDiscounts: summary.discount
                 });
 
                 setSessionItems({
@@ -115,7 +150,7 @@ export const CashierStatus = () => {
         );
     }
 
-    const currentCash = (cashSession.start_amount || 0) + stats.cashSales + stats.incomes - stats.expenses;
+    const currentCash = (cashSession.start_amount || 0) + stats.cashSales + stats.cashIncomes - stats.cashExpenses;
 
     return (
         <div className="space-y-6">
@@ -140,7 +175,7 @@ export const CashierStatus = () => {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Base Inicial</p>
                     <p className="text-2xl font-black text-slate-700 dark:text-slate-300">${(cashSession.start_amount || 0).toLocaleString()}</p>
@@ -154,9 +189,18 @@ export const CashierStatus = () => {
                     <p className="text-2xl font-black text-blue-700 dark:text-blue-400">+ ${(stats.cardSales + stats.transferSales).toLocaleString()}</p>
                 </div>
                 <div className="p-5 bg-purple-50 dark:bg-purple-900/10 rounded-2xl border border-purple-100 dark:border-purple-800/30">
-                    <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-2">Faltante (Pendientes)</p>
+                    <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-2">Pendientes</p>
                     <p className="text-2xl font-black text-rose-600 dark:text-rose-400">
                         - ${(stats.pendingCredits + (sessionItems.loans.reduce((sum, l) => sum + l.amount, 0))).toLocaleString()}
+                    </p>
+                </div>
+                <div className="p-5 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-800/30">
+                    <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                        <span className="material-symbols-outlined !text-[14px]">sell</span>
+                        Rebajas Otorgadas
+                    </p>
+                    <p className="text-2xl font-black text-amber-700 dark:text-amber-500">
+                        ${stats.totalDiscounts.toLocaleString()}
                     </p>
                 </div>
             </div>

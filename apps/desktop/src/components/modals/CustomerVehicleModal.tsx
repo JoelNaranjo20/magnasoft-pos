@@ -25,9 +25,10 @@ interface Vehicle {
 interface CustomerVehicleModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSelect: (customer: Customer, vehicle: Vehicle | null) => void;
+    onSelect: (customer: Customer | null, vehicle: Vehicle | null) => void;
     initialPlate?: string;
     preSelectedCustomer?: Customer | null;
+    allowPublicSkip?: boolean;
 }
 
 const VEHICLE_TYPES = [
@@ -40,7 +41,7 @@ const VEHICLE_TYPES = [
 
 const COMMON_BRANDS = ['Toyota', 'Chevrolet', 'Mazda', 'Renault', 'Kia', 'Hyundai', 'Nissan', 'Ford', 'Suzuki', 'Volkswagen'];
 
-export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, preSelectedCustomer }: CustomerVehicleModalProps) => {
+export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, preSelectedCustomer, allowPublicSkip }: CustomerVehicleModalProps) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
@@ -53,7 +54,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
     const [step, setStep] = useState<'search' | 'customer_form' | 'vehicle_form' | 'selection'>('search');
 
     // New entity forms
-    const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' });
+    const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', loyaltyOptOut: false });
     const [newVehicle, setNewVehicle] = useState({
         license_plate: '',
         type: 'car' as any,
@@ -178,8 +179,13 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
         setLoading(true);
         try {
             const payload = {
-                ...newCustomer,
-                business_id: useBusinessStore.getState().id
+                name: newCustomer.name,
+                phone: newCustomer.phone,
+                email: newCustomer.email,
+                business_id: useBusinessStore.getState().id,
+                metadata: {
+                    loyalty_opt_out: newCustomer.loyaltyOptOut
+                }
             };
             const { data, error } = await supabase.from('customers').insert(payload).select().single();
             if (error) throw error;
@@ -243,12 +249,26 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                             {step === 'selection' && 'Elige un vehículo o agrega uno nuevo'}
                         </p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 hover:text-rose-500 transition-colors"
-                    >
-                        <span className="material-symbols-outlined">close</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {allowPublicSkip && step === 'search' && (
+                            <button
+                                onClick={() => {
+                                    onSelect(null, null);
+                                    onClose();
+                                }}
+                                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center gap-2"
+                            >
+                                <span className="material-symbols-outlined !text-[16px]">storefront</span>
+                                Público General
+                            </button>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 hover:text-rose-500 transition-colors"
+                        >
+                            <span className="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-8 pb-8 custom-scrollbar">
@@ -333,6 +353,23 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                         </div>
                                     </div>
                                 )}
+                                
+                                {allowPublicSkip && (
+                                    <button
+                                        onClick={() => {
+                                            onSelect(null, null);
+                                            onClose();
+                                        }}
+                                        className="w-full mt-4 py-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex flex-col items-center justify-center gap-1 group"
+                                    >
+                                        <span className="text-sm font-black uppercase tracking-widest group-hover:text-slate-700 dark:group-hover:text-slate-300">
+                                            Continuar sin registrar
+                                        </span>
+                                        <span className="text-xs font-bold opacity-70">
+                                            Vender a Público General (Sin puntos ni historial)
+                                        </span>
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}
@@ -361,6 +398,19 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                         className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-700 rounded-2xl focus:border-primary outline-none font-bold"
                                         placeholder="Ej: 300 000 0000"
                                     />
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                                    <div className="flex-1">
+                                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">Sin Puntos de Fidelización</h4>
+                                        <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Marcar si es Cliente Mayorista o "Público General".</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setNewCustomer(prev => ({ ...prev, loyaltyOptOut: !prev.loyaltyOptOut }))}
+                                        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${newCustomer.loyaltyOptOut ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                    >
+                                        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${newCustomer.loyaltyOptOut ? 'translate-x-4' : 'translate-x-0'}`} />
+                                    </button>
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Email (Opcional)</label>

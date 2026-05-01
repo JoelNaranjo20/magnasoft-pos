@@ -1,6 +1,7 @@
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { PrePOSLayout } from './PrePOSLayout';
 import { Outlet } from 'react-router-dom';
+import { WhatsNewModal } from '@shared/components/modals/WhatsNewModal';
 
 export const AppLayout = () => {
     const { business, isLoading } = useAuthStore();
@@ -17,6 +18,7 @@ export const AppLayout = () => {
     return (
         <PrePOSLayout>
             <Outlet />
+            <WhatsNewModal />
         </PrePOSLayout>
     );
 };

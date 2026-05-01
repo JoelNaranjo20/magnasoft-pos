@@ -35,6 +35,15 @@ export default function ConfigurationsPage() {
     const [dangerLoading, setDangerLoading] = useState(false);
     const [dangerResult, setDangerResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+    const [resetOptions, setResetOptions] = useState({
+        sales: false,
+        cash: false,
+        customers: false,
+        workers: false,
+        products: false,
+        queue: false
+    });
+
     useEffect(() => {
         fetchBusinesses();
     }, []);
@@ -103,6 +112,7 @@ export default function ConfigurationsPage() {
         setDangerModal(null);
         setDangerConfirmText('');
         setDangerResult(null);
+        setResetOptions({ sales: false, cash: false, customers: false, workers: false, products: false, queue: false });
     };
 
     const handleDangerConfirm = async () => {
@@ -116,10 +126,15 @@ export default function ConfigurationsPage() {
 
         try {
             if (action === 'purge') {
-                const result = await purgeBusinessData(business.id);
+                if (!resetOptions.sales && !resetOptions.cash && !resetOptions.customers && !resetOptions.workers && !resetOptions.products && !resetOptions.queue) {
+                    setDangerResult({ type: 'error', message: '❌ Error: Debes seleccionar al menos un módulo para limpiar.' });
+                    setDangerLoading(false);
+                    return;
+                }
+
+                const result = await purgeBusinessData(business.id, resetOptions);
                 if (result.success) {
-                    const total = Object.values(result.deleted || {}).reduce((a, b) => a + b, 0);
-                    setDangerResult({ type: 'success', message: `✅ Datos eliminados correctamente. ${total} registros borrados.` });
+                    setDangerResult({ type: 'success', message: `✅ Datos eliminados correctamente.` });
                     await fetchBusinesses();
                 } else {
                     setDangerResult({ type: 'error', message: `❌ Error: ${result.error}` });
@@ -427,17 +442,95 @@ export default function ConfigurationsPage() {
                         {/* Body */}
                         <div className="p-6 space-y-4">
                             {dangerModal.action === 'purge' ? (
-                                <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300 space-y-1">
-                                    <p className="font-black">Se borrarán permanentemente:</p>
-                                    <ul className="list-disc list-inside text-xs space-y-0.5 font-medium">
-                                        <li>Todas las ventas e ítems de venta</li>
-                                        <li>Sesiones de caja y movimientos</li>
-                                        <li>Clientes y vehículos</li>
-                                        <li>Trabajadores y comisiones</li>
-                                        <li>Productos y servicios</li>
-                                        <li>Cola de servicio</li>
-                                    </ul>
-                                    <p className="font-black mt-2">El negocio y su configuración se conservarán.</p>
+                                <div className="space-y-4">
+                                    <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300">
+                                        <p className="font-black mb-2 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[18px]">warning</span> 
+                                            Se borrarán permanentemente:
+                                        </p>
+                                        <p className="font-black mt-2">El negocio y su configuración se conservarán.</p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-2 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+                                        <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={resetOptions.sales}
+                                                onChange={(e) => setResetOptions({ ...resetOptions, sales: e.target.checked })}
+                                                className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                            />
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                Todas las ventas e ítems de venta
+                                            </span>
+                                        </label>
+
+                                        <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={resetOptions.cash}
+                                                onChange={(e) => setResetOptions({ ...resetOptions, cash: e.target.checked })}
+                                                className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                            />
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                Sesiones de caja y movimientos
+                                            </span>
+                                        </label>
+
+                                        <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={resetOptions.customers}
+                                                onChange={(e) => setResetOptions({ ...resetOptions, customers: e.target.checked })}
+                                                className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                            />
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                Clientes y vehículos
+                                            </span>
+                                        </label>
+
+                                        <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={resetOptions.workers}
+                                                onChange={(e) => setResetOptions({ ...resetOptions, workers: e.target.checked })}
+                                                className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                            />
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                Trabajadores y comisiones
+                                            </span>
+                                        </label>
+
+                                        <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={resetOptions.products}
+                                                onChange={(e) => setResetOptions({ ...resetOptions, products: e.target.checked })}
+                                                className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                            />
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                Productos y servicios
+                                            </span>
+                                        </label>
+
+                                        <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={resetOptions.queue}
+                                                onChange={(e) => setResetOptions({ ...resetOptions, queue: e.target.checked })}
+                                                className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                            />
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                Cola de servicio
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    <button
+                                        onClick={() => setResetOptions({ sales: true, cash: true, customers: true, workers: true, products: true, queue: true })}
+                                        className="w-full mt-2 py-2 border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
+                                    >
+                                        Seleccionar Todo
+                                    </button>
                                 </div>
                             ) : (
                                 <div className="bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800 rounded-xl p-4 text-sm text-rose-800 dark:text-rose-300 space-y-1">

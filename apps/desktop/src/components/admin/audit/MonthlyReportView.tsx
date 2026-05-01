@@ -74,8 +74,12 @@ export const MonthlyReportView = () => {
 
                 // Add session movements
                 const sessionMovements = movements?.filter(m => m.session_id === session.id) || [];
-                const income = sessionMovements.filter(m => m.type === 'income').reduce((sum, m) => sum + m.amount, 0);
-                const expense = sessionMovements.filter(m => m.type === 'expense').reduce((sum, m) => sum + m.amount, 0);
+                const income = sessionMovements
+                    .filter(m => m.type === 'income' && !((m.description || '').toLowerCase().startsWith('[canje]')))
+                    .reduce((sum, m) => sum + m.amount, 0);
+                const expense = sessionMovements
+                    .filter(m => m.type === 'expense' && !((m.description || '').toLowerCase().startsWith('[canje]')))
+                    .reduce((sum, m) => sum + m.amount, 0);
 
                 summary.totalIncome += income;
                 summary.totalExpenses += expense;

@@ -11,6 +11,7 @@ import { CustomerVehicleModal } from '../modals/CustomerVehicleModal';
 import { CustomerHistoryModal } from '../modals/CustomerHistoryModal';
 import { EditPriceModal } from '../modals/EditPriceModal';
 import { SimpleCustomerModal } from '../modals/SimpleCustomerModal';
+import { SecurityPinModal } from '../modals/SecurityPinModal';
 import { POSCustomerSection } from './POSCustomerSection';
 import { supabase } from '../../lib/supabase';
 import { useTableStore } from '../../store/useTableStore';
@@ -120,6 +121,7 @@ export const POSCart = () => {
 
     // Price Edit Modal State
     const [priceEditModal, setPriceEditModal] = useState<{ isOpen: boolean; itemId: string; currentPrice: number; originalPrice: number; name: string } | null>(null);
+    const [isSecurityPinOpen, setIsSecurityPinOpen] = useState(false);
 
     // Customer & Vehicle State
     const [searchQuery, setSearchQuery] = useState('');
@@ -131,7 +133,7 @@ export const POSCart = () => {
     const [last30DaysVisits, setLast30DaysVisits] = useState(0);
 
     // State for Cash Movements
-    const [movementModal, setMovementModal] = useState<{ isOpen: boolean; type: 'income' | 'expense' }>({
+    const [movementModal, setMovementModal] = useState<{ isOpen: boolean; type: 'income' | 'expense' | 'favor' }>({
         isOpen: false,
         type: 'income'
     });
@@ -333,7 +335,16 @@ export const POSCart = () => {
         }
     };
 
-    const handleCustomerSelect = async (customer: Customer, vehicle: Vehicle | null, source: 'quick_search' | 'modal' = 'modal') => {
+    const handleCustomerSelect = async (customer: Customer | null, vehicle: Vehicle | null, source: 'quick_search' | 'modal' = 'modal') => {
+        // If the user clicked "Continuar sin registrar" in the modal, it returns null for both
+        if (!customer) {
+            handleQuickClient();
+            // Do NOT clear searchQuery here, we might need it as quickSaleReference
+            setShowResults(false);
+            setSearchResults([]);
+            return;
+        }
+
         let finalVehicle = vehicle;
 
         // Auto-fetch vehicle if they selected the customer by name instead of plate
@@ -363,7 +374,13 @@ export const POSCart = () => {
         }
 
         setCustomer(customer, finalVehicle, source);
-        setSearchQuery('');
+        
+        // Only clear the search query if this is a REAL customer with a REAL vehicle.
+        // If it's Público General, we want to keep the query as the quick sale reference (like a plate).
+        if (customer.name !== 'Público General') {
+            setSearchQuery('');
+        }
+        
         setShowResults(false);
         setSearchResults([]);
     };
@@ -456,7 +473,11 @@ export const POSCart = () => {
 
     const handlePriceEditSave = (newPrice: number) => {
         if (priceEditModal) {
-            updatePrice(priceEditModal.itemId, newPrice);
+            if (priceEditModal.itemId === 'global') {
+                useCartStore.getState().applyGlobalDiscount(newPrice);
+            } else {
+                updatePrice(priceEditModal.itemId, newPrice);
+            }
             setPriceEditModal(null);
         }
     };
@@ -493,6 +514,7 @@ export const POSCart = () => {
                 customer={selectedCustomer}
                 vehicle={selectedVehicle}
                 workers={workers}
+                quickSaleReference={searchQuery}
             />
 
             <CashMovementModal
@@ -517,6 +539,27 @@ export const POSCart = () => {
                     originalPrice={priceEditModal.originalPrice}
                     itemName={priceEditModal.name}
                     onSave={handlePriceEditSave}
+                />
+            )}
+
+            {isSecurityPinOpen && (
+                <SecurityPinModal
+                    onCancel={() => setIsSecurityPinOpen(false)}
+                    onSuccess={() => {
+                        setIsSecurityPinOpen(false);
+                        // Open the edit modal with the current aggregated total
+                        const currentTotal = items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+                        const originalTotal = items.reduce((acc, i) => acc + ((i.originalPrice || i.price) * i.quantity), 0);
+                        setPriceEditModal({
+                            isOpen: true,
+                            itemId: 'global',
+                            currentPrice: currentTotal,
+                            originalPrice: originalTotal,
+                            name: 'Total de la Venta'
+                        });
+                    }}
+                    title="PIN Maestro Requerido"
+                    description="Ingrese el PIN Maestro del negocio para autorizar la modificación del precio total de esta venta."
                 />
             )}
 
@@ -556,7 +599,7 @@ export const POSCart = () => {
                     </button>
                     {showCustomerSection && (
                         <POSCustomerSection
-                            selectedCustomer={customerSelectionSource === 'quick_search' ? selectedCustomer : null}
+                            selectedCustomer={selectedCustomer}
                             selectedVehicle={selectedVehicle}
                             searchQuery={searchQuery}
                             searchResults={searchResults}
@@ -595,7 +638,7 @@ export const POSCart = () => {
                 /* ── NON-RESTAURANT: always-visible customer + table section ── */
                 <div className="flex flex-col gap-2">
                     <POSCustomerSection
-                        selectedCustomer={customerSelectionSource === 'quick_search' ? selectedCustomer : null}
+                        selectedCustomer={selectedCustomer}
                         selectedVehicle={selectedVehicle}
                         searchQuery={searchQuery}
                         searchResults={searchResults}
@@ -662,17 +705,16 @@ export const POSCart = () => {
                                 <div className="flex justify-between items-start">
                                     <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm leading-tight truncate pr-2">{item.name}</h4>
                                     <div className="flex flex-col items-end">
-                                        <span className="font-bold text-slate-900 dark:text-white text-sm tracking-tight">${(item.price * item.quantity).toLocaleString()}</span>
-                                        {item.originalPrice && item.price !== item.originalPrice && (
-                                            <span className="text-[10px] text-slate-400 line-through">
-                                                ${(item.originalPrice * item.quantity).toLocaleString()}
+                                        <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                            <span className="font-bold text-slate-900 dark:text-white text-sm tracking-tight">
+                                                ${((item.originalPrice || item.price) * item.quantity).toLocaleString()}
                                             </span>
-                                        )}
-                                        {item.originalPrice && item.price < item.originalPrice && (
-                                            <span className="text-[9px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded ml-1">
-                                                REBAJADO
-                                            </span>
-                                        )}
+                                            {item.originalPrice && item.price !== item.originalPrice && (
+                                                <span className="text-xs font-bold text-amber-500">
+                                                    (-${((item.originalPrice - item.price) * item.quantity).toLocaleString()})
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -681,19 +723,6 @@ export const POSCart = () => {
                                         <div className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400">
                                             {item.quantity} x ${(item.price).toLocaleString()}
                                         </div>
-                                        <button
-                                            onClick={() => setPriceEditModal({
-                                                isOpen: true,
-                                                itemId: item.cartId,
-                                                currentPrice: item.price,
-                                                originalPrice: item.originalPrice || item.price,
-                                                name: item.name
-                                            })}
-                                            className="p-1 text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
-                                            title="Modificar precio / Descuento"
-                                        >
-                                            <span className="material-symbols-outlined !text-[14px]">edit</span>
-                                        </button>
                                     </div>
 
                                     <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-900 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700">
@@ -782,28 +811,38 @@ export const POSCart = () => {
                         <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">${total.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-end">
-                        <div>
-                            <span className="text-sm font-bold text-slate-800 dark:text-white block mb-1">Total a Pagar</span>
+                        <div className="flex flex-col gap-1 items-start">
+                            <span className="text-sm font-bold text-slate-800 dark:text-white block">Total a Pagar</span>
+                            <button
+                                onClick={() => items.length > 0 && setIsSecurityPinOpen(true)}
+                                disabled={items.length === 0}
+                                className="flex items-center gap-1 text-[10px] text-primary hover:text-primary-hover font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded shadow-sm"
+                            >
+                                <span className="material-symbols-outlined !text-[12px]">edit</span>
+                                Descuento / Modificar
+                            </button>
+                        </div>
+                        <div className="text-right flex flex-col items-end">
+                            <span className="block text-4xl font-black text-slate-900 dark:text-white leading-none tracking-tighter">
+                                ${items.reduce((acc, i) => acc + (i.originalPrice || i.price) * i.quantity, 0).toLocaleString()}
+                            </span>
                             {items.some(i => i.originalPrice && i.price < i.originalPrice) && (
-                                <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                                    AHORRAS ${items.reduce((acc, i) => acc + ((i.originalPrice || i.price) - i.price) * i.quantity, 0).toLocaleString()}
+                                <span className="block text-lg font-bold text-amber-500 mt-2">
+                                    (-${items.reduce((acc, i) => acc + ((i.originalPrice || i.price) - i.price) * i.quantity, 0).toLocaleString()})
                                 </span>
                             )}
-                        </div>
-                        <div className="text-right">
-                            <span className="block text-4xl font-black text-slate-900 dark:text-white leading-none tracking-tighter">${total.toLocaleString()}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-5 gap-2">
                     <button
                         onClick={() => setMovementModal({ isOpen: true, type: 'income' })}
                         className="col-span-1 h-14 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
                         title="Ingreso Extra"
                     >
                         <span className="material-symbols-outlined !text-[20px]">add_circle</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none">Ingreso</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Ingreso</span>
                     </button>
                     <button
                         onClick={() => setMovementModal({ isOpen: true, type: 'expense' })}
@@ -811,11 +850,19 @@ export const POSCart = () => {
                         title="Gasto Rápido"
                     >
                         <span className="material-symbols-outlined !text-[20px]">remove_circle</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none">Gasto</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Gasto</span>
+                    </button>
+                    <button
+                        onClick={() => setMovementModal({ isOpen: true, type: 'favor' })}
+                        className="col-span-1 h-14 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
+                        title="Canje de Efectivo/Transferencia"
+                    >
+                        <span className="material-symbols-outlined !text-[20px] transition-transform group-hover:rotate-180 duration-500">swap_horiz</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Canje</span>
                     </button>
                     <button className="col-span-1 h-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-700 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group">
                         <span className="material-symbols-outlined !text-[20px]">print</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none">Imprimir</span>
+                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Imprimir</span>
                     </button>
                     <button
                         onClick={handlePayment}
