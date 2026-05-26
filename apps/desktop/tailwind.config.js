@@ -16,7 +16,8 @@ export default {
                 "surface-dark": "#1e293b",     // slate-800
             },
             fontFamily: {
-                "display": ["Inter", "sans-serif"]
+                "display": ["Outfit", "sans-serif"],
+                "title": ["Syne", "sans-serif"]
             },
             borderRadius: {
                 "DEFAULT": "0.25rem",

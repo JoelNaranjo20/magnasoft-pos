@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '@shared/store/useAuthStore';
 
 export const LoginPage = () => {
+    const [isRegister, setIsRegister] = useState(false);
+    const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -36,29 +38,64 @@ export const LoginPage = () => {
 
         try {
             const cleanEmail = email.trim();
-            const { data, error: authError } = await supabase.auth.signInWithPassword({
-                email: cleanEmail,
-                password
-            });
-
-            if (authError) throw authError;
-
-            if (data.user) {
-                // Persistent storage of credentials
-                if (window.electronAPI) {
-                    await window.electronAPI.storageSet('sv_login_email', cleanEmail);
-                    await window.electronAPI.storageSet('sv_login_password', password);
-                } else {
-                    localStorage.setItem('sv_login_email', cleanEmail);
-                    localStorage.setItem('sv_login_password', password);
+            
+            if (isRegister) {
+                if (!fullName.trim()) {
+                    throw new Error('Por favor, ingresa tu nombre completo.');
                 }
 
-                // Successful login, update global state
-                await useAuthStore.getState().checkSession();
-                // The App interaction will automatically redirect due to !user becoming false
+                // Register flow
+                const { data, error: signUpError } = await supabase.auth.signUp({
+                    email: cleanEmail,
+                    password,
+                    options: {
+                        data: {
+                            full_name: fullName.trim(),
+                            business_name: 'Pending Setup',
+                            business_type: 'pending'
+                        }
+                    }
+                });
+
+                if (signUpError) throw signUpError;
+
+                if (data.user) {
+                    // Save credentials for auto-login/fill
+                    if (window.electronAPI) {
+                        await window.electronAPI.storageSet('sv_login_email', cleanEmail);
+                        await window.electronAPI.storageSet('sv_login_password', password);
+                    } else {
+                        localStorage.setItem('sv_login_email', cleanEmail);
+                        localStorage.setItem('sv_login_password', password);
+                    }
+                    
+                    setSuccessMsg('¡Registro exitoso! Iniciando sesión...');
+                    // Automatically check and load session
+                    await useAuthStore.getState().checkSession();
+                }
+            } else {
+                // Login flow
+                const { data, error: authError } = await supabase.auth.signInWithPassword({
+                    email: cleanEmail,
+                    password
+                });
+
+                if (authError) throw authError;
+
+                if (data.user) {
+                    if (window.electronAPI) {
+                        await window.electronAPI.storageSet('sv_login_email', cleanEmail);
+                        await window.electronAPI.storageSet('sv_login_password', password);
+                    } else {
+                        localStorage.setItem('sv_login_email', cleanEmail);
+                        localStorage.setItem('sv_login_password', password);
+                    }
+
+                    await useAuthStore.getState().checkSession();
+                }
             }
         } catch (err: any) {
-            console.error('Login error:', err);
+            console.error('Authentication error:', err);
             let message = '';
             if (typeof err === 'string') {
                 message = err;
@@ -67,7 +104,7 @@ export const LoginPage = () => {
             } else if (err?.error_description) {
                 message = err.error_description;
             } else {
-                message = 'Error al iniciar sesión';
+                message = 'Error en la autenticación';
             }
 
             if (message.toLowerCase().includes('invalid login credentials')) {
@@ -103,36 +140,75 @@ export const LoginPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6">
-            <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="text-center space-y-4">
-                    <div className="size-24 mx-auto rounded-[2rem] bg-white p-1 shadow-2xl overflow-hidden flex items-center justify-center">
-                        <div className="w-full h-full bg-sky-500 flex items-center justify-center text-white rounded-[1.8rem]">
-                            <span className="material-symbols-outlined text-4xl">lock_open</span>
+        <div className="min-h-screen bg-[#070b19] flex items-center justify-center p-6 relative overflow-hidden font-display select-none">
+            {/* Ambient Background Glowing Blobs */}
+            <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 size-[450px] bg-primary/20 blur-[120px] rounded-full animate-glow-slow z-0"></div>
+            <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 size-[450px] bg-indigo-600/20 blur-[130px] rounded-full animate-glow-slower z-0"></div>
+
+            <div className="w-full max-w-lg space-y-8 relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                
+                {/* Branding / Header */}
+                <div className="text-center space-y-3">
+                    <div className="inline-flex size-20 rounded-[2rem] bg-gradient-to-br from-primary via-blue-600 to-indigo-600 p-0.5 shadow-2xl shadow-primary/30 items-center justify-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                        <div className="w-full h-full bg-[#0d1527] flex items-center justify-center rounded-[1.95rem]">
+                            <span className="material-symbols-outlined text-4xl text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-400">
+                                {isRegister ? 'rocket_launch' : 'shield_person'}
+                            </span>
                         </div>
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-white uppercase tracking-tight">Bienvenido</h2>
-                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.2em] mt-1">Iniciar Sesión</p>
+                        <h2 className="text-3xl font-black font-title text-white uppercase tracking-tight leading-none">
+                            {isRegister ? 'Registrar Negocio' : 'Bienvenido'}
+                        </h2>
+                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.25em] mt-1.5">
+                            {isRegister ? 'Crea tu cuenta en MagnaSoft' : 'Iniciar Sesión'}
+                        </p>
                     </div>
                 </div>
 
-                <form onSubmit={handleLogin} className="bg-slate-900/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-slate-800 shadow-3xl space-y-6">
+                {/* Main Card */}
+                <form onSubmit={handleLogin} className="glass-panel p-10 rounded-[3rem] shadow-3xl space-y-6">
                     <div className="space-y-4">
-                        <div className="space-y-1">
-                            <label className="block ml-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">Email</label>
+                        
+                        {/* Full Name field (Only shown for Sign Up) */}
+                        {isRegister && (
+                            <div className="space-y-1.5 animate-in fade-in duration-300">
+                                <label className="block ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    Nombre Completo
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={fullName}
+                                    onChange={e => setFullName(e.target.value)}
+                                    placeholder="Tu nombre y apellido"
+                                    className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-bold"
+                                />
+                            </div>
+                        )}
+
+                        {/* Email Input */}
+                        <div className="space-y-1.5">
+                            <label className="block ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                Correo Electrónico
+                            </label>
                             <input
                                 type="email"
                                 required
-                                autoFocus
+                                autoFocus={!isRegister}
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 placeholder="usuario@ejemplo.com"
-                                className="w-full px-5 py-4 bg-slate-800/50 border border-slate-700 focus:border-sky-500 rounded-2xl outline-none transition-all text-white font-medium placeholder:text-slate-600"
+                                className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-bold"
                             />
                         </div>
-                        <div className="space-y-1 relative">
-                            <label className="block ml-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">Contraseña</label>
+
+                        {/* Password Input */}
+                        <div className="space-y-1.5">
+                            <label className="block ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                Contraseña
+                            </label>
                             <div className="relative">
                                 <input
                                     type={showPassword ? "text" : "password"}
@@ -140,57 +216,79 @@ export const LoginPage = () => {
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
                                     placeholder="••••••••"
-                                    className="w-full px-5 py-4 bg-slate-800/50 border border-slate-700 focus:border-sky-500 rounded-2xl outline-none transition-all text-white font-medium placeholder:text-slate-600 pr-12"
+                                    className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-bold pr-12"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors flex items-center justify-center h-full"
                                 >
-                                    <span className="material-symbols-outlined">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                                    <span className="material-symbols-outlined text-[20px]">
+                                        {showPassword ? 'visibility_off' : 'visibility'}
+                                    </span>
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex justify-end mt-2">
-                        <button
-                            type="button"
-                            onClick={handleResetPassword}
-                            disabled={loading}
-                            className="text-[11px] font-bold text-sky-400 hover:text-sky-300 transition-colors uppercase tracking-widest disabled:opacity-50"
-                        >
-                            ¿Cambiar Contraseña?
-                        </button>
-                    </div>
+                    {/* Forgot Password Link (Only for Login) */}
+                    {!isRegister && (
+                        <div className="flex justify-end mt-1">
+                            <button
+                                type="button"
+                                onClick={handleResetPassword}
+                                disabled={loading}
+                                className="text-[10px] font-black text-primary hover:text-cyan-400 transition-colors uppercase tracking-widest disabled:opacity-50"
+                            >
+                                ¿Olvidaste tu contraseña?
+                            </button>
+                        </div>
+                    )}
 
+                    {/* Notification Messages */}
                     {error && (
-                        <div className="text-rose-500 text-center text-xs font-bold bg-rose-500/10 py-3 px-4 rounded-xl animate-shake">
+                        <div className="text-rose-400 text-center text-xs font-bold bg-rose-500/10 border border-rose-500/20 py-3.5 px-4 rounded-2xl animate-shake">
                             {error}
                         </div>
                     )}
 
                     {successMsg && (
-                        <div className="text-emerald-400 text-center text-xs font-bold bg-emerald-500/10 py-3 px-4 rounded-xl">
+                        <div className="text-emerald-400 text-center text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 py-3.5 px-4 rounded-2xl">
                             {successMsg}
                         </div>
                     )}
 
+                    {/* Submit Button */}
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full py-5 bg-sky-500 hover:bg-sky-400 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-xl shadow-sky-500/20 transition-all active:scale-[0.98] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full py-5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all hover:scale-[1.01] active:scale-[0.99] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? (
                             <div className="animate-spin size-5 border-b-2 border-white rounded-full mx-auto"></div>
                         ) : (
-                            'INGRESAR'
+                            isRegister ? 'Registrar Negocio' : 'INGRESAR AL SISTEMA'
                         )}
                     </button>
 
-                    <div className="pt-2 text-center">
-                        <p className="text-[10px] text-slate-600 uppercase tracking-widest">
-                            Magnasoft V2.0 System
+                    {/* Register Toggle */}
+                    <div className="pt-2 text-center border-t border-slate-800/60 mt-4">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsRegister(!isRegister);
+                                setError('');
+                                setSuccessMsg('');
+                            }}
+                            className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-primary transition-colors"
+                        >
+                            {isRegister ? 'Ya tengo cuenta → Iniciar Sesión' : '¿Nuevo negocio? → Regístralo aquí'}
+                        </button>
+                    </div>
+
+                    <div className="text-center">
+                        <p className="text-[9px] text-slate-700 uppercase tracking-widest">
+                            Magnasoft POS System v2.0
                         </p>
                     </div>
                 </form>

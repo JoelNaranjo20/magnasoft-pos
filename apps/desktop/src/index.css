@@ -166,3 +166,44 @@ textarea:focus {
     outline: 2px solid theme('colors.primary') !important;
     outline-offset: -1px;
 }
+
+/* Glassmorphism utility */
+.glass-panel {
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-input {
+    background: rgba(15, 23, 42, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-input:focus {
+    border-color: #0d7ff2;
+    background: rgba(15, 23, 42, 0.55);
+    box-shadow: 0 0 20px rgba(13, 127, 242, 0.15);
+}
+
+/* Custom keyframes for premium UI animations */
+@keyframes pulseGlow {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1) rotate(0deg);
+        opacity: 0.12;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.15) rotate(180deg);
+        opacity: 0.18;
+    }
+}
+
+.animate-glow-slow {
+    animation: pulseGlow 18s infinite ease-in-out;
+}
+
+.animate-glow-slower {
+    animation: pulseGlow 25s infinite ease-in-out reverse;
+}
