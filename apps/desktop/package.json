@@ -1,8 +1,8 @@
 {
   "name": "magnasoft-pos",
   "private": true,
-  "version": "1.0.32",
-  "description": "Sqerviteca POS - Sistema de punto de venta",
+  "version": "1.0.33",
+  "description": "Serviteca POS - Sistema de punto de venta",
   "author": "JoelNaranjo20",
   "repository": {
     "type": "git",
