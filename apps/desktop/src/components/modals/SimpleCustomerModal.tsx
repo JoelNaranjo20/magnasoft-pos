@@ -58,12 +58,55 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
         setSaving(true);
         setError(null);
         try {
+            const businessId = useBusinessStore.getState().id;
+            const customerName = name.trim();
+            const customerPhone = phone.trim() || null;
+
+            // Check for duplicate customer
+            if (customerPhone) {
+                const { data: existingPhone } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .eq('business_id', businessId)
+                    .eq('phone', customerPhone)
+                    .maybeSingle();
+
+                if (existingPhone) {
+                    alert(`El cliente con teléfono ${customerPhone} ya existe: ${existingPhone.name}`);
+                    onSelect(existingPhone);
+                    onClose();
+                    setName('');
+                    setPhone('');
+                    setLoyaltyOptOut(false);
+                    setSaving(false);
+                    return;
+                }
+            } else {
+                const { data: existingName } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .eq('business_id', businessId)
+                    .ilike('name', customerName)
+                    .maybeSingle();
+
+                if (existingName) {
+                    alert(`Ya existe un cliente con el nombre exacto: ${existingName.name}`);
+                    onSelect(existingName);
+                    onClose();
+                    setName('');
+                    setPhone('');
+                    setLoyaltyOptOut(false);
+                    setSaving(false);
+                    return;
+                }
+            }
+
             const { data, error: insertError } = await supabase
                 .from('customers')
                 .insert({
-                    business_id: useBusinessStore.getState().id,
-                    name: name.trim(),
-                    phone: phone.trim() || null,
+                    business_id: businessId,
+                    name: customerName,
+                    phone: customerPhone,
                     email: null,
                     loyalty_points: 0,
                     total_visits: 0,

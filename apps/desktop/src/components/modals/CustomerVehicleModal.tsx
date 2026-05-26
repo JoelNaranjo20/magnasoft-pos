@@ -175,14 +175,55 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
     };
 
     const handleCreateCustomer = async () => {
-        if (!newCustomer.name || !newCustomer.phone) return;
+        if (!newCustomer.name) return;
         setLoading(true);
         try {
+            const businessId = useBusinessStore.getState().id;
+            const customerName = newCustomer.name.trim();
+            const customerPhone = newCustomer.phone.trim() || null;
+
+            // Check for duplicate customer
+            if (customerPhone) {
+                const { data: existingPhone } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .eq('business_id', businessId)
+                    .eq('phone', customerPhone)
+                    .maybeSingle();
+
+                if (existingPhone) {
+                    alert(`El cliente con teléfono ${customerPhone} ya existe: ${existingPhone.name}`);
+                    setSelectedCustomer(existingPhone);
+                    loadVehicles(existingPhone.id);
+                    setStep('selection');
+                    setNewCustomer({ name: '', phone: '', email: '', loyaltyOptOut: false });
+                    setLoading(false);
+                    return;
+                }
+            } else {
+                const { data: existingName } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .eq('business_id', businessId)
+                    .ilike('name', customerName)
+                    .maybeSingle();
+
+                if (existingName) {
+                    alert(`Ya existe un cliente con el nombre exacto: ${existingName.name}`);
+                    setSelectedCustomer(existingName);
+                    loadVehicles(existingName.id);
+                    setStep('selection');
+                    setNewCustomer({ name: '', phone: '', email: '', loyaltyOptOut: false });
+                    setLoading(false);
+                    return;
+                }
+            }
+
             const payload = {
-                name: newCustomer.name,
-                phone: newCustomer.phone,
-                email: newCustomer.email,
-                business_id: useBusinessStore.getState().id,
+                name: customerName,
+                phone: customerPhone,
+                email: newCustomer.email.trim() || null,
+                business_id: businessId,
                 metadata: {
                     loyalty_opt_out: newCustomer.loyaltyOptOut
                 }
@@ -206,11 +247,31 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
         if (!newVehicle.license_plate || !selectedCustomer) return;
         setLoading(true);
         try {
+            const businessId = useBusinessStore.getState().id;
+            const plate = newVehicle.license_plate.toUpperCase().trim();
+
+            // Check if vehicle with this plate already exists in the business
+            const { data: existingVehicle } = await supabase
+                .from('vehicles')
+                .select('*, customer:customers(*)')
+                .eq('business_id', businessId)
+                .eq('license_plate', plate)
+                .maybeSingle();
+
+            if (existingVehicle) {
+                const ownerName = existingVehicle.customer ? existingVehicle.customer.name : 'un cliente desconocido';
+                alert(`El vehículo con placa ${plate} ya está registrado a nombre de: ${ownerName}`);
+                onSelect(existingVehicle.customer || null, existingVehicle);
+                onClose();
+                setLoading(false);
+                return;
+            }
+
             const { data, error } = await supabase.from('vehicles').insert({
                 ...newVehicle,
                 customer_id: selectedCustomer.id,
-                license_plate: newVehicle.license_plate.toUpperCase(),
-                business_id: useBusinessStore.getState().id
+                license_plate: plate,
+                business_id: businessId
             }).select().single();
             if (error) throw error;
             setSelectedVehicle(data);
@@ -432,7 +493,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                 </button>
                                 <button
                                     onClick={handleCreateCustomer}
-                                    disabled={loading || !newCustomer.name || !newCustomer.phone}
+                                    disabled={loading || !newCustomer.name}
                                     className="flex-1 py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 transition-all"
                                 >
                                     {loading ? 'Creando...' : 'Continuar al Vehículo'}

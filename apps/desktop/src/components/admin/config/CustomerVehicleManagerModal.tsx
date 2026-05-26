@@ -71,10 +71,33 @@ export const CustomerVehicleManagerModal = ({ isOpen, onClose, customer }: Props
         if (!editData.license_plate) return;
         setSaving(true);
         try {
+            const businessId = useBusinessStore.getState().id;
+            const plate = editData.license_plate.toUpperCase().trim();
+
+            // Check for duplicate vehicle
+            let query = supabase
+                .from('vehicles')
+                .select('*, customer:customers(*)')
+                .eq('business_id', businessId)
+                .eq('license_plate', plate);
+
+            if (editData.id) {
+                query = query.neq('id', editData.id);
+            }
+
+            const { data: existingVehicle } = await query.maybeSingle();
+
+            if (existingVehicle) {
+                const ownerName = existingVehicle.customer ? existingVehicle.customer.name : 'otro cliente';
+                alert(`La placa ${plate} ya está registrada a nombre de: ${ownerName}`);
+                setSaving(false);
+                return;
+            }
+
             const payload = {
                 customer_id: customer.id,
-                business_id: useBusinessStore.getState().id,
-                license_plate: editData.license_plate.toUpperCase().trim(),
+                business_id: businessId,
+                license_plate: plate,
                 brand: editData.brand || null,
                 model: editData.model || null,
                 color: editData.color || null,
