@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, X, Wallet, Tag, Calculator, BookOpen, TrendingUp } from 'lucide-react';
+import { Sparkles, X, Tag, Calculator, BookOpen, TrendingUp } from 'lucide-react';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 
 // ==========================================

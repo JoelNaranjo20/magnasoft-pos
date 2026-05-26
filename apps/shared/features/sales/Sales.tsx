@@ -298,18 +298,7 @@ export const SalesPage = () => {
         });
     }, [sales, searchTerm]);
 
-    const totalRevenue = useMemo(() => {
-        // Same formula as Dashboard: cash + digital + abonos (credit excluded as not yet collected)
-        return filteredSales.reduce((acc, sale) => {
-            const tot = sale.total_amount || 0;
-            if (sale.payment_method === 'mixed') {
-                return acc + (sale.cash_amount || 0) + (sale.card_amount || 0) + (sale.transfer_amount || 0);
-            } else if (sale.payment_method === 'credit') {
-                return acc; // credit not counted as income yet
-            }
-            return acc + tot;
-        }, 0);
-    }, [filteredSales]);
+
 
     const reconciliation = useMemo(() => {
         const totals = {
@@ -424,40 +413,7 @@ export const SalesPage = () => {
             .map(([name, total]) => ({ name, total }));
     }, [filteredSales]);
 
-    // Detalle de gastos/salidas del turno
-    const expenseDetails = useMemo(() => {
-        const items: { label: string; amount: number; color: string }[] = [];
 
-        // Liquidaciones (pagos de comisiones)
-        const liquidaciones = movements
-            .filter(m => m.type === 'expense' && (m.description || '').toLowerCase().includes('pago de comisiones'))
-            .reduce((sum, m) => sum + (m.amount || 0), 0);
-        if (liquidaciones > 0) items.push({ label: 'Liquidaciones', amount: liquidaciones, color: 'text-amber-400' });
-
-        // Otros gastos
-        const otrosGastos = movements
-            .filter(m => m.type === 'expense' && !(m.description || '').toLowerCase().includes('pago de comisiones') && !(m.description || '').toLowerCase().startsWith('[canje]'))
-            .reduce((sum, m) => sum + (m.amount || 0), 0);
-        if (otrosGastos > 0) items.push({ label: 'Gastos', amount: otrosGastos, color: 'text-rose-400' });
-
-        // Transferencias recibidas
-        if (reconciliation.sales_digital > 0) items.push({ label: 'Transferencias', amount: reconciliation.sales_digital, color: 'text-indigo-400' });
-
-        // X Cobrar (Créditos/Fiado)
-        if (reconciliation.sales_credit > 0) items.push({ label: 'X Cobrar (Fiado)', amount: reconciliation.sales_credit, color: 'text-slate-400' });
-
-        // Descuentos/Rebajas
-        if (reconciliation.rebajas > 0) items.push({ label: 'Rebajas', amount: reconciliation.rebajas, color: 'text-amber-500' });
-
-        // Promos
-        if (reconciliation.promociones > 0) items.push({ label: 'Promociones', amount: reconciliation.promociones, color: 'text-purple-400' });
-
-        // Abonos recibidos
-        const totalAbonos = reconciliation.abonos_cash + reconciliation.abonos_digital;
-        if (totalAbonos > 0) items.push({ label: 'Abonos Recibidos', amount: totalAbonos, color: 'text-sky-400' });
-
-        return items;
-    }, [movements, reconciliation]);
 
     const cashFlowTotal = useMemo(() => {
         const base = sessionOpeningBalance;
@@ -476,7 +432,19 @@ export const SalesPage = () => {
         const openDate = new Date(s.opened_at);
         const dateStr = format(openDate, "d 'de' MMMM", { locale: es });
         const timeStr = format(openDate, 'HH:mm');
-        return { dateStr, timeStr };
+
+        let closeLabel: string | null = null;
+        if (s.closed_at) {
+            const closeDate = new Date(s.closed_at);
+            const closeTimeStr = format(closeDate, 'HH:mm');
+            // If closed on a different calendar day, include the date
+            const sameDay = openDate.toDateString() === closeDate.toDateString();
+            closeLabel = sameDay
+                ? `→ Cierre ${closeTimeStr}`
+                : `→ Cierre ${format(closeDate, "d 'de' MMMM", { locale: es })} ${closeTimeStr}`;
+        }
+
+        return { dateStr, timeStr, closeLabel };
     };
 
     return (
@@ -575,10 +543,10 @@ export const SalesPage = () => {
                                         {allSessions.filter(s => s.status === 'closed').length > 0 && (
                                             <optgroup label="📋 Turnos Anteriores">
                                                 {allSessions.filter(s => s.status === 'closed').map(s => {
-                                                    const { dateStr, timeStr } = sessionLabel(s);
+                                                    const { dateStr, timeStr, closeLabel } = sessionLabel(s);
                                                     return (
                                                         <option key={s.id} value={s.id}>
-                                                            {dateStr} — Apertura {timeStr}{s.workerName ? ` — ${s.workerName}` : ''}
+                                                            🔴 {dateStr} — Apertura {timeStr}{closeLabel ? ` ${closeLabel}` : ''}{s.workerName ? ` — ${s.workerName}` : ''}
                                                         </option>
                                                     );
                                                 })}

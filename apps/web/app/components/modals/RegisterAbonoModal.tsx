@@ -93,7 +93,8 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
 
             if (error) throw error;
 
-            const result = data?.[0];
+            // The function returns a single JSON object (RETURNS json)
+            const result = data;
             if (result?.success) {
                 // Register in Central Cash if needed
                 if (goToCentral) {

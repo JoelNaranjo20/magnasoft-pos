@@ -45,12 +45,21 @@ export const CarteraHub = () => {
     const [searchTerm, setSearchTerm] = useState('');
 
     // --- New Manual Debt State ---
+    const [debtMode, setDebtMode] = useState<'single' | 'bulk'>('single');
+    const [bulkDebts, setBulkDebts] = useState<{
+        id: string;
+        customerId: string | null;
+        customerName: string;
+        amount: number;
+        notes: string;
+    }[]>([]);
     const [showNewDebtModal, setShowNewDebtModal] = useState(false);
     const [newDebtAmount, setNewDebtAmount] = useState('');
     const [newDebtNotes, setNewDebtNotes] = useState('');
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [customerSearchTerm, setCustomerSearchTerm] = useState('');
     const [customerSearchResults, setCustomerSearchResults] = useState<{ id: string, name: string }[]>([]);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
 
     // Pagination State
     const [pendingPage, setPendingPage] = useState(1);
@@ -233,13 +242,31 @@ export const CarteraHub = () => {
     }, [customerSearchTerm, showNewDebtModal, businessId]);
 
     const handleCreateManualDebt = async () => {
-        if (!selectedCustomerId || !newDebtAmount || isNaN(parseFloat(newDebtAmount))) return;
-        
+        const currentBusinessId = useBusinessStore.getState().id || businessId;
+        const amount = parseFloat(newDebtAmount);
+
+        if (!customerSearchTerm.trim()) { alert('Ingresa o selecciona un cliente'); return; }
+        if (!newDebtAmount || isNaN(amount) || amount <= 0) { alert('Ingresa un monto válido'); return; }
+        if (!currentBusinessId) { alert('Error: No se detectó el negocio. Recarga la aplicación.'); return; }
+
         try {
-            const amount = parseFloat(newDebtAmount);
+            let finalCustomerId = selectedCustomerId;
+
+            // If no customer is selected but there's text, create one on the fly
+            if (!finalCustomerId) {
+                const { data, error: createError } = await supabase
+                    .from('customers')
+                    .insert({ business_id: currentBusinessId, name: customerSearchTerm.trim() })
+                    .select('id')
+                    .single();
+                if (createError) throw createError;
+                finalCustomerId = data.id;
+            }
+
             const { error } = await supabase.from('customer_debts').insert({
-                business_id: useBusinessStore.getState().id,
-                customer_id: selectedCustomerId,
+                business_id: currentBusinessId,
+                customer_id: finalCustomerId,
+                sale_id: null,
                 amount: amount,
                 remaining_amount: amount,
                 notes: newDebtNotes || 'Fiado Manual',
@@ -248,16 +275,87 @@ export const CarteraHub = () => {
 
             if (error) throw error;
 
-            alert('Crédito registrado correctamente');
+            alert('✅ Crédito registrado correctamente');
             setShowNewDebtModal(false);
             setNewDebtAmount('');
             setNewDebtNotes('');
             setSelectedCustomerId(null);
             setCustomerSearchTerm('');
             fetchData();
-        } catch (error) {
-            console.error('Error creating manual debt:', error);
-            alert('Error al registrar crédito manual');
+        } catch (error: any) {
+            console.error('❌ Error creating manual debt:', error);
+            alert(`Error al registrar crédito: ${error?.message || JSON.stringify(error)}`);
+        }
+    };
+
+    const handleAddToBulk = () => {
+        const amount = parseFloat(newDebtAmount);
+        if (!customerSearchTerm.trim()) { alert('Ingresa o selecciona un cliente'); return; }
+        if (!newDebtAmount || isNaN(amount) || amount <= 0) { alert('Ingresa un monto válido'); return; }
+
+        setBulkDebts([
+            ...bulkDebts,
+            {
+                id: Math.random().toString(36).substr(2, 9),
+                customerId: selectedCustomerId,
+                customerName: customerSearchTerm.trim(),
+                amount: amount,
+                notes: newDebtNotes || 'Fiado Manual'
+            }
+        ]);
+
+        // Reset form for next item
+        setNewDebtAmount('');
+        setNewDebtNotes('');
+        setSelectedCustomerId(null);
+        setCustomerSearchTerm('');
+    };
+
+    const handleRemoveFromBulk = (id: string) => {
+        setBulkDebts(bulkDebts.filter(d => d.id !== id));
+    };
+
+    const handleSaveBulk = async () => {
+        if (bulkDebts.length === 0) return;
+        const currentBusinessId = useBusinessStore.getState().id || businessId;
+        if (!currentBusinessId) { alert('Error: No se detectó el negocio. Recarga la aplicación.'); return; }
+
+        try {
+            // First pass: create missing customers
+            const resolvedDebts = [];
+            for (const debt of bulkDebts) {
+                let cid = debt.customerId;
+                if (!cid) {
+                    const { data, error: createError } = await supabase
+                        .from('customers')
+                        .insert({ business_id: currentBusinessId, name: debt.customerName })
+                        .select('id')
+                        .single();
+                    if (createError) throw createError;
+                    cid = data.id;
+                }
+                resolvedDebts.push({
+                    business_id: currentBusinessId,
+                    customer_id: cid,
+                    sale_id: null,
+                    amount: debt.amount,
+                    remaining_amount: debt.amount,
+                    notes: debt.notes,
+                    status: 'pending'
+                });
+            }
+
+            const { error } = await supabase.from('customer_debts').insert(resolvedDebts);
+            if (error) throw error;
+
+            alert(`✅ ${bulkDebts.length} créditos registrados correctamente`);
+            setShowNewDebtModal(false);
+            setBulkDebts([]);
+            setDebtMode('single');
+            fetchData();
+        } catch (error: any) {
+            console.error('❌ Error saving bulk debts:', error);
+            alert(`Error al guardar créditos masivos: ${error?.message || JSON.stringify(error)}`);
         }
     };
 
@@ -761,64 +859,94 @@ export const CarteraHub = () => {
                                 <h3 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">Nuevo Crédito</h3>
                                 <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Creación manual</p>
                             </div>
-                            <button onClick={() => setShowNewDebtModal(false)} className="h-10 w-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                            <button onClick={() => {
+                                setShowNewDebtModal(false);
+                                setBulkDebts([]);
+                                setDebtMode('single');
+                            }} className="h-10 w-10 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                                 <span className="material-symbols-outlined text-xl">close</span>
                             </button>
                         </div>
 
+                        {/* Mode Switcher */}
+                        <div className="flex p-1 mb-4 bg-slate-100 dark:bg-slate-900/50 rounded-xl shrink-0">
+                            <button
+                                onClick={() => setDebtMode('single')}
+                                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
+                                    debtMode === 'single'
+                                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                }`}
+                            >
+                                Individual
+                            </button>
+                            <button
+                                onClick={() => setDebtMode('bulk')}
+                                className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
+                                    debtMode === 'bulk'
+                                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                }`}
+                            >
+                                Cargue Masivo
+                            </button>
+                        </div>
+
                         <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
-                            {/* Customer Search Section */}
+                            {/* Customer Search or Create Section */}
                             <div>
                                 <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Cliente</label>
-                                {selectedCustomerId ? (
-                                    <div className="flex items-center justify-between p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-2xl">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 flex items-center justify-center font-black">
-                                                {customerSearchTerm.charAt(0).toUpperCase()}
-                                            </div>
-                                            <span className="font-bold text-slate-700 dark:text-indigo-100">{customerSearchTerm}</span>
+                                <div className="relative group">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">
+                                        {selectedCustomerId ? 'check_circle' : 'search'}
+                                    </span>
+                                    <input
+                                        type="text"
+                                        value={customerSearchTerm}
+                                        onChange={(e) => {
+                                            setCustomerSearchTerm(e.target.value);
+                                            setSelectedCustomerId(null); // Clear selection if user types
+                                        }}
+                                        onFocus={() => setIsSearchFocused(true)}
+                                        onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                                        placeholder="Buscar o escribir nuevo cliente..."
+                                        className={`w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-2 rounded-2xl text-sm font-bold outline-none transition-all ${
+                                            selectedCustomerId 
+                                                ? 'border-emerald-500/50 text-emerald-700 dark:text-emerald-400 focus:border-emerald-500' 
+                                                : 'border-slate-100 dark:border-slate-800 focus:border-indigo-500'
+                                        }`}
+                                    />
+                                    {/* Dropdown shows if there are results and user is searching */}
+                                    {!selectedCustomerId && isSearchFocused && customerSearchResults.length > 0 && (
+                                        <div className="absolute top-14 left-0 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl z-50 custom-scrollbar">
+                                            {customerSearchResults.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => {
+                                                        setSelectedCustomerId(c.id);
+                                                        setCustomerSearchTerm(c.name);
+                                                        setCustomerSearchResults([]);
+                                                    }}
+                                                    className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2 border-b border-slate-50 dark:border-slate-700/50 last:border-0"
+                                                >
+                                                    <span className="material-symbols-outlined text-slate-400 text-sm">person</span>
+                                                    <span className="font-bold text-sm text-slate-700 dark:text-slate-300">{c.name}</span>
+                                                </button>
+                                            ))}
                                         </div>
-                                        <button 
-                                            onClick={() => {
-                                                setSelectedCustomerId(null);
-                                                setCustomerSearchTerm('');
-                                            }}
-                                            className="text-xs font-black text-rose-500 hover:text-rose-600 uppercase"
-                                        >
-                                            Cambiar
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="relative group">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
-                                        <input
-                                            type="text"
-                                            value={customerSearchTerm}
-                                            onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                                            placeholder="Buscar cliente registrado..."
-                                            className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-bold outline-none focus:border-indigo-500 transition-all"
-                                        />
-                                        {/* Dropdown always shows if there are results */}
-                                        {customerSearchResults.length > 0 && (
-                                            <div className="absolute top-14 left-0 w-full max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl z-50 custom-scrollbar">
-                                                {customerSearchResults.map(c => (
-                                                    <button
-                                                        key={c.id}
-                                                        onClick={() => {
-                                                            setSelectedCustomerId(c.id);
-                                                            setCustomerSearchTerm(c.name);
-                                                            setCustomerSearchResults([]);
-                                                        }}
-                                                        className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center gap-2 border-b border-slate-50 dark:border-slate-700/50 last:border-0"
-                                                    >
-                                                        <span className="material-symbols-outlined text-slate-400 text-sm">person</span>
-                                                        <span className="font-bold text-sm text-slate-700 dark:text-slate-300">{c.name}</span>
-                                                    </button>
-                                                ))}
+                                    )}
+                                    {/* Create New Hint if typing and no results */}
+                                    {!selectedCustomerId && isSearchFocused && customerSearchTerm.length > 0 && customerSearchResults.length === 0 && (
+                                        <div className="absolute top-14 left-0 w-full bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-3 flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center shrink-0">
+                                                <span className="material-symbols-outlined text-indigo-500 !text-sm">person_add</span>
                                             </div>
-                                        )}
-                                    </div>
-                                )}
+                                            <p className="text-xs text-slate-500 font-medium">
+                                                Se creará un nuevo cliente llamado <span className="font-black text-indigo-600 dark:text-indigo-400">"{customerSearchTerm}"</span>
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div>
@@ -848,13 +976,60 @@ export const CarteraHub = () => {
                         </div>
 
                         <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
-                            <button
-                                onClick={handleCreateManualDebt}
-                                disabled={!selectedCustomerId || !newDebtAmount}
-                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed uppercase tracking-widest text-sm"
-                            >
-                                Guardar Fiado
-                            </button>
+                            {debtMode === 'single' ? (
+                                <button
+                                    onClick={handleCreateManualDebt}
+                                    disabled={!customerSearchTerm.trim() || !newDebtAmount}
+                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed uppercase tracking-widest text-sm"
+                                >
+                                    Guardar Fiado
+                                </button>
+                            ) : (
+                                <div className="space-y-4">
+                                    <button
+                                        onClick={handleAddToBulk}
+                                        disabled={!customerSearchTerm.trim() || !newDebtAmount}
+                                        className="w-full py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-white rounded-2xl font-black active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-xs flex items-center justify-center gap-2"
+                                    >
+                                        <span className="material-symbols-outlined !text-[16px]">add_circle</span>
+                                        Agregar a la lista
+                                    </button>
+
+                                    {bulkDebts.length > 0 && (
+                                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                            <div className="flex justify-between items-center mb-3 text-xs font-black uppercase tracking-widest text-slate-500">
+                                                <span>{bulkDebts.length} créditos en lista</span>
+                                                <span className="text-indigo-600 dark:text-indigo-400">
+                                                    Total: ${bulkDebts.reduce((acc, d) => acc + d.amount, 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar pr-2 mb-4">
+                                                {bulkDebts.map(debt => (
+                                                    <div key={debt.id} className="flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border border-slate-100 dark:border-slate-700">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 line-clamp-1">{debt.customerName}</span>
+                                                            <span className="text-[10px] text-slate-400">{debt.notes}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-xs font-black text-slate-900 dark:text-white">${debt.amount.toLocaleString()}</span>
+                                                            <button onClick={() => handleRemoveFromBulk(debt.id)} className="text-rose-400 hover:text-rose-500 transition-colors">
+                                                                <span className="material-symbols-outlined !text-[16px]">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <button
+                                                onClick={handleSaveBulk}
+                                                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all uppercase tracking-widest text-sm flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined !text-[18px]">cloud_upload</span>
+                                                Guardar Todos los Fiados
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

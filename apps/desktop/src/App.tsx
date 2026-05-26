@@ -14,13 +14,13 @@ import { CustomersPage } from './pages/CustomersPage';
 import { AuditPage } from './pages/admin/AuditPage';
 import { ConfigPage } from './pages/admin/ConfigPage';
 import { InventoryPage } from './pages/inventory/InventoryPage';
-import { SetupWizard } from './pages/setup/SetupWizard';
 import { DesktopSetup } from './pages/setup/DesktopSetup';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { ApprovalPendingPage } from './pages/auth/ApprovalPendingPage';
 import { ConfigGuard } from './components/auth/ConfigGuard';
+import { AdminGuard } from './components/auth/AdminGuard';
 import { UpdateNotification } from './components/UpdateNotification';
 
 // POS Components
@@ -254,9 +254,9 @@ function App() {
                     <Route path="/sales" element={<ConfigGuard moduleId="sales"><SalesPage /></ConfigGuard>} />
                     <Route path="/finance" element={<ConfigGuard moduleId="finance"><FinancePage /></ConfigGuard>} />
                     <Route path="/customers" element={<ConfigGuard moduleId="customers"><CustomersPage /></ConfigGuard>} />
-                    <Route path="/audit" element={<ConfigGuard moduleId="audit"><AuditPage /></ConfigGuard>} />
-                    <Route path="/inventory" element={<ConfigGuard moduleId="inventory"><InventoryPage /></ConfigGuard>} />
-                    <Route path="/config" element={<ConfigGuard moduleId="config"><ConfigPage /></ConfigGuard>} />
+                    <Route path="/audit" element={<ConfigGuard moduleId="audit"><AdminGuard><AuditPage /></AdminGuard></ConfigGuard>} />
+                    <Route path="/inventory" element={<ConfigGuard moduleId="inventory"><AdminGuard><InventoryPage /></AdminGuard></ConfigGuard>} />
+                    <Route path="/config" element={<ConfigGuard moduleId="config"><AdminGuard><ConfigPage /></AdminGuard></ConfigGuard>} />
                 </Route>
 
                 <Route path="/pos/*" element={<ConfigGuard moduleId="pos"><POSRoute /></ConfigGuard>} />

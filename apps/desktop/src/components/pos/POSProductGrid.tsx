@@ -118,6 +118,8 @@ interface ProductItem {
     category_id?: string;
     icon?: string;
     commission_percentage?: number | null;
+    commission_type?: 'percentage' | 'fixed' | null;
+    commission_amount?: number | null;
     metadata?: any;
     service_type: 'PRODUCT' | 'SERVICE';
 }
@@ -146,7 +148,7 @@ export const POSProductGrid = () => {
                 // A. Productos (Pedimos el icono)
                 const { data: productsData, error: productsError } = await supabase
                     .from('products')
-                    .select('id, name, price, stock, category_id, icon, commission_percentage, metadata')
+                    .select('id, name, price, stock, category_id, icon, commission_percentage, commission_type, commission_amount, metadata')
                     .eq('business_id', businessId)
                     .eq('active', true);
 
@@ -157,7 +159,7 @@ export const POSProductGrid = () => {
                 // NO como UUID en category_id. Por eso pedimos ambos campos.
                 const { data: servicesData, error: servicesError } = await supabase
                     .from('services')
-                    .select('id, name, price, category_id, category, icon, commission_percentage, is_variable_price')
+                    .select('id, name, price, category_id, category, icon, commission_percentage, commission_type, commission_amount, is_variable_price')
                     .eq('business_id', businessId)
                     .eq('active', true);
 

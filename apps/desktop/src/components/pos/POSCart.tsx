@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useCartStore } from '../../store/useCartStore';
-import { useAuthStore } from '@shared/store/useAuthStore';
+import { useAuthStore, selectIsAdmin } from '@shared/store/useAuthStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useModule } from '../../hooks/useModule';
 import { PaymentModal } from '../modals/PaymentModal';
@@ -78,7 +78,8 @@ export const POSCart = () => {
         setMetadata,
         activeCartId
     } = useCartStore();
-    const { business } = useAuthStore();
+    const { business, profile } = useAuthStore();
+    const isAdmin = useAuthStore(selectIsAdmin);
     const isRestaurant = business?.business_type === 'restaurant';
     // Module-based feature flags — replaces hardcoded business_type checks
     const hasVehicles = useModule('vehicles');
@@ -122,6 +123,8 @@ export const POSCart = () => {
     // Price Edit Modal State
     const [priceEditModal, setPriceEditModal] = useState<{ isOpen: boolean; itemId: string; currentPrice: number; originalPrice: number; name: string } | null>(null);
     const [isSecurityPinOpen, setIsSecurityPinOpen] = useState(false);
+    // Track which cart item the PIN modal is being requested for deletion
+    const [pendingDeleteCartId, setPendingDeleteCartId] = useState<string | null>(null);
 
     // Customer & Vehicle State
     const [searchQuery, setSearchQuery] = useState('');
@@ -398,8 +401,12 @@ export const POSCart = () => {
             setIsPaymentModalOpen(true);
             return;
         }
-        // If no customer selected, open customer modal first
-        if (!selectedCustomer) {
+
+        const hasServices = useCartStore.getState().items.some(i => i.type === 'service');
+        const needsVehicle = hasVehicles && hasServices && selectedCustomer?.name !== 'Público General' && !selectedVehicle;
+
+        // If no customer selected, OR missing vehicle for services, open customer modal first
+        if (!selectedCustomer || needsVehicle) {
             setIsCustomerModalOpen(true);
         } else {
             setIsPaymentModalOpen(true);
@@ -560,6 +567,19 @@ export const POSCart = () => {
                     }}
                     title="PIN Maestro Requerido"
                     description="Ingrese el PIN Maestro del negocio para autorizar la modificación del precio total de esta venta."
+                />
+            )}
+
+            {/* PIN Modal for item deletion (non-admin users) */}
+            {pendingDeleteCartId && (
+                <SecurityPinModal
+                    onCancel={() => setPendingDeleteCartId(null)}
+                    onSuccess={() => {
+                        removeItem(pendingDeleteCartId);
+                        setPendingDeleteCartId(null);
+                    }}
+                    title="Autorización Requerida"
+                    description="Ingrese el PIN Maestro del negocio para eliminar este ítem de la venta."
                 />
             )}
 
@@ -746,11 +766,18 @@ export const POSCart = () => {
                             {/* Actions & Toggles */}
                             <div className="absolute right-2 top-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
                                 <button
-                                    onClick={() => removeItem(item.cartId)}
+                                    onClick={() => {
+                                        if (isAdmin) {
+                                            removeItem(item.cartId);
+                                        } else {
+                                            setPendingDeleteCartId(item.cartId);
+                                        }
+                                    }}
                                     className="p-1.5 text-rose-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
-                                    title="Eliminar ítem"
+                                    title={isAdmin ? 'Eliminar ítem' : 'Eliminar ítem (requiere PIN)'}
                                 >
                                     <span className="material-symbols-outlined !text-[18px]">delete</span>
+                                    {!isAdmin && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 bg-amber-400 rounded-full border border-white dark:border-slate-800" title="Requiere autorización"></span>}
                                 </button>
 
                                 <button
@@ -814,7 +841,23 @@ export const POSCart = () => {
                         <div className="flex flex-col gap-1 items-start">
                             <span className="text-sm font-bold text-slate-800 dark:text-white block">Total a Pagar</span>
                             <button
-                                onClick={() => items.length > 0 && setIsSecurityPinOpen(true)}
+                                onClick={() => {
+                                    if (items.length > 0) {
+                                        if (profile?.role === 'super_admin' || profile?.role === 'admin') {
+                                            const currentTotal = items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+                                            const originalTotal = items.reduce((acc, i) => acc + ((i.originalPrice || i.price) * i.quantity), 0);
+                                            setPriceEditModal({
+                                                isOpen: true,
+                                                itemId: 'global',
+                                                currentPrice: currentTotal,
+                                                originalPrice: originalTotal,
+                                                name: 'Total de la Venta'
+                                            });
+                                        } else {
+                                            setIsSecurityPinOpen(true);
+                                        }
+                                    }
+                                }}
                                 disabled={items.length === 0}
                                 className="flex items-center gap-1 text-[10px] text-primary hover:text-primary-hover font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded shadow-sm"
                             >

@@ -7,6 +7,7 @@ import { useCartStore } from '../../store/useCartStore';
 import { ServiceQueueModal } from '../modals/ServiceQueueModal';
 import { supabase } from '../../lib/supabase';
 import { useModule } from '../../hooks/useModule';
+import { useAuthStore, selectIsAdmin } from '@shared/store/useAuthStore';
 
 export const POSTopBar = () => {
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -19,6 +20,7 @@ export const POSTopBar = () => {
     const hasCommissionsPayment = useModule('commission_payment');
     const hasServiceQueue = useModule('vehicle_queue');
     const { config } = useBusinessStore();
+    const isAdmin = useAuthStore(selectIsAdmin);
 
     useEffect(() => {
         console.log("🛠️ POS TOPBAR MODULES DEBUG:");
@@ -127,8 +129,8 @@ export const POSTopBar = () => {
                     {/* User Actions */}
                     <div className="flex items-center gap-3">
 
-                        {/* Commission Payments - Only if module enabled */}
-                        {hasCommissionsPayment && (
+                        {/* Commission Payments - Only if module enabled AND admin */}
+                        {hasCommissionsPayment && isAdmin && (
                             <button
                                 onClick={() => navigate('/pos/commissions')}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-xl hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors font-bold shadow-sm border border-amber-200 dark:border-amber-900/30"
@@ -147,6 +149,8 @@ export const POSTopBar = () => {
                             <span className="hidden sm:inline">Cerrar</span>
                         </button>
 
+                        {/* Panel Admin - Only visible for admin users */}
+                        {isAdmin && (
                         <button
                             onClick={() => navigate('/admin')}
                             className="hidden lg:flex h-10 px-4 items-center gap-2 bg-blue-50 dark:bg-blue-900/10 text-primary hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-xl transition-all text-xs font-bold uppercase tracking-wide border border-blue-100 dark:border-blue-900/30 shadow-sm hover:shadow-blue-500/10 active:scale-95"
@@ -154,6 +158,7 @@ export const POSTopBar = () => {
                             <span className="material-symbols-outlined !text-[20px]">dashboard</span>
                             Panel
                         </button>
+                        )}
 
                         {/* Profile Avatar & Name */}
                         <div
@@ -174,7 +179,7 @@ export const POSTopBar = () => {
                             </div>
                             <div className="flex flex-col select-none">
                                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-tighter leading-none">
-                                    {useSessionStore.getState().workerRole || 'Administrador'}
+                                    {isAdmin ? 'Administrador' : (useSessionStore.getState().workerRole || 'Cajero')}
                                 </span>
                                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200 leading-tight">
                                     {user?.full_name || user?.email?.split('@')[0] || 'Cajero'}

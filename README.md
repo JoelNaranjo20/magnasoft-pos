@@ -6,7 +6,7 @@
 ![Supabase](https://img.shields.io/badge/Supabase-DB%20%26%20Auth-green)
 ![Tailwind](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC)
 
-Magnasoft POS es un sistema integral de Punto de Venta (POS) diseñado específicamente para el sector automotriz. Actualmente, se encuentra optimizado y operando con éxito en **lavaderos de vehículos (Car Wash)** y **servitecas**. 
+**Magnasoft POS** es un sistema integral de Punto de Venta (POS) diseñado específicamente para el sector automotriz. Actualmente, se encuentra optimizado y operando con éxito en **lavaderos de vehículos (Car Wash)** y **servitecas**.
 
 Ofrece una solución de escritorio robusta para la gestión completa del negocio, desde el registro rápido de servicios y ventas hasta el control detallado de créditos y administración de clientes.
 
@@ -61,7 +61,7 @@ magnasoft/
     pnpm install
     ```
 
-3.  Configurar Variables de Entorno:
+3.  **Configurar Variables de Entorno:**
     Crea un archivo `.env.local` en la raíz del proyecto o dentro de `apps/desktop` con tus credenciales:
     ```env
     VITE_SUPABASE_URL=tu_supabase_url

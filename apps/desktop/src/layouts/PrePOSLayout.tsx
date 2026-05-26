@@ -1,13 +1,16 @@
 import { useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
-import { useAuthStore } from '@shared/store/useAuthStore';
+import { useAuthStore, selectIsAdmin } from '@shared/store/useAuthStore';
 
-const navItems = [
+const publicNavItems = [
     { path: '/', label: 'Dashboard', icon: 'dashboard' },
     { path: '/sales', label: 'Ventas', icon: 'storefront' },
     { path: '/finance', label: 'Finanzas', icon: 'attach_money' },
     { path: '/customers', label: 'Clientes', icon: 'group' },
+];
+
+const adminNavItems = [
     { path: '/audit', label: 'Auditoría', icon: 'verified_user' },
     { path: '/inventory', label: 'Inventario', icon: 'category' },
     { path: '/config', label: 'Configuración', icon: 'settings' },
@@ -18,6 +21,8 @@ export const PrePOSLayout = ({ children }: { children?: React.ReactNode }) => {
     const navigate = useNavigate();
     const { name: businessName, logoUrl } = useBusinessStore();
     const { signOut } = useAuthStore();
+    const isAdmin = useAuthStore(selectIsAdmin);
+    const navItems = isAdmin ? [...publicNavItems, ...adminNavItems] : publicNavItems;
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {

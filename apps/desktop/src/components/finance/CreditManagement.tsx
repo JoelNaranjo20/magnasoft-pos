@@ -164,8 +164,8 @@ export const CreditManagement = () => {
                 throw error;
             }
 
-            // The function returns an array with one result
-            const result = data?.[0];
+            // The function returns a single JSON object (RETURNS json)
+            const result = data;
 
             if (!result?.success) {
                 console.error('❌ Payment processing failed:', result?.message);

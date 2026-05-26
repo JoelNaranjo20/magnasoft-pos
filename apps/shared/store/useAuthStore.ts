@@ -189,3 +189,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
     },
 }));
+
+/**
+ * Returns true if the current user has admin-level access.
+ * Roles: 'super_admin' or 'admin' are considered administrators.
+ * Use this selector to conditionally render or gate sensitive UI actions.
+ */
+export const selectIsAdmin = (state: { profile: { role?: string | null } | null }): boolean => {
+    const role = state.profile?.role;
+    return role === 'super_admin' || role === 'admin';
+};

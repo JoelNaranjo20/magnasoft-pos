@@ -252,31 +252,10 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
             const workerId = getWorkerForItem(item.cartId);
             if (!workerId) return sum;
 
-            const baseAmount = (item.originalPrice || item.price) * item.quantity;
-            let commission = 0;
-
-            if (item.type === 'product') {
-                // Products always get commission if a worker is assigned
-                // commissionEnabled is for services (can be toggled off)
-                const { commissionAmount } = getProductCommission(item.originalItem || item, item.quantity);
-                commission = commissionAmount;
-            } else {
-                // Services: respect the commissionEnabled toggle
-                if (!item.commissionEnabled) return sum;
-                const originalItem = item.originalItem as any;
-                const commType = originalItem?.commission_type || 'percentage';
-                if (commType === 'fixed') {
-                    const fixedAmount = originalItem?.commission_amount || 0;
-                    commission = fixedAmount * item.quantity;
-                } else {
-                    const predefinedPercentage = originalItem?.commission_percentage;
-                    if (predefinedPercentage !== undefined && predefinedPercentage > 0) {
-                        commission = (baseAmount * predefinedPercentage) / 100;
-                    }
-                }
-            }
-
-            return sum + commission;
+            if (item.type === 'service' && !item.commissionEnabled) return sum;
+            
+            const { commissionAmount } = getProductCommission(item.originalItem || item, item.quantity);
+            return sum + commissionAmount;
         }, 0);
     };
 
@@ -291,22 +270,8 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
 
             const serviceType = detectServiceType(item, vehicle?.type);
 
-            if (item.type === 'product') {
-                const { appliedPercentage } = getProductCommission(item.originalItem || item, item.quantity);
-                return appliedPercentage > 0;
-            }
-
-            const originalItem = (item.originalItem as any);
-            const commType = originalItem?.commission_type || 'percentage';
-            if (commType === 'fixed') {
-                return (originalItem?.commission_amount || 0) > 0;
-            }
-            const predefinedPercentage = originalItem?.commission_percentage;
-            const percentage = (predefinedPercentage !== undefined && predefinedPercentage > 0)
-                ? predefinedPercentage
-                : 0;
-
-            return percentage > 0;
+            const { appliedPercentage, commissionAmount } = getProductCommission(item.originalItem || item, item.quantity);
+            return appliedPercentage > 0 || commissionAmount > 0;
         });
     };
 
@@ -543,29 +508,9 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
 
                     const baseAmount = (cartItem?.originalPrice || cartItem?.originalItem?.price || item.unit_price) * item.quantity;
 
-                    let percentage: number;
-                    let commission: number;
-
-                    if (cartItem?.type === 'product') {
-                        const result = getProductCommission(cartItem.originalItem || cartItem, item.quantity);
-                        percentage = result.appliedPercentage;
-                        commission = result.commissionAmount;
-                    } else {
-                        const originalItem = (cartItem?.originalItem as any);
-                        const commType = originalItem?.commission_type || 'percentage';
-                        if (commType === 'fixed') {
-                            const fixedAmount = originalItem?.commission_amount || 0;
-                            commission = fixedAmount * item.quantity;
-                            percentage = 0;
-                        } else {
-                            const predefinedPercentage = originalItem?.commission_percentage;
-                            // Usar SOLO el porcentaje predefinido del servicio. Si no existe, es 0.
-                            percentage = predefinedPercentage !== undefined && predefinedPercentage > 0
-                                ? predefinedPercentage
-                                : 0;
-                            commission = (baseAmount * percentage) / 100;
-                        }
-                    }
+                    const result = getProductCommission(cartItem?.originalItem || cartItem, item.quantity);
+                    const percentage = result.appliedPercentage;
+                    const commission = result.commissionAmount;
 
                     return {
                         sale_id: sale.id,

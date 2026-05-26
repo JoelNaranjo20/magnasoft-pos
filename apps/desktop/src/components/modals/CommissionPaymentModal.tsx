@@ -39,6 +39,7 @@ export const CommissionPaymentModal = () => {
     const cashSession = useSessionStore((state) => state.cashSession);
 
     const [commissionsByWorker, setCommissionsByWorker] = useState<CommissionsByWorker[]>([]);
+    const [selectedCommissions, setSelectedCommissions] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
     const [processingPayment, setProcessingPayment] = useState(false);
     const [selectedWorker, setSelectedWorker] = useState<string | null>(null);
@@ -80,6 +81,7 @@ export const CommissionPaymentModal = () => {
 
             // Group by worker
             const grouped: { [key: string]: CommissionsByWorker } = {};
+            const defaultSelected = new Set<number>();
 
             commissions?.forEach((comm: any) => {
                 const workerId = comm.worker_id;
@@ -113,10 +115,12 @@ export const CommissionPaymentModal = () => {
                 grouped[workerId].total += comm.commission_amount;
                 if (comm.status === 'pending') {
                     grouped[workerId].pending += comm.commission_amount;
+                    defaultSelected.add(comm.id);
                 }
             });
 
             setCommissionsByWorker(Object.values(grouped));
+            setSelectedCommissions(defaultSelected);
         } catch (error) {
             console.error('Error fetching session commissions:', error);
         } finally {
@@ -124,16 +128,54 @@ export const CommissionPaymentModal = () => {
         }
     };
 
+    const toggleSelection = (id: number) => {
+        setSelectedCommissions(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = (workerId: string) => {
+        const worker = commissionsByWorker.find(w => w.worker_id === workerId);
+        if (!worker) return;
+        
+        const pendingIds = worker.commissions.filter(c => c.status === 'pending').map(c => c.id);
+        const allSelected = pendingIds.length > 0 && pendingIds.every(id => selectedCommissions.has(id));
+        
+        setSelectedCommissions(prev => {
+            const next = new Set(prev);
+            if (allSelected) {
+                pendingIds.forEach(id => next.delete(id));
+            } else {
+                pendingIds.forEach(id => next.add(id));
+            }
+            return next;
+        });
+    };
+
+    const getWorkerSelectedTotal = (workerId: string) => {
+        const worker = commissionsByWorker.find(w => w.worker_id === workerId);
+        if (!worker) return 0;
+        return worker.commissions
+            .filter(c => c.status === 'pending' && selectedCommissions.has(c.id))
+            .reduce((sum, c) => sum + c.commission_amount, 0);
+    };
+
     const handlePayWorker = async (workerId: string) => {
         const worker = commissionsByWorker.find(w => w.worker_id === workerId);
         if (!worker || worker.pending === 0) return;
 
-        const pendingCommissions = worker.commissions.filter(c => c.status === 'pending');
+        const pendingCommissions = worker.commissions.filter(c => c.status === 'pending' && selectedCommissions.has(c.id));
+        if (pendingCommissions.length === 0) return;
+
+        const totalToPay = pendingCommissions.reduce((sum, c) => sum + c.commission_amount, 0);
 
         setConfirmModal({
             isOpen: true,
             title: 'Confirmar Pago de Comisiones',
-            message: `¿Estás seguro de registrar el pago de $${worker.pending.toLocaleString()} en comisiones a ${worker.worker_name}?`,
+            message: `¿Estás seguro de registrar el pago de $${totalToPay.toLocaleString()} por ${pendingCommissions.length} servicios a ${worker.worker_name}?`,
             type: 'warning',
             isProcessing: false,
             onConfirm: async () => {
@@ -157,7 +199,7 @@ export const CommissionPaymentModal = () => {
                             session_id: cashSession!.id,
                             business_id: businessId,
                             type: 'expense',
-                            amount: worker.pending,
+                            amount: totalToPay,
                             description: `Pago de comisiones a ${worker.worker_name} (${pendingCommissions.length} servicios)`,
                             user_id: user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id)
                                 ? user.id
@@ -166,7 +208,6 @@ export const CommissionPaymentModal = () => {
 
                     if (movementError) throw movementError;
 
-                    // alert(`Comisiones pagadas correctamente a ${worker.worker_name}`);
                     setConfirmModal(prev => ({ ...prev, isOpen: false }));
                     await fetchSessionCommissions();
                 } catch (error) {
@@ -232,15 +273,15 @@ export const CommissionPaymentModal = () => {
                                         </div>
                                         <div className="text-right">
                                             <p className="text-sm text-slate-500 font-bold uppercase mb-1">
-                                                {worker.pending > 0 ? 'Pendiente' : 'Pagado'}
+                                                {worker.pending > 0 ? 'Seleccionado para Pago' : 'Pagado'}
                                             </p>
                                             <p className={`text-3xl font-black ${worker.pending > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                                ${worker.pending.toLocaleString()}
+                                                ${getWorkerSelectedTotal(worker.worker_id).toLocaleString()}
                                             </p>
                                             {worker.pending > 0 && (
                                                 <button
                                                     onClick={() => handlePayWorker(worker.worker_id)}
-                                                    disabled={processingPayment}
+                                                    disabled={processingPayment || getWorkerSelectedTotal(worker.worker_id) === 0}
                                                     className="mt-3 px-6 py-2 bg-primary text-white font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     {processingPayment ? 'Procesando...' : 'Pagar Ahora'}
@@ -254,6 +295,16 @@ export const CommissionPaymentModal = () => {
                                         <table className="w-full text-left text-sm">
                                             <thead className="bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 uppercase">
                                                 <tr>
+                                                    <th className="px-4 py-3 font-bold w-12">
+                                                        {worker.pending > 0 && (
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={worker.commissions.filter(c => c.status === 'pending').every(c => selectedCommissions.has(c.id))}
+                                                                onChange={() => toggleSelectAll(worker.worker_id)}
+                                                                className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary cursor-pointer"
+                                                            />
+                                                        )}
+                                                    </th>
                                                     <th className="px-4 py-3 font-bold">Servicio</th>
                                                     <th className="px-4 py-3 font-bold">Monto Base</th>
                                                     <th className="px-4 py-3 font-bold">%</th>
@@ -263,13 +314,25 @@ export const CommissionPaymentModal = () => {
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                                                 {worker.commissions.map((comm) => (
-                                                    <tr key={comm.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                                                    <tr key={comm.id} className={`hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors ${selectedCommissions.has(comm.id) ? 'bg-amber-50/30 dark:bg-amber-900/10' : ''}`}>
+                                                        <td className="px-4 py-3">
+                                                            {comm.status === 'pending' && (
+                                                                <input 
+                                                                    type="checkbox"
+                                                                    checked={selectedCommissions.has(comm.id)}
+                                                                    onChange={() => toggleSelection(comm.id)}
+                                                                    className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary cursor-pointer"
+                                                                />
+                                                            )}
+                                                        </td>
                                                         <td className="px-4 py-3">
                                                             <div className="font-medium text-slate-700 dark:text-slate-200">{comm.sale_item_name}</div>
                                                             <div className="text-xs text-slate-400 capitalize">{comm.service_type.replace('_', ' ')}</div>
                                                         </td>
                                                         <td className="px-4 py-3 text-slate-600 dark:text-slate-400">${comm.base_amount.toLocaleString()}</td>
-                                                        <td className="px-4 py-3 text-slate-500">{comm.commission_percentage}%</td>
+                                                        <td className="px-4 py-3 text-slate-500">
+                                                            {comm.commission_percentage > 0 ? `${comm.commission_percentage}%` : 'Fija'}
+                                                        </td>
                                                         <td className="px-4 py-3 font-bold text-emerald-600 dark:text-emerald-400">${comm.commission_amount.toLocaleString()}</td>
                                                         <td className="px-4 py-3 text-right">
                                                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase ${comm.status === 'paid' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
