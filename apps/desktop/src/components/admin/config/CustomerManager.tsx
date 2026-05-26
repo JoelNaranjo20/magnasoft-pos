@@ -4,6 +4,7 @@ import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { CustomerHistoryModal } from '../../modals/CustomerHistoryModal';
 import { CustomerEditModal } from './CustomerEditModal';
 import { CustomerVehicleManagerModal } from './CustomerVehicleManagerModal';
+import { CustomerCreateModal } from './CustomerCreateModal';
 import { Pagination } from '../../ui/Pagination';
 
 export const CustomerManager = () => {
@@ -16,6 +17,7 @@ export const CustomerManager = () => {
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -76,6 +78,29 @@ export const CustomerManager = () => {
         setIsVehicleModalOpen(true);
     };
 
+    const handleDeleteCustomer = async (customer: any) => {
+        if (!confirm(`¿Estás seguro de que deseas eliminar al cliente "${customer.name}"? Esta acción no se puede deshacer.`)) return;
+        setLoading(true);
+        try {
+            const { error } = await supabase
+                .from('customers')
+                .delete()
+                .eq('id', customer.id);
+
+            if (error) throw error;
+            alert('Cliente eliminado correctamente');
+            fetchCustomers();
+        } catch (error: any) {
+            console.error('Error deleting customer:', error);
+            const msg = error.code === '23503'
+                ? 'No se puede eliminar el cliente porque tiene deudas, ventas o vehículos asociados en el sistema. Primero elimina sus vehículos o deudas asociadas.'
+                : 'Error al eliminar cliente: ' + (error.message || JSON.stringify(error));
+            alert(msg);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -83,15 +108,24 @@ export const CustomerManager = () => {
                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">Gestión de Clientes</h3>
                     <p className="text-sm text-slate-500">Consulta y administra la base de datos de clientes registrados.</p>
                 </div>
-                <div className="relative w-72">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
-                    <input
-                        type="text"
-                        placeholder="Buscar nombre, tel o email..."
-                        className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-primary outline-none text-slate-900 dark:text-white font-medium"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="flex items-center gap-2 px-5 py-3 bg-primary hover:bg-primary/90 text-white rounded-xl text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
+                    >
+                        <span className="material-symbols-outlined !text-[18px]">person_add</span>
+                        NUEVO CLIENTE
+                    </button>
+                    <div className="relative w-72">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
+                        <input
+                            type="text"
+                            placeholder="Buscar nombre, tel o email..."
+                            className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-primary outline-none text-slate-900 dark:text-white font-medium"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -181,6 +215,13 @@ export const CustomerManager = () => {
                                                 >
                                                     <span className="material-symbols-outlined text-[20px]">history</span>
                                                 </button>
+                                                <button
+                                                    onClick={() => handleDeleteCustomer(customer)}
+                                                    className="p-2 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                                    title="Eliminar Cliente"
+                                                >
+                                                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -216,6 +257,12 @@ export const CustomerManager = () => {
                 isOpen={isVehicleModalOpen}
                 onClose={() => setIsVehicleModalOpen(false)}
                 customer={selectedCustomerForVehicles}
+            />
+
+            <CustomerCreateModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSuccess={fetchCustomers}
             />
         </div>
     );
