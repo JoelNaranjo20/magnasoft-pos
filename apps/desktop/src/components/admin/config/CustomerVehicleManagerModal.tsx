@@ -72,6 +72,11 @@ export const CustomerVehicleManagerModal = ({ isOpen, onClose, customer }: Props
         setSaving(true);
         try {
             const businessId = useBusinessStore.getState().id;
+            if (!businessId) {
+                alert('No se pudo identificar el negocio actual.');
+                setSaving(false);
+                return;
+            }
             const plate = editData.license_plate.toUpperCase().trim();
 
             // Check for duplicate vehicle

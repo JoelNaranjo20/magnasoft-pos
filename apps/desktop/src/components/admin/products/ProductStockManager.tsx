@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { supabase } from '../../../lib/supabase';
+import { supabase, ensureSession } from '../../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { Pagination } from '../../ui/Pagination';
@@ -97,6 +97,7 @@ export const ProductStockManager = () => {
     };
 
     const toggleActive = async (product: Product) => {
+        await ensureSession();
         const { error } = await supabase
             .from('products')
             .update({ active: !product.active })
@@ -232,6 +233,7 @@ export const ProductStockManager = () => {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        await ensureSession();
 
         const marginValue = parseFloat(margin) || 0;
         const finalMetadata = {
@@ -289,6 +291,7 @@ export const ProductStockManager = () => {
     const handleDelete = async (id: string) => {
         if (!confirm('¿Estás seguro de eliminar este producto PERMANENTEMENTE?\nEsta acción no se puede deshacer.')) return;
         setLoading(true);
+        await ensureSession();
         try {
             const { error } = await supabase
                 .from('products')

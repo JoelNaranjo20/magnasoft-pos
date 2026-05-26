@@ -59,7 +59,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
     setProfile: (profile) => set((_state) => ({
         profile,
-        isSuperAdmin: profile?.role === 'super_admin'
+        isSuperAdmin: profile?.role === 'super_admin' || profile?.saas_role === 'super_admin'
     })),
 
     setBusiness: (business) => set({ business }),
@@ -195,7 +195,8 @@ export const useAuthStore = create<AuthState>((set) => ({
  * Roles: 'super_admin' or 'admin' are considered administrators.
  * Use this selector to conditionally render or gate sensitive UI actions.
  */
-export const selectIsAdmin = (state: { profile: { role?: string | null } | null }): boolean => {
+export const selectIsAdmin = (state: { profile: { role?: string | null, saas_role?: string | null } | null }): boolean => {
     const role = state.profile?.role;
-    return role === 'super_admin' || role === 'admin';
+    const saasRole = state.profile?.saas_role;
+    return role === 'super_admin' || role === 'admin' || saasRole === 'super_admin' || saasRole === 'admin';
 };

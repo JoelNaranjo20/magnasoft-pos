@@ -25,6 +25,11 @@ export const CustomerCreateModal = ({ isOpen, onClose, onSuccess }: CustomerCrea
         setLoading(true);
         try {
             const businessId = useBusinessStore.getState().id;
+            if (!businessId) {
+                alert('No se pudo identificar el negocio actual.');
+                setLoading(false);
+                return;
+            }
             const customerName = formData.name.trim();
             const customerPhone = formData.phone.trim() || null;
 

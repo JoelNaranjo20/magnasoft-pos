@@ -843,7 +843,7 @@ export const POSCart = () => {
                             <button
                                 onClick={() => {
                                     if (items.length > 0) {
-                                        if (profile?.role === 'super_admin' || profile?.role === 'admin') {
+                                        if (isAdmin) {
                                             const currentTotal = items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
                                             const originalTotal = items.reduce((acc, i) => acc + ((i.originalPrice || i.price) * i.quantity), 0);
                                             setPriceEditModal({
