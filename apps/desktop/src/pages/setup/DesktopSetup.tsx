@@ -179,6 +179,17 @@ export const DesktopSetup = () => {
                     </div>
                 </form>
 
+                {/* Back / Sign Out option */}
+                <div className="text-center mt-6 animate-in fade-in duration-1000 delay-300">
+                    <button
+                        type="button"
+                        onClick={() => useAuthStore.getState().signOut()}
+                        className="text-xs font-bold text-slate-500 hover:text-rose-500 transition-colors uppercase tracking-widest"
+                    >
+                        Cerrar Sesión (Cambiar de Cuenta)
+                    </button>
+                </div>
+
             </div>
         </div>
     );
