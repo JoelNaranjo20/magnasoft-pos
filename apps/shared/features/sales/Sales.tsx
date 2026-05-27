@@ -62,6 +62,7 @@ export const SalesPage = () => {
     const itemsPerPage = 10;
 
     const [movements, setMovements] = useState<any[]>([]);
+    const [debtPayments, setDebtPayments] = useState<any[]>([]);
     const [sessionOpeningBalance, setSessionOpeningBalance] = useState(0);
 
     // Column Configuration based on Business Type
@@ -218,6 +219,7 @@ export const SalesPage = () => {
         if (selectedSessionId && allSessions.length > 0) {
             fetchSales();
             fetchMovements();
+            fetchDebtPayments();
         }
     }, [selectedSessionId, allSessions.length]);
 
@@ -237,6 +239,20 @@ export const SalesPage = () => {
             setMovements(data || []);
         } catch (error) {
             console.error('Error fetching movements:', error);
+        }
+    };
+
+    const fetchDebtPayments = async () => {
+        if (!selectedSessionId) return;
+        try {
+            const { data, error } = await (supabase as any)
+                .from('debt_payments')
+                .select('amount, payment_method')
+                .eq('cash_session_id', selectedSessionId);
+            if (error) throw error;
+            setDebtPayments(data || []);
+        } catch (error) {
+            console.error('Error fetching debt payments:', error);
         }
     };
 
@@ -351,7 +367,7 @@ export const SalesPage = () => {
             }
         });
 
-        // Process movements (debt payments/abonos/expenses/canjes)
+        // Process movements (expenses/canjes only — abonos come from debt_payments)
         movements.forEach(m => {
             const desc = (m.description || '').toLowerCase();
             const isCanje = desc.startsWith('[canje]');
@@ -369,11 +385,16 @@ export const SalesPage = () => {
                 }
             } else if (m.type === 'income') {
                 if (!isCanje) {
-                    // Detect payment method for Abonos
-                    if (desc.includes('transferencia') || desc.includes('tarjeta') || m.payment_method === 'transfer' || m.payment_method === 'card') {
-                        totals.abonos_digital += m.amount || 0;
-                    } else {
-                        totals.abonos_cash += m.amount || 0;
+                    // Non-canje income movements (manual incomes, NOT abonos)
+                    // Abonos are now sourced from debt_payments table directly
+                    const isAbono = desc.includes('abono') || desc.includes('crédito');
+                    if (!isAbono) {
+                        // Generic manual income
+                        if (desc.includes('transferencia') || desc.includes('tarjeta') || m.payment_method === 'transfer' || m.payment_method === 'card') {
+                            totals.abonos_digital += m.amount || 0;
+                        } else {
+                            totals.abonos_cash += m.amount || 0;
+                        }
                     }
                 } else {
                     // Canje In
@@ -386,8 +407,18 @@ export const SalesPage = () => {
             }
         });
 
+        // Process debt payments (abonos) from the debt_payments table directly
+        // This is the authoritative source — same approach as CashierStatus.tsx
+        debtPayments.forEach((dp: any) => {
+            if (dp.payment_method === 'cash') {
+                totals.abonos_cash += dp.amount || 0;
+            } else {
+                totals.abonos_digital += dp.amount || 0;
+            }
+        });
+
         return totals;
-    }, [filteredSales, movements]);
+    }, [filteredSales, movements, debtPayments]);
 
     // ── Desglose por servicio/producto (como el cuaderno) ─────────────
     const salesByService = useMemo(() => {
@@ -639,15 +670,20 @@ export const SalesPage = () => {
                                         </span>
                                         <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 tabular-nums">+${reconciliation.sales_digital.toLocaleString()}</span>
                                     </div>
-                                    {(reconciliation.abonos_cash + reconciliation.abonos_digital) > 0 && (
-                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
-                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-                                                Abonos Recibidos
-                                            </span>
-                                            <span className="text-xs font-black text-sky-600 dark:text-sky-400 tabular-nums">+${(reconciliation.abonos_cash + reconciliation.abonos_digital).toLocaleString()}</span>
-                                        </div>
-                                    )}
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
+                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                                            Abonos en Efectivo
+                                        </span>
+                                        <span className="text-xs font-black text-sky-600 dark:text-sky-400 tabular-nums">+${reconciliation.abonos_cash.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
+                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                            Abonos en Transferencia
+                                        </span>
+                                        <span className="text-xs font-black text-blue-600 dark:text-blue-400 tabular-nums">+${reconciliation.abonos_digital.toLocaleString()}</span>
+                                    </div>
 
                                     {/* ── SALIDAS (−) ── */}
                                     <div className="px-2 py-1 mt-2">

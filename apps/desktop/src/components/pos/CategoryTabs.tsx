@@ -10,10 +10,10 @@ export const CategoryTabs = () => {
     const { categories, loading } = useCategories(businessId || undefined);
     const { activeCategoryId, setActiveCategoryId } = useCartStore();
 
-    if (loading) return <div className="h-14 bg-gray-50 animate-pulse w-full mb-2 rounded-lg" />;
+    if (loading) return <div className="h-12 bg-slate-50 dark:bg-white/[0.02] animate-pulse w-full" />;
 
     return (
-        <div className="w-full bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 py-2 shadow-sm z-10 transition-colors">
+        <div className="w-full bg-white/70 dark:bg-[#0b1227]/50 border-b border-slate-200/40 dark:border-white/5 px-4 py-2.5 backdrop-blur-sm z-10 transition-colors">
             {/* Contenedor con Flex Wrap para permitir múltiples filas de categorías compactas */}
             <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto w-full pb-1 pr-1 custom-scrollbar">
 
@@ -23,8 +23,8 @@ export const CategoryTabs = () => {
                     className={`
             flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border
             ${activeCategoryId === null
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                            : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-gray-300 dark:hover:border-slate-600'
+                            ? 'bg-gradient-to-r from-primary to-blue-600 text-white border-transparent shadow-md shadow-primary/20'
+                            : 'bg-slate-50 dark:bg-white/[0.02] text-slate-600 dark:text-slate-350 border-slate-200/60 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/[0.05] hover:border-slate-300 dark:hover:border-white/10'
                         }
           `}
                 >
@@ -33,7 +33,7 @@ export const CategoryTabs = () => {
                 </button>
 
                 {/* Separador vertical visual minificado */}
-                <div className="h-5 w-px bg-gray-300 dark:bg-slate-700 mx-0.5 self-center" />
+                <div className="h-5 w-px bg-slate-200/60 dark:bg-white/10 mx-0.5 self-center" />
 
                 {/* Lista de Categorías Dinámicas */}
                 {categories.map((cat) => (
@@ -43,8 +43,8 @@ export const CategoryTabs = () => {
                         className={`
               px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all border
               ${activeCategoryId === cat.id
-                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 hover:border-blue-300 dark:hover:border-blue-500'
+                                ? 'bg-gradient-to-r from-primary to-blue-600 text-white border-transparent shadow-md shadow-primary/20'
+                                : 'bg-slate-50 dark:bg-white/[0.02] text-slate-700 dark:text-slate-350 border-slate-200/60 dark:border-white/5 hover:bg-slate-100 dark:hover:bg-white/[0.05] hover:border-primary/30 dark:hover:border-primary/20'
                             }
             `}
                     >
@@ -53,7 +53,7 @@ export const CategoryTabs = () => {
                 ))}
 
                 {categories.length === 0 && (
-                    <span className="text-xs text-gray-400 italic">Sin categorías</span>
+                    <span className="text-xs text-slate-400 italic">Sin categorías</span>
                 )}
             </div>
         </div>

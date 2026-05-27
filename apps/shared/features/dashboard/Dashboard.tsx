@@ -41,12 +41,29 @@ interface ChartDataEntry {
     value: number;
 }
 
+// Module-level memory cache to persist dashboard data across component mounts
+interface DashboardCacheEntry {
+    stats: DashboardStats;
+    recentSessions: any[];
+    recentSales: any[];
+    rewardDetails: RewardDetail[];
+    chartData: ChartDataEntry[];
+    allSales: any[];
+    movements: any[];
+    timestamp: number;
+}
+
+const dashboardCache: Record<string, DashboardCacheEntry> = {};
+
 export const FinanceDashboard = () => {
     const cashSession = useSessionStore((state: any) => state.cashSession);
     const { config, loading: configLoading } = useDashboardConfig(); // Use Hook
     const businessType = useBusinessStore((state: any) => state.businessType);
-    const [loading, setLoading] = useState(true);
     const [viewPeriod, setViewPeriod] = useState<ViewPeriod>('day');
+    const [loading, setLoading] = useState(() => {
+        // Start loading as false if we already have cached data for the default 'day' period
+        return !dashboardCache['day'];
+    });
 
     const [stats, setStats] = useState<DashboardStats>({
         income: 0,
@@ -80,11 +97,28 @@ export const FinanceDashboard = () => {
     const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
 
     useEffect(() => {
+        const cached = dashboardCache[viewPeriod];
+        if (cached) {
+            setStats(cached.stats);
+            setRecentSessions(cached.recentSessions);
+            setRecentSales(cached.recentSales);
+            setRewardDetails(cached.rewardDetails);
+            setChartData(cached.chartData);
+            setAllSales(cached.allSales);
+            setMovements(cached.movements);
+            // No full-screen spinner if we have cache!
+            setLoading(false);
+        } else {
+            setLoading(true);
+        }
         fetchDashboardData();
     }, [viewPeriod]);
 
     const fetchDashboardData = async () => {
-        setLoading(true);
+        // If we don't have cached data, trigger full-screen loading spinner
+        if (!dashboardCache[viewPeriod]) {
+            setLoading(true);
+        }
         try {
             const businessId = useBusinessStore.getState().id;
 
@@ -340,7 +374,7 @@ export const FinanceDashboard = () => {
             // True Total Income = Direct Sales (No Credit) + Received Abonos
             income = income + cashAbonos + digitalAbonos;
 
-            setStats({
+            const newStats = {
                 income,
                 transactions: sales?.length || 0,
                 avgTicket: sales?.length ? income / sales.length : 0,
@@ -360,7 +394,9 @@ export const FinanceDashboard = () => {
                 cashAbonos,
                 digitalAbonos,
                 serviceBreakdown // Add this new field
-            });
+            };
+
+            setStats(newStats);
             setAllSales(sales || []);
             setRecentSales(sales?.slice(0, 5) || []);
             setRewardDetails(collectedRewards);
@@ -376,7 +412,20 @@ export const FinanceDashboard = () => {
 
             if (sessionsError) throw sessionsError;
 
-            setRecentSessions(sessions || []);
+            const finalSessions = sessions || [];
+            setRecentSessions(finalSessions);
+
+            // Save to memory cache
+            dashboardCache[viewPeriod] = {
+                stats: newStats,
+                recentSessions: finalSessions,
+                recentSales: sales?.slice(0, 5) || [],
+                rewardDetails: collectedRewards,
+                chartData: processedChartData,
+                allSales: sales || [],
+                movements: movements.filter(m => m.type === 'expense'),
+                timestamp: Date.now()
+            };
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
         } finally {
@@ -411,15 +460,14 @@ export const FinanceDashboard = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-
-                    <div className="flex p-1.5 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
+                    <div className="flex p-1 bg-white/80 dark:bg-[#0b1227]/80 rounded-2xl shadow-lg border border-slate-200/60 dark:border-white/5 backdrop-blur-sm">
                         {['day', 'yesterday', 'week', 'month'].map((p) => (
                             <button
                                 key={p}
                                 onClick={() => setViewPeriod(p as ViewPeriod)}
-                                className={`flex-1 md:flex-none px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${viewPeriod === p
-                                    ? 'bg-primary text-white shadow-md'
-                                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                className={`flex-1 md:flex-none px-4 md:px-6 py-2 rounded-xl text-xs md:text-sm font-bold transition-all ${viewPeriod === p
+                                    ? 'bg-gradient-to-r from-primary to-blue-600 text-white shadow-lg shadow-primary/20 scale-105'
+                                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white'
                                     }`}
                             >
                                 {p === 'day' ? 'Turno Actual' : p === 'yesterday' ? 'Turno Anterior' : p === 'week' ? 'Semana' : 'Mes'}
@@ -460,73 +508,73 @@ export const FinanceDashboard = () => {
                                             {/* Ingresos — siempre visible */}
                                             <div
                                                 onClick={() => setIsSalesModalOpen(true)}
-                                                className={`bg-gradient-to-br from-emerald-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-emerald-100/50 dark:shadow-none border border-emerald-200 dark:border-slate-700 cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-700 transition-all group flex flex-col items-center text-center`}
+                                                className={`bg-gradient-to-br from-emerald-50/90 to-white dark:from-emerald-950/10 dark:to-transparent rounded-2xl ${sMap.pad} shadow-lg shadow-emerald-100/20 dark:shadow-[0_0_20px_rgba(16,185,129,0.08)] border border-emerald-200/80 dark:border-emerald-500/30 cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-400/60 transition-all hover:scale-[1.02] active:scale-95 group flex flex-col items-center text-center`}
                                             >
-                                                <div className={`${sMap.iconPad} bg-emerald-100 dark:bg-emerald-900/30 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
+                                                <div className={`${sMap.iconPad} bg-emerald-100/85 dark:bg-emerald-500/20 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
                                                     <span className={`material-symbols-outlined text-emerald-600 dark:text-emerald-400 ${sMap.iconSz}`}>payments</span>
                                                 </div>
-                                                <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Ingresos</p>
-                                                <p className={`${sMap.sub} text-slate-500 italic mt-0.5`}>{stats.transactions} ventas</p>
-                                                <p className={`${sMap.val} font-black text-slate-900 dark:text-white`}>${stats.income.toLocaleString()}</p>
+                                                <p className={`${sMap.title} text-emerald-900/80 dark:text-emerald-400/80 font-bold uppercase tracking-wider leading-none`}>Ingresos</p>
+                                                <p className={`${sMap.sub} text-emerald-700/60 dark:text-emerald-500/60 italic mt-0.5`}>{stats.transactions} ventas</p>
+                                                <p className={`${sMap.val} font-black text-emerald-950 dark:text-emerald-200`}>${stats.income.toLocaleString()}</p>
                                             </div>
 
                                             {config.show_card_ticket !== false && (
-                                                <div className={`bg-gradient-to-br from-blue-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-blue-100/50 dark:shadow-none border border-blue-200 dark:border-slate-700 flex flex-col items-center text-center`}>
-                                                    <div className={`${sMap.iconPad} bg-blue-100 dark:bg-blue-900/30 rounded-xl mb-2`}>
+                                                <div className={`bg-gradient-to-br from-blue-50/90 to-white dark:from-blue-950/10 dark:to-transparent rounded-2xl ${sMap.pad} shadow-lg shadow-blue-100/20 dark:shadow-[0_0_20px_rgba(59,130,246,0.08)] border border-blue-200/80 dark:border-blue-500/30 flex flex-col items-center text-center hover:scale-[1.02] transition-all`}>
+                                                    <div className={`${sMap.iconPad} bg-blue-100/85 dark:bg-blue-500/20 rounded-xl mb-2`}>
                                                         <span className={`material-symbols-outlined text-blue-600 dark:text-blue-400 ${sMap.iconSz}`}>receipt_long</span>
                                                     </div>
-                                                    <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Ticket P.</p>
-                                                    <p className={`${sMap.sub} text-slate-500 mt-0.5`}>Promedio</p>
-                                                    <p className={`${sMap.val} font-black text-slate-900 dark:text-white`}>${Math.round(stats.avgTicket).toLocaleString()}</p>
+                                                    <p className={`${sMap.title} text-blue-900/80 dark:text-blue-400/80 font-bold uppercase tracking-wider leading-none`}>Ticket P.</p>
+                                                    <p className={`${sMap.sub} text-blue-700/60 dark:text-blue-500/60 mt-0.5`}>Promedio</p>
+                                                    <p className={`${sMap.val} font-black text-blue-950 dark:text-blue-200`}>${Math.round(stats.avgTicket).toLocaleString()}</p>
                                                 </div>
                                             )}
 
                                             {config.show_card_items !== false && (
-                                                <div className={`bg-gradient-to-br from-amber-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-amber-100/50 dark:shadow-none border border-amber-200 dark:border-slate-700 flex flex-col items-center text-center`}>
-                                                    <div className={`${sMap.iconPad} bg-amber-100 dark:bg-amber-900/30 rounded-xl mb-2`}>
+                                                <div className={`bg-gradient-to-br from-amber-50/90 to-white dark:from-amber-950/10 dark:to-transparent rounded-2xl ${sMap.pad} shadow-lg shadow-amber-100/20 dark:shadow-[0_0_20px_rgba(245,158,11,0.08)] border border-amber-200/80 dark:border-amber-500/30 flex flex-col items-center text-center hover:scale-[1.02] transition-all`}>
+                                                    <div className={`${sMap.iconPad} bg-amber-100/85 dark:bg-amber-500/20 rounded-xl mb-2`}>
                                                         <span className={`material-symbols-outlined text-amber-600 dark:text-amber-400 ${sMap.iconSz}`}>inventory_2</span>
                                                     </div>
-                                                    <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Items</p>
-                                                    <p className={`${sMap.sub} text-slate-500 mt-0.5`}>Vendidos</p>
-                                                    <p className={`${sMap.val} font-black text-slate-900 dark:text-white`}>{stats.totalItems.toLocaleString()}</p>
+                                                    <p className={`${sMap.title} text-amber-900/80 dark:text-amber-400/80 font-bold uppercase tracking-wider leading-none`}>Items</p>
+                                                    <p className={`${sMap.sub} text-amber-700/60 dark:text-amber-500/60 mt-0.5`}>Vendidos</p>
+                                                    <p className={`${sMap.val} font-black text-amber-950 dark:text-amber-200`}>{stats.totalItems.toLocaleString()}</p>
                                                 </div>
                                             )}
 
                                             {config.show_card_clientes !== false && (
-                                                <div className={`bg-gradient-to-br from-purple-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-purple-100/50 dark:shadow-none border border-purple-200 dark:border-slate-700 flex flex-col items-center text-center`}>
-                                                    <div className={`${sMap.iconPad} bg-purple-100 dark:bg-purple-900/30 rounded-xl mb-2`}>
+                                                <div className={`bg-gradient-to-br from-purple-50/90 to-white dark:from-purple-950/10 dark:to-transparent rounded-2xl ${sMap.pad} shadow-lg shadow-purple-100/20 dark:shadow-[0_0_20px_rgba(168,85,247,0.08)] border border-purple-200/80 dark:border-purple-500/30 flex flex-col items-center text-center hover:scale-[1.02] transition-all`}>
+                                                    <div className={`${sMap.iconPad} bg-purple-100/85 dark:bg-purple-500/20 rounded-xl mb-2`}>
                                                         <span className={`material-symbols-outlined text-purple-600 dark:text-purple-400 ${sMap.iconSz}`}>people</span>
                                                     </div>
-                                                    <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Clientes</p>
-                                                    <p className={`${sMap.sub} text-slate-500 mt-0.5`}>Únicos</p>
-                                                    <p className={`${sMap.val} font-black text-slate-900 dark:text-white`}>{stats.uniqueCustomers.toLocaleString()}</p>
+                                                    <p className={`${sMap.title} text-purple-900/80 dark:text-purple-400/80 font-bold uppercase tracking-wider leading-none`}>Clientes</p>
+                                                    <p className={`${sMap.sub} text-purple-700/60 dark:text-purple-500/60 mt-0.5`}>Únicos</p>
+                                                    <p className={`${sMap.val} font-black text-purple-950 dark:text-purple-200`}>{stats.uniqueCustomers.toLocaleString()}</p>
                                                 </div>
                                             )}
 
                                             {/* Gastos — siempre visible */}
                                             <div
                                                 onClick={() => setIsMovementsModalOpen(true)}
-                                                className={`bg-gradient-to-br from-rose-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-rose-100/50 dark:shadow-none border border-rose-200 dark:border-slate-700 cursor-pointer hover:border-rose-400 dark:hover:border-rose-700 transition-all group flex flex-col items-center text-center`}
+                                                className={`bg-gradient-to-br from-rose-50/90 to-white dark:from-rose-950/10 dark:to-transparent rounded-2xl ${sMap.pad} shadow-lg shadow-rose-100/20 dark:shadow-[0_0_20px_rgba(244,63,94,0.08)] border border-rose-200/80 dark:border-rose-500/30 cursor-pointer hover:border-rose-400 dark:hover:border-rose-400/60 transition-all hover:scale-[1.02] active:scale-95 group flex flex-col items-center text-center`}
                                             >
-                                                <div className={`${sMap.iconPad} bg-rose-100 dark:bg-rose-900/30 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
+                                                <div className={`${sMap.iconPad} bg-rose-100/85 dark:bg-rose-500/20 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
                                                     <span className={`material-symbols-outlined text-rose-600 dark:text-rose-400 ${sMap.iconSz}`}>upload</span>
                                                 </div>
-                                                <p className={`${sMap.title} text-slate-600 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Gastos</p>
-                                                <p className={`${sMap.sub} text-slate-500 italic mt-0.5`}>Egresos</p>
-                                                <p className={`${sMap.val} font-black text-rose-600 dark:text-rose-400`}>${stats.expenses.toLocaleString()}</p>
+                                                <p className={`${sMap.title} text-rose-900/80 dark:text-rose-400/80 font-bold uppercase tracking-wider leading-none`}>Gastos</p>
+                                                <p className={`${sMap.sub} text-rose-700/60 dark:text-rose-500/60 italic mt-0.5`}>Egresos</p>
+                                                <p className={`${sMap.val} font-black text-rose-950 dark:text-rose-400`}>${stats.expenses.toLocaleString()}</p>
                                             </div>
 
                                             {config.show_card_promo !== false && (
                                                 <div
                                                     onClick={() => setIsRewardsModalOpen(true)}
-                                                    className={`bg-gradient-to-br from-fuchsia-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 rounded-2xl ${sMap.pad} shadow-md shadow-fuchsia-100/50 dark:shadow-none border border-fuchsia-200 dark:border-slate-700 cursor-pointer hover:border-purple-400 dark:hover:border-purple-700 transition-all group flex flex-col items-center text-center`}
+                                                    className={`bg-gradient-to-br from-fuchsia-50/90 to-white dark:from-fuchsia-950/10 dark:to-transparent rounded-2xl ${sMap.pad} shadow-lg shadow-fuchsia-100/20 dark:shadow-[0_0_20px_rgba(217,70,239,0.08)] border border-fuchsia-200/80 dark:border-fuchsia-500/30 cursor-pointer hover:border-fuchsia-400 dark:hover:border-fuchsia-400/60 transition-all hover:scale-[1.02] active:scale-95 group flex flex-col items-center text-center`}
                                                 >
-                                                    <div className={`${sMap.iconPad} bg-purple-100 dark:bg-purple-900/30 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
-                                                        <span className={`material-symbols-outlined text-purple-600 dark:text-purple-400 ${sMap.iconSz}`}>redeem</span>
+                                                    <div className={`${sMap.iconPad} bg-fuchsia-100/85 dark:bg-fuchsia-500/20 rounded-xl group-hover:scale-110 transition-transform mb-2`}>
+                                                        <span className={`material-symbols-outlined text-fuchsia-600 dark:text-fuchsia-400 ${sMap.iconSz}`}>redeem</span>
                                                     </div>
-                                                    <p className={`${sMap.title} text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider leading-none`}>Promo</p>
-                                                    <p className={`${sMap.sub} text-slate-400 italic mt-0.5`}>Impacto</p>
-                                                    <p className={`${sMap.val} font-black text-purple-600 dark:text-purple-400`}>${stats.rewardCosts.toLocaleString()}</p>
+                                                    <p className={`${sMap.title} text-fuchsia-900/80 dark:text-fuchsia-400/80 font-bold uppercase tracking-wider leading-none`}>Promo</p>
+                                                    <p className={`${sMap.sub} text-fuchsia-700/60 dark:text-fuchsia-500/60 italic mt-0.5`}>Impacto</p>
+                                                    <p className={`${sMap.val} font-black text-fuchsia-950 dark:text-fuchsia-400`}>${stats.rewardCosts.toLocaleString()}</p>
                                                 </div>
                                             )}
                                         </>

@@ -77,7 +77,7 @@ export const POSCustomerSection = ({
     };
 
     return (
-        <div className="flex-none p-6 border-b border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/20 space-y-4">
+        <div className="flex-none p-5 border-b border-slate-100/60 dark:border-white/5 bg-white/60 dark:bg-white/[0.02] space-y-4 backdrop-blur-sm">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -88,7 +88,7 @@ export const POSCustomerSection = ({
                     {!selectedCustomer && (
                         <button
                             onClick={onQuickClient}
-                            className="flex items-center gap-1 px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-all font-black text-[10px] uppercase tracking-wider border border-emerald-500/20"
+                            className="flex items-center gap-1 px-3 py-1 bg-emerald-500/10 dark:bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-all font-semibold text-[10px] uppercase tracking-wider border border-emerald-500/20 dark:border-emerald-500/15"
                         >
                             <span className="material-symbols-outlined !text-[16px]">bolt</span>
                             {getQuickButtonLabel()}
@@ -125,7 +125,7 @@ export const POSCustomerSection = ({
             <div className="relative group">
                 <span className="absolute left-3 top-2.5 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">person_search</span>
                 <input
-                    className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-12 py-3 text-sm font-bold focus:ring-0 focus:border-primary transition-all placeholder:text-slate-400 outline-none shadow-sm group-hover:border-slate-300 dark:group-hover:border-slate-600"
+                    className="w-full bg-slate-50/70 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/8 rounded-xl pl-10 pr-12 py-2.5 text-sm font-medium focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-white/[0.06] transition-all placeholder:text-slate-400 outline-none shadow-sm hover:border-slate-300 dark:hover:border-white/10"
                     placeholder={getPlaceholder()}
                     type="text"
                     value={searchQuery}
@@ -150,10 +150,9 @@ export const POSCustomerSection = ({
                                 >
                                     <div className="shrink-0">
                                         {result.type === 'vehicle' ? (
-                                            <div className="w-16 h-10 bg-slate-900 border-2 border-slate-700 rounded-lg flex flex-col items-center justify-center shadow-lg relative overflow-hidden group-hover/item:border-primary transition-colors">
-                                                <div className="absolute top-0 left-0 right-0 h-1 bg-yellow-400"></div>
-                                                <span className="text-sm font-black leading-none text-white">{result.data.license_plate}</span>
-                                                <div className="text-[7px] font-black text-slate-400 uppercase leading-none mt-0.5">COLOMBIA</div>
+                                            <div className="w-16 h-10 bg-gradient-to-b from-yellow-400 via-yellow-400 to-yellow-500 border-2 border-yellow-500 rounded-lg flex flex-col items-center justify-center shadow-lg relative overflow-hidden group-hover/item:ring-2 group-hover/item:ring-primary transition-all">
+                                                <span className="text-sm font-black leading-none text-gray-900 tracking-tight">{result.data.license_plate}</span>
+                                                <div className="text-[7px] font-black text-gray-700 uppercase leading-none mt-0.5 tracking-widest">COLOMBIA</div>
                                             </div>
                                         ) : (
                                             <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
@@ -229,21 +228,21 @@ export const POSCustomerSection = ({
                                 </button>
                             </span>
                             {isFrequentCustomer && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 text-[11px] font-bold border border-emerald-100 dark:border-emerald-900/30">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gradient-to-r from-emerald-500/15 to-teal-500/10 dark:from-emerald-500/10 dark:to-teal-500/5 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-200/60 dark:border-emerald-500/15 shadow-sm shadow-emerald-500/10">
                                     <span className="material-symbols-outlined !text-[14px]">star</span>
                                     Cliente Frecuente
                                 </span>
                             )}
                             {selectedVehicle && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] font-bold border border-slate-200 dark:border-slate-700">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gradient-to-r from-yellow-400 to-yellow-500 text-gray-900 text-[11px] font-black border border-yellow-500/50 shadow-sm">
                                     <span className="material-symbols-outlined !text-[14px]">
                                         {selectedVehicle.type === 'motorcycle' ? 'two_wheeler' : 'directions_car'}
                                     </span>
-                                    {selectedVehicle.brand} {selectedVehicle.model || selectedVehicle.license_plate}
+                                    {selectedVehicle.license_plate}
                                 </span>
                             )}
                             {(selectedCustomer.loyalty_points || 0) >= (loyaltySettings.points_threshold || 50) && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 text-[11px] font-black border border-purple-200 dark:border-purple-800 animate-pulse transition-all">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-gradient-to-r from-purple-500/15 to-pink-500/10 dark:from-purple-500/10 dark:to-pink-500/5 text-purple-700 dark:text-purple-400 text-[11px] font-semibold border border-purple-200/60 dark:border-purple-500/15 shadow-sm shadow-purple-500/15 animate-pulse">
                                     <span className="material-symbols-outlined !text-[14px]">redeem</span>
                                     RECOMPENSA ({selectedCustomer.loyalty_points || 0})
                                 </span>

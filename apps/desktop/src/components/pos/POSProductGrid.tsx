@@ -247,7 +247,7 @@ export const POSProductGrid = () => {
         return (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="h-40 bg-gray-100 dark:bg-slate-700 rounded-2xl animate-pulse" />
+                    <div key={i} className="h-40 bg-gradient-to-br from-slate-100 to-slate-200/80 dark:from-white/[0.04] dark:to-white/[0.02] rounded-2xl animate-pulse border border-slate-200/40 dark:border-white/5" />
                 ))}
             </div>
         );
@@ -257,20 +257,20 @@ export const POSProductGrid = () => {
     // mostrar pantalla vacía hasta que se seleccione categoría o se escriba algo.
     if (hideAllByDefault && !hasFilter) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-slate-500 gap-4 select-none">
-                <div className="p-5 rounded-2xl bg-gray-100 dark:bg-slate-800">
-                    <Car size={48} className="opacity-40" />
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 gap-4 select-none">
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200/50 dark:from-white/5 dark:to-white/[0.02] border border-slate-200/40 dark:border-white/5 shadow-sm">
+                    <Car size={48} className="opacity-30" />
                 </div>
                 <div className="text-center">
-                    <p className="font-semibold text-base text-gray-500 dark:text-slate-400">Selecciona una categoría</p>
-                    <p className="text-sm text-gray-400 dark:text-slate-500 mt-1">o escribe para buscar un servicio o producto</p>
+                    <p className="font-semibold text-base text-slate-500 dark:text-slate-400">Selecciona una categoría</p>
+                    <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">o escribe para buscar un servicio o producto</p>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-full bg-gray-50 dark:bg-slate-900">
+        <div className="flex flex-col h-full bg-slate-50/30 dark:bg-transparent">
             {/* Grid de Tarjetas Premium */}
             <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
                 {filteredItems.length === 0 ? (
@@ -336,12 +336,12 @@ export const POSProductGrid = () => {
 
                                     {/* Información */}
                                     <div className="text-center space-y-1 relative z-10">
-                                        <h3 className="font-bold text-gray-900 dark:text-white text-xs leading-snug line-clamp-2 h-8 flex items-center justify-center px-1 drop-shadow-sm">
+                                        <h3 className="font-semibold text-gray-900 dark:text-white text-xs leading-snug line-clamp-2 h-8 flex items-center justify-center px-1 drop-shadow-sm">
                                             {item.name}
                                         </h3>
 
                                         <div className={`pt-1 mt-1 rounded-lg ${theme.price.light} ${theme.price.dark} backdrop-blur-sm`}>
-                                            <p className={`text-sm font-black tracking-tight py-1 drop-shadow-sm`}>
+                                            <p className={`text-sm font-bold tracking-tight py-1 drop-shadow-sm`}>
                                                 ${item.price.toLocaleString()}
                                             </p>
                                         </div>

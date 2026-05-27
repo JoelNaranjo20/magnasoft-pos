@@ -5,6 +5,7 @@ import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { Pagination } from '../../ui/Pagination';
 import { IconSelector } from '../../ui/IconSelector';
+import { InternalUseModal } from './InternalUseModal';
 
 type Product = Database['public']['Tables']['products']['Row'];
 
@@ -302,10 +303,10 @@ export const ProductStockManager = () => {
             await fetchProducts();
         } catch (error: any) {
             console.error('Error deleting:', error);
-            if (error.code === '23503') {
-                alert('No se puede eliminar porque tiene historial. Por favor, solo desactívalo.');
+            if (error.code === '23503' || error.code === '409' || error?.status === 409 || error?.message?.includes('409') || error?.message?.toLowerCase()?.includes('conflict')) {
+                alert('No se puede eliminar porque tiene historial de ventas u otros registros asociados. Por favor, solo desactívalo.');
             } else {
-                alert('Error al eliminar el producto');
+                alert('Error al eliminar el producto: ' + (error.message || 'Error desconocido'));
             }
         } finally {
             setLoading(false);

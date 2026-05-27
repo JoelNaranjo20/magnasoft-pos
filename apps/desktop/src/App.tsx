@@ -71,16 +71,7 @@ function App() {
 
     // 1. Initialize auth session on mount
     useEffect(() => {
-        const handleInitialStartup = async () => {
-            const hasInitialized = sessionStorage.getItem('app_initialized_session');
-            if (!hasInitialized) {
-                sessionStorage.setItem('app_initialized_session', 'true');
-                console.log('[Auth] Startup detected. Signing out active session to present login screen.');
-                await supabase.auth.signOut();
-            }
-            checkSession();
-        };
-        handleInitialStartup();
+        checkSession();
     }, [checkSession]);
 
     // 1.1 verification of active cash session (Hydration Check)

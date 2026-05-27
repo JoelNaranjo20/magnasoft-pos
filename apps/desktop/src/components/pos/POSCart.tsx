@@ -497,7 +497,7 @@ export const POSCart = () => {
             : 'Vendedor / Responsable';
 
     return (
-        <aside className="w-[350px] lg:w-[400px] xl:w-[450px] flex-none flex flex-col bg-surface-light dark:bg-surface-dark border-l border-slate-200 dark:border-slate-800 shadow-2xl z-30 relative">
+        <aside className="w-[350px] lg:w-[400px] xl:w-[450px] flex-none flex flex-col bg-white dark:bg-[#080d1e] border-l border-slate-200/60 dark:border-white/5 shadow-2xl z-30 relative">
             {hasVehicles ? (
                 <CustomerVehicleModal
                     isOpen={isCustomerModalOpen}
@@ -695,20 +695,20 @@ export const POSCart = () => {
             )}
 
             {/* Cart Items List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 scrollbar-track-transparent">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/10 scrollbar-track-transparent">
                 {items.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl m-4 bg-slate-50/50 dark:bg-slate-900/20">
-                        <div className="h-20 w-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                            <span className="material-symbols-outlined !text-[40px] opacity-50">shopping_cart_off</span>
+                    <div className="flex flex-col items-center justify-center h-full text-slate-400 border-2 border-dashed border-slate-200/60 dark:border-white/5 rounded-2xl m-4 bg-slate-50/30 dark:bg-white/[0.015]">
+                        <div className="h-20 w-20 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
+                            <span className="material-symbols-outlined !text-[40px] opacity-30">shopping_cart_off</span>
                         </div>
-                        <p className="font-medium text-sm">El carrito está vacío</p>
-                        <p className="text-xs opacity-75 mt-1">Escanea productos o selecciona servicios</p>
+                        <p className="font-medium text-sm text-slate-500 dark:text-slate-400">El carrito está vacío</p>
+                        <p className="text-xs opacity-60 mt-1">Escanea productos o selecciona servicios</p>
                     </div>
                 ) : (
                     items.map((item) => (
-                        <div key={item.cartId} className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700/50 hover:border-primary/30 transition-all group relative overflow-hidden">
+                        <div key={item.cartId} className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-white/[0.03] shadow-sm border border-slate-100/80 dark:border-white/5 hover:border-primary/30 dark:hover:border-primary/20 transition-all group relative overflow-hidden">
                             {/* Item Type Color Strip */}
-                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.type === 'product' ? 'bg-amber-400' : 'bg-blue-500'}`}></div>
+                            <div className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl ${item.type === 'product' ? 'bg-gradient-to-b from-amber-400 to-orange-500' : 'bg-gradient-to-b from-primary to-blue-600'}`}></div>
 
                             <div className={`h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 ml-2 ${item.type === 'product'
                                 ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
@@ -804,7 +804,7 @@ export const POSCart = () => {
             </div>
 
             {/* Totals & Actions */}
-            <div className="flex-none p-6 bg-white dark:bg-[#1e293b] border-t border-slate-200 dark:border-slate-800 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] z-40 space-y-4">
+            <div className="flex-none p-6 bg-slate-50/70 dark:bg-[#060a18] border-t border-slate-200/50 dark:border-white/5 shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.25)] z-40 space-y-4">
 
                 {/* Worker Selector */}
                 <div className="relative">
@@ -881,39 +881,39 @@ export const POSCart = () => {
                 <div className="grid grid-cols-5 gap-2">
                     <button
                         onClick={() => setMovementModal({ isOpen: true, type: 'income' })}
-                        className="col-span-1 h-14 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
+                        className="col-span-1 h-14 rounded-xl border border-emerald-200/60 dark:border-emerald-500/10 bg-emerald-50/60 dark:bg-emerald-500/5 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-100/80 dark:hover:bg-emerald-500/10 hover:border-emerald-300 dark:hover:border-emerald-500/20 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
                         title="Ingreso Extra"
                     >
                         <span className="material-symbols-outlined !text-[20px]">add_circle</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Ingreso</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Ingreso</span>
                     </button>
                     <button
                         onClick={() => setMovementModal({ isOpen: true, type: 'expense' })}
-                        className="col-span-1 h-14 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/10 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
+                        className="col-span-1 h-14 rounded-xl border border-rose-200/60 dark:border-rose-500/10 bg-rose-50/60 dark:bg-rose-500/5 text-rose-500 dark:text-rose-400 hover:bg-rose-100/80 dark:hover:bg-rose-500/10 hover:border-rose-300 dark:hover:border-rose-500/20 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
                         title="Gasto Rápido"
                     >
                         <span className="material-symbols-outlined !text-[20px]">remove_circle</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Gasto</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Gasto</span>
                     </button>
                     <button
                         onClick={() => setMovementModal({ isOpen: true, type: 'favor' })}
-                        className="col-span-1 h-14 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
+                        className="col-span-1 h-14 rounded-xl border border-blue-200/60 dark:border-blue-500/10 bg-blue-50/60 dark:bg-blue-500/5 text-blue-500 dark:text-blue-400 hover:bg-blue-100/80 dark:hover:bg-blue-500/10 hover:border-blue-300 dark:hover:border-blue-500/20 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
                         title="Canje de Efectivo/Transferencia"
                     >
                         <span className="material-symbols-outlined !text-[20px] transition-transform group-hover:rotate-180 duration-500">swap_horiz</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Canje</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Canje</span>
                     </button>
-                    <button className="col-span-1 h-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-700 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group">
+                    <button className="col-span-1 h-14 rounded-xl border border-slate-200/60 dark:border-white/5 bg-slate-50/60 dark:bg-white/[0.03] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:border-slate-300 dark:hover:border-white/10 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group">
                         <span className="material-symbols-outlined !text-[20px]">print</span>
-                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Imprimir</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Imprimir</span>
                     </button>
                     <button
                         onClick={handlePayment}
                         disabled={items.length === 0}
-                        className="col-span-1 h-14 rounded-xl bg-primary hover:bg-primary-hover text-white shadow-lg shadow-blue-500/20 flex flex-col items-center justify-center gap-1 font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                        className="col-span-1 h-14 rounded-xl bg-gradient-to-br from-primary via-blue-600 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/30 flex flex-col items-center justify-center gap-1 font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                     >
                         <span className="material-symbols-outlined !text-[24px]">payments</span>
-                        <span className="text-[10px] uppercase tracking-wider">Cobrar</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">Cobrar</span>
                     </button>
                 </div>
             </div>

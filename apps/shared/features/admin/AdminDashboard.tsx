@@ -138,25 +138,25 @@ export const AdminDashboard = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-900 text-slate-100 font-display">
+        <div className="min-h-screen bg-[#080c19] text-slate-100 font-display">
             {/* Header */}
-            <header className="bg-slate-800 border-b border-slate-700 px-8 py-5 flex justify-between items-center sticky top-0 z-10 shadow-xl">
+            <header className="bg-[#0b1227]/90 border-b border-white/5 px-8 py-5 flex justify-between items-center sticky top-0 z-10 shadow-xl backdrop-blur-md">
                 <div>
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg shadow-lg shadow-purple-500/20">
-                            <span className="material-symbols-outlined text-white">admin_panel_settings</span>
+                        <div className="p-2.5 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl shadow-lg shadow-purple-500/20">
+                            <span className="material-symbols-outlined text-white text-[22px]">admin_panel_settings</span>
                         </div>
                         <div>
-                            <h1 className="text-2xl font-black bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+                            <h1 className="text-2xl font-black bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
                                 Magnasoft Admin
                             </h1>
-                            <p className="text-xs text-slate-500 font-bold tracking-widest uppercase">Panel de Control Global</p>
+                            <p className="text-[10px] text-purple-400/80 font-bold tracking-widest uppercase">Panel de Control Global</p>
                         </div>
                     </div>
                 </div>
                 <button
                     onClick={signOut}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-700 hover:bg-rose-500/10 hover:text-rose-400 text-slate-400 transition-all font-bold text-sm"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/10 hover:bg-rose-500/10 hover:border-rose-500/20 hover:text-rose-400 text-slate-400 transition-all font-bold text-sm"
                 >
                     <span className="material-symbols-outlined text-[18px]">logout</span>
                     Cerrar Sesión
@@ -164,17 +164,25 @@ export const AdminDashboard = () => {
             </header>
 
             <main className="p-8 max-w-7xl mx-auto">
-                <div className="flex gap-4 mb-6 border-b border-slate-700">
+                <div className="flex gap-2 mb-8 bg-slate-800/60 p-1.5 rounded-2xl w-fit border border-slate-700/60 backdrop-blur-sm">
                     <button
                         onClick={() => setActiveTab('licenses')}
-                        className={`px-6 py-3 font-bold border-b-2 transition-colors ${activeTab === 'licenses' ? 'border-primary text-white' : 'border-transparent text-slate-400 hover:text-white'}`}
+                        className={`px-6 py-2.5 rounded-xl font-bold transition-all text-sm flex items-center gap-2 ${activeTab === 'licenses'
+                            ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-600/20'
+                            : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
+                            }`}
                     >
+                        <span className="material-symbols-outlined text-[18px]">workspace_premium</span>
                         Licencias
                     </button>
                     <button
                         onClick={() => setActiveTab('requests')}
-                        className={`px-6 py-3 font-bold border-b-2 transition-colors ${activeTab === 'requests' ? 'border-amber-500 text-white' : 'border-transparent text-slate-400 hover:text-white'}`}
+                        className={`px-6 py-2.5 rounded-xl font-bold transition-all text-sm flex items-center gap-2 ${activeTab === 'requests'
+                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20'
+                            : 'text-slate-400 hover:text-white hover:bg-white/[0.02]'
+                            }`}
                     >
+                        <span className="material-symbols-outlined text-[18px]">person_add</span>
                         Solicitudes Pendientes ({pendingUsers.length})
                     </button>
                 </div>
@@ -183,7 +191,7 @@ export const AdminDashboard = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                         <div className="lg:col-span-1 space-y-6">
-                            <div className="bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-2xl">
+                            <div className="bg-slate-800/90 rounded-3xl p-6 border border-slate-700/70 shadow-2xl backdrop-blur-sm">
                                 <div className="flex items-center gap-2 mb-6 text-purple-400">
                                     <span className="material-symbols-outlined">workspace_premium</span>
                                     <h2 className="text-lg font-black uppercase tracking-wide">Generador de Licencias</h2>
@@ -191,51 +199,60 @@ export const AdminDashboard = () => {
 
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Plan / Prefijo</label>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-wider">Plan / Prefijo</label>
                                         <div className="grid grid-cols-3 gap-2">
-                                            {['BASIC', 'PRO', 'ENT'].map((p) => (
-                                                <button
-                                                    key={p}
-                                                    onClick={() => setPlan(p)}
-                                                    className={`py-2 rounded-lg text-xs font-black transition-all border-2 ${plan === p
-                                                        ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-600/30'
-                                                        : 'bg-slate-700 border-transparent text-slate-400 hover:bg-slate-600'
-                                                        }`}
-                                                >
-                                                    {p}
-                                                </button>
-                                            ))}
+                                            {['BASIC', 'PRO', 'ENT'].map((p) => {
+                                                const isActive = plan === p;
+                                                const grad = p === 'BASIC'
+                                                    ? 'from-blue-600 to-cyan-600 shadow-blue-600/20'
+                                                    : p === 'PRO'
+                                                        ? 'from-purple-600 to-pink-600 shadow-purple-600/20'
+                                                        : 'from-fuchsia-600 to-rose-600 shadow-fuchsia-600/20';
+
+                                                return (
+                                                    <button
+                                                        key={p}
+                                                        onClick={() => setPlan(p)}
+                                                        className={`py-2.5 rounded-xl text-xs font-black transition-all border-2 ${isActive
+                                                            ? `bg-gradient-to-r ${grad} border-transparent text-white shadow-lg scale-105`
+                                                            : 'bg-slate-900 border-transparent text-slate-400 hover:bg-slate-800'
+                                                            }`}
+                                                    >
+                                                        {p}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Duración (Meses)</label>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-wider">Duración (Meses)</label>
                                         <input
                                             type="number"
                                             value={durationMonths}
                                             onChange={(e) => setDurationMonths(Number(e.target.value))}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-purple-500 transition-colors"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Dispositivos Máximos</label>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-wider">Dispositivos Máximos</label>
                                         <input
                                             type="number"
                                             value={maxDevices}
                                             onChange={(e) => setMaxDevices(Number(e.target.value))}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-purple-500 transition-colors"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all"
                                         />
                                     </div>
 
-                                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-700/50">
-                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Referencia Visual (No se guarda)</label>
+                                    <div className="p-3 bg-slate-900/50 rounded-xl border border-slate-700/50 focus-within:ring-2 focus-within:ring-purple-500/30 focus-within:border-purple-500 transition-all">
+                                        <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1 tracking-wider">Referencia Visual (No se guarda)</label>
                                         <input
                                             type="text"
                                             placeholder="Nombre del Cliente..."
                                             value={clientName}
                                             onChange={(e) => setClientName(e.target.value)}
-                                            className="w-full bg-transparent border-none p-0 text-sm text-slate-300 placeholder:text-slate-600 focus:ring-0"
+                                            className="w-full bg-transparent border-none p-0 text-sm text-slate-300 placeholder:text-slate-600 focus:ring-0 outline-none"
                                         />
                                     </div>
 
@@ -257,12 +274,12 @@ export const AdminDashboard = () => {
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700">
-                                    <h3 className="text-slate-500 text-xs font-bold uppercase">Total Licencias</h3>
+                                <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
+                                    <h3 className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Total Licencias</h3>
                                     <p className="text-3xl font-black text-white mt-1">{codes.length}</p>
                                 </div>
-                                <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700">
-                                    <h3 className="text-slate-500 text-xs font-bold uppercase">Activas</h3>
+                                <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60">
+                                    <h3 className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Activas</h3>
                                     <p className="text-3xl font-black text-emerald-400 mt-1">
                                         {codes.filter(c => c.status === 'activated').length}
                                     </p>
@@ -271,8 +288,8 @@ export const AdminDashboard = () => {
                         </div>
 
                         <div className="lg:col-span-2 space-y-6">
-                            <div className="bg-slate-800 rounded-3xl border border-slate-700 shadow-2xl overflow-hidden min-h-[600px] flex flex-col">
-                                <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-800/80 backdrop-blur-sm sticky top-0 z-10">
+                            <div className="bg-slate-800/90 rounded-3xl border border-slate-700/70 shadow-2xl overflow-hidden min-h-[600px] flex flex-col backdrop-blur-sm">
+                                <div className="p-6 border-b border-slate-700/80 flex justify-between items-center bg-slate-800/80 backdrop-blur-sm sticky top-0 z-10">
                                     <h2 className="text-lg font-black uppercase tracking-wide flex items-center gap-2">
                                         <span className="material-symbols-outlined text-blue-400">list_alt</span>
                                         Historial de Licencias

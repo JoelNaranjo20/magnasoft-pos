@@ -158,10 +158,10 @@ export const LoginPage = () => {
                         </div>
                     </div>
                     <div>
-                        <h2 className="text-3xl font-black font-title text-white uppercase tracking-tight leading-none">
+                        <h2 className="text-3xl font-bold font-title text-white uppercase tracking-tight leading-none">
                             {isRegister ? 'Registrar Negocio' : 'Bienvenido'}
                         </h2>
-                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.25em] mt-1.5">
+                        <p className="text-slate-500 text-[10px] font-semibold uppercase tracking-[0.25em] mt-1.5">
                             {isRegister ? 'Crea tu cuenta en MagnaSoft' : 'Iniciar Sesión'}
                         </p>
                     </div>
@@ -174,7 +174,7 @@ export const LoginPage = () => {
                         {/* Full Name field (Only shown for Sign Up) */}
                         {isRegister && (
                             <div className="space-y-1.5 animate-in fade-in duration-300">
-                                <label className="block ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                <label className="block ml-2 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
                                     Nombre Completo
                                 </label>
                                 <input
@@ -183,14 +183,14 @@ export const LoginPage = () => {
                                     value={fullName}
                                     onChange={e => setFullName(e.target.value)}
                                     placeholder="Tu nombre y apellido"
-                                    className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-bold"
+                                    className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-medium"
                                 />
                             </div>
                         )}
 
                         {/* Email Input */}
                         <div className="space-y-1.5">
-                            <label className="block ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <label className="block ml-2 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
                                 Correo Electrónico
                             </label>
                             <input
@@ -200,13 +200,13 @@ export const LoginPage = () => {
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 placeholder="usuario@ejemplo.com"
-                                className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-bold"
+                                className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-medium"
                             />
                         </div>
 
                         {/* Password Input */}
                         <div className="space-y-1.5">
-                            <label className="block ml-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <label className="block ml-2 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
                                 Contraseña
                             </label>
                             <div className="relative">
@@ -216,7 +216,7 @@ export const LoginPage = () => {
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
                                     placeholder="••••••••"
-                                    className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-bold pr-12"
+                                    className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-600 text-sm font-medium pr-12"
                                 />
                                 <button
                                     type="button"
@@ -238,7 +238,7 @@ export const LoginPage = () => {
                                 type="button"
                                 onClick={handleResetPassword}
                                 disabled={loading}
-                                className="text-[10px] font-black text-primary hover:text-cyan-400 transition-colors uppercase tracking-widest disabled:opacity-50"
+                                className="text-[10px] font-semibold text-primary hover:text-cyan-400 transition-colors uppercase tracking-widest disabled:opacity-50"
                             >
                                 ¿Olvidaste tu contraseña?
                             </button>
@@ -247,13 +247,13 @@ export const LoginPage = () => {
 
                     {/* Notification Messages */}
                     {error && (
-                        <div className="text-rose-400 text-center text-xs font-bold bg-rose-500/10 border border-rose-500/20 py-3.5 px-4 rounded-2xl animate-shake">
+                        <div className="text-rose-400 text-center text-xs font-medium bg-rose-500/10 border border-rose-500/20 py-3.5 px-4 rounded-2xl animate-shake">
                             {error}
                         </div>
                     )}
 
                     {successMsg && (
-                        <div className="text-emerald-400 text-center text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 py-3.5 px-4 rounded-2xl">
+                        <div className="text-emerald-400 text-center text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 py-3.5 px-4 rounded-2xl">
                             {successMsg}
                         </div>
                     )}
@@ -262,7 +262,7 @@ export const LoginPage = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full py-5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 text-white rounded-[1.5rem] font-black uppercase tracking-widest shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all hover:scale-[1.01] active:scale-[0.99] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full py-5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 text-white rounded-[1.5rem] font-bold uppercase tracking-widest shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all hover:scale-[1.01] active:scale-[0.99] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? (
                             <div className="animate-spin size-5 border-b-2 border-white rounded-full mx-auto"></div>
@@ -280,7 +280,7 @@ export const LoginPage = () => {
                                 setError('');
                                 setSuccessMsg('');
                             }}
-                            className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-primary transition-colors"
+                            className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 hover:text-primary transition-colors"
                         >
                             {isRegister ? 'Ya tengo cuenta → Iniciar Sesión' : '¿Nuevo negocio? → Regístralo aquí'}
                         </button>

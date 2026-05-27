@@ -65,33 +65,38 @@ export const DesktopSetup = () => {
             setLoading(false);
         }
     };
-
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center p-4">
-            <div className="max-w-2xl w-full">
+        <div className="min-h-screen bg-[#070b19] flex items-center justify-center p-6 relative overflow-hidden font-display select-none">
+            {/* Ambient Background Glowing Blobs */}
+            <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 size-[450px] bg-primary/20 blur-[120px] rounded-full animate-glow-slow z-0"></div>
+            <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 size-[450px] bg-indigo-600/20 blur-[130px] rounded-full animate-glow-slower z-0"></div>
 
-                {/* Header */}
-                <div className="text-center mb-12 space-y-4 animate-in fade-in slide-in-from-top-6 duration-700">
-                    <div className="inline-flex items-center justify-center w-20 h-20 bg-primary rounded-3xl shadow-xl shadow-primary/30 mb-4">
-                        <span className="material-symbols-outlined !text-5xl text-white">rocket_launch</span>
+            <div className="w-full max-w-2xl space-y-8 relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                {/* Branding / Header */}
+                <div className="text-center space-y-3">
+                    <div className="inline-flex size-20 rounded-[2rem] bg-gradient-to-br from-primary via-blue-600 to-indigo-600 p-0.5 shadow-2xl shadow-primary/30 items-center justify-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                        <div className="w-full h-full bg-[#0d1527] flex items-center justify-center rounded-[1.95rem]">
+                            <span className="material-symbols-outlined text-4xl text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-400">
+                                rocket_launch
+                            </span>
+                        </div>
                     </div>
-
-                    <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-none">
-                        Configuración <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-600">Inicial</span>
-                    </h1>
-
-                    <p className="text-lg text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
-                        Configura tu negocio para comenzar a vender
-                    </p>
+                    <div>
+                        <h2 className="text-3xl font-bold font-title text-white uppercase tracking-tight leading-none">
+                            Configuración Inicial
+                        </h2>
+                        <p className="text-slate-500 text-[10px] font-semibold uppercase tracking-[0.25em] mt-1.5">
+                            Configura tu negocio para comenzar a vender
+                        </p>
+                    </div>
                 </div>
 
                 {/* Setup Form */}
-                <form onSubmit={handleActivate} className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-8 md:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200">
-
+                <form onSubmit={handleActivate} className="glass-panel p-10 rounded-[3rem] shadow-3xl space-y-8">
                     {/* Business Name */}
-                    <div className="space-y-3">
-                        <label className="flex items-center gap-2 text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                            <span className="material-symbols-outlined !text-[20px] text-primary">storefront</span>
+                    <div className="space-y-1.5">
+                        <label className="block ml-2 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
                             Nombre del Negocio
                         </label>
                         <input
@@ -99,15 +104,14 @@ export const DesktopSetup = () => {
                             value={businessName}
                             onChange={(e) => setBusinessName(e.target.value)}
                             placeholder="Ej: Barbería El Corte"
-                            className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200 dark:border-slate-700 rounded-2xl text-slate-900 dark:text-white font-bold focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all outline-none"
+                            className="w-full px-5 py-4.5 glass-input rounded-2xl outline-none placeholder:text-slate-650 text-sm font-medium"
                             disabled={loading}
                         />
                     </div>
 
                     {/* Business Type */}
                     <div className="space-y-3">
-                        <label className="flex items-center gap-2 text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                            <span className="material-symbols-outlined !text-[20px] text-primary">category</span>
+                        <label className="block ml-2 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
                             Tipo de Negocio
                         </label>
                         <div className="grid grid-cols-2 gap-4">
@@ -116,38 +120,44 @@ export const DesktopSetup = () => {
                                 { value: 'retail', label: 'Retail / Tienda', icon: 'shopping_cart' },
                                 { value: 'restaurant', label: 'Restaurante', icon: 'restaurant' },
                                 { value: 'barbershop', label: 'Barbería / Salón', icon: 'content_cut' }
-                            ].map((type) => (
-                                <button
-                                    key={type.value}
-                                    type="button"
-                                    onClick={() => setBusinessType(type.value as BusinessType)}
-                                    disabled={loading}
-                                    className={`p-6 rounded-2xl border-2 transition-all ${businessType === type.value
-                                        ? 'border-primary bg-primary/5 shadow-lg shadow-primary/10'
-                                        : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'
+                            ].map((type) => {
+                                const isSelected = businessType === type.value;
+                                return (
+                                    <button
+                                        key={type.value}
+                                        type="button"
+                                        onClick={() => setBusinessType(type.value as BusinessType)}
+                                        disabled={loading}
+                                        className={`p-5 rounded-2xl border transition-all flex flex-col items-center justify-center relative overflow-hidden group ${
+                                            isSelected
+                                                ? 'border-primary bg-primary/10 shadow-lg shadow-primary/15'
+                                                : 'border-white/5 bg-white/[0.02] hover:border-white/10 hover:bg-white/[0.04]'
                                         }`}
-                                >
-                                    <div className={`w-12 h-12 rounded-xl ${businessType === type.value ? 'bg-primary' : 'bg-slate-100 dark:bg-slate-900'
-                                        } flex items-center justify-center mb-3 mx-auto transition-all`}>
-                                        <span className={`material-symbols-outlined !text-2xl ${businessType === type.value ? 'text-white' : 'text-slate-400'
-                                            }`}>
-                                            {type.icon}
-                                        </span>
-                                    </div>
-                                    <p className={`text-sm font-bold ${businessType === type.value ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-400'
+                                    >
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-all ${
+                                            isSelected ? 'bg-primary' : 'bg-white/5 group-hover:bg-white/10'
                                         }`}>
-                                        {type.label}
-                                    </p>
-                                </button>
-                            ))}
+                                            <span className={`material-symbols-outlined text-2xl transition-colors ${
+                                                isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-350'
+                                            }`}>
+                                                {type.icon}
+                                            </span>
+                                        </div>
+                                        <p className={`text-xs font-semibold uppercase tracking-wider transition-colors ${
+                                            isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-300'
+                                        }`}>
+                                            {type.label}
+                                        </p>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
                     {/* Error Message */}
                     {error && (
-                        <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border-2 border-rose-200 dark:border-rose-800 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                            <span className="material-symbols-outlined !text-[24px] text-rose-600 dark:text-rose-400 flex-shrink-0">error</span>
-                            <p className="text-sm font-bold text-rose-900 dark:text-rose-200">{error}</p>
+                        <div className="text-rose-400 text-center text-xs font-medium bg-rose-500/10 border border-rose-500/20 py-3.5 px-4 rounded-2xl animate-shake">
+                            {error}
                         </div>
                     )}
 
@@ -155,41 +165,23 @@ export const DesktopSetup = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full flex items-center justify-center gap-3 px-8 py-5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 text-white rounded-2xl font-black text-lg shadow-xl shadow-primary/30 hover:shadow-primary/40 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        className="w-full py-5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 text-white rounded-[1.5rem] font-bold uppercase tracking-widest shadow-xl shadow-primary/20 hover:shadow-primary/30 transition-all hover:scale-[1.01] active:scale-[0.99] mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? (
-                            <>
-                                <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-                                Configurando...
-                            </>
+                            <div className="animate-spin size-5 border-b-2 border-white rounded-full mx-auto"></div>
                         ) : (
-                            <>
-                                <span className="material-symbols-outlined !text-[28px]">check_circle</span>
-                                Configurar Negocio
-                            </>
+                            'Configurar Negocio'
                         )}
                     </button>
 
                     {/* Info Note */}
-                    <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-center text-slate-500 dark:text-slate-400 font-medium">
-                            <span className="material-symbols-outlined !text-[14px] align-middle mr-1">info</span>
-                            Al configurar, tu negocio se establecerá automáticamente según el tipo seleccionado
+                    <div className="pt-4 border-t border-white/5 text-center">
+                        <p className="text-[9px] text-slate-500 uppercase tracking-widest flex items-center justify-center gap-1">
+                            <span className="material-symbols-outlined !text-[12px]">info</span>
+                            Al configurar, tu negocio se establecerá con módulos según tu tipo de industria
                         </p>
                     </div>
                 </form>
-
-                {/* Back / Sign Out option */}
-                <div className="text-center mt-6 animate-in fade-in duration-1000 delay-300">
-                    <button
-                        type="button"
-                        onClick={() => useAuthStore.getState().signOut()}
-                        className="text-xs font-bold text-slate-500 hover:text-rose-500 transition-colors uppercase tracking-widest"
-                    >
-                        Cerrar Sesión (Cambiar de Cuenta)
-                    </button>
-                </div>
-
             </div>
         </div>
     );

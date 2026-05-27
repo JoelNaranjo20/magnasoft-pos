@@ -38,11 +38,11 @@ export const PrePOSLayout = ({ children }: { children?: React.ReactNode }) => {
     const isActive = (path: string) => location.pathname === path;
 
     return (
-        <div className="h-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-display">
+        <div className="h-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-[#090d1f] text-slate-900 dark:text-slate-100 font-display">
             {/* Top Navigation Bar */}
-            <header className="flex-none flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800/80 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 py-2 shadow-sm z-40">
+            <header className="flex-none flex items-center justify-between border-b border-slate-200/40 dark:border-white/5 bg-white/70 dark:bg-[#0b1227]/70 backdrop-blur-md px-6 py-3.5 z-40">
                 {/* Left: Brand + Nav */}
-                <div className="flex items-center gap-5">
+                <div className="flex items-center gap-6">
                     {/* Brand */}
                     <div className="flex items-center gap-2.5 cursor-default select-none">
                         {logoUrl ? (
@@ -50,34 +50,42 @@ export const PrePOSLayout = ({ children }: { children?: React.ReactNode }) => {
                                 <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
                             </div>
                         ) : (
-                            <div className="size-9 bg-gradient-to-br from-primary to-blue-600 rounded-xl flex items-center justify-center shadow-md text-white">
-                                <span className="material-symbols-outlined !text-[22px]">store</span>
+                            <div className="size-9 bg-gradient-to-br from-primary to-blue-650 rounded-xl flex items-center justify-center shadow-lg shadow-primary/10 text-white">
+                                <span className="material-symbols-outlined !text-[20px]">store</span>
                             </div>
                         )}
                         <div className="flex flex-col leading-none">
-                            <span className="text-sm font-black text-slate-800 dark:text-white tracking-tight">{businessName}</span>
-                            <span className="text-[9px] uppercase tracking-[0.15em] text-slate-400 font-bold">Panel de Gestión</span>
+                            <span className="text-sm font-semibold text-slate-800 dark:text-white tracking-tight">{businessName}</span>
+                            <span className="text-[8px] uppercase tracking-[0.2em] text-slate-400 font-semibold mt-0.5">Panel de Gestión</span>
                         </div>
                     </div>
 
                     {/* Divider */}
-                    <div className="h-7 w-px bg-slate-200 dark:bg-slate-700"></div>
+                    <div className="h-7 w-px bg-slate-200/60 dark:bg-white/10"></div>
 
                     {/* Navigation Links */}
-                    <nav className="flex items-center gap-1">
-                        {navItems.map((item) => (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${isActive(item.path)
-                                        ? 'bg-primary/10 text-primary dark:bg-primary/20'
-                                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200'
+                    <nav className="flex items-center gap-1.5 relative h-full">
+                        {navItems.map((item) => {
+                            const active = isActive(item.path);
+                            return (
+                                <Link
+                                    key={item.path}
+                                    to={item.path}
+                                    className={`relative group flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                                        active
+                                            ? 'text-primary'
+                                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                                     }`}
-                            >
-                                <span className="material-symbols-outlined !text-[18px]">{item.icon}</span>
-                                <span className="hidden lg:inline">{item.label}</span>
-                            </Link>
-                        ))}
+                                >
+                                    <span className="material-symbols-outlined !text-[18px]">{item.icon}</span>
+                                    <span className="hidden lg:inline">{item.label}</span>
+                                    {/* Micro-indicator bar with smooth transition */}
+                                    <span className={`absolute bottom-[-14px] left-3 right-3 h-0.5 bg-primary rounded-full transition-all duration-300 ${
+                                        active ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-0 group-hover:opacity-50 group-hover:scale-x-50'
+                                    }`} />
+                                </Link>
+                            );
+                        })}
                     </nav>
                 </div>
 
@@ -85,7 +93,7 @@ export const PrePOSLayout = ({ children }: { children?: React.ReactNode }) => {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => navigate('/pos')}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wide shadow-md shadow-blue-500/20 transition-all active:scale-95"
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-blue-600 hover:from-primary/95 hover:to-blue-600/95 text-white rounded-xl text-xs font-semibold uppercase tracking-wider shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
                     >
                         <span className="material-symbols-outlined !text-[18px]">point_of_sale</span>
                         <span className="hidden sm:inline">Caja / POS</span>
