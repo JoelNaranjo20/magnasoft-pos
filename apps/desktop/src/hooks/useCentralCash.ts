@@ -90,6 +90,48 @@ export function useCentralCash() {
         }
     };
 
+    const deleteMovement = async (id: string) => {
+        try {
+            console.log('🗑️ Deleting movement:', id);
+            const { error } = await supabase
+                .from('central_cash_movements')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            console.log('✅ Movement deleted successfully');
+            await fetchMovements();
+            return { success: true };
+        } catch (error) {
+            console.error('Error deleting central cash movement:', error);
+            return { success: false, error };
+        }
+    };
+
+    const updateMovement = async (id: string, type: 'income' | 'expense', amount: number, description: string) => {
+        try {
+            console.log('✏️ Updating movement:', id, { type, amount, description });
+            const { error } = await supabase
+                .from('central_cash_movements')
+                .update({
+                    type,
+                    amount,
+                    description
+                })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            console.log('✅ Movement updated successfully');
+            await fetchMovements();
+            return { success: true };
+        } catch (error) {
+            console.error('Error updating central cash movement:', error);
+            return { success: false, error };
+        }
+    };
+
     useEffect(() => {
         fetchMovements();
     }, [businessId]);
@@ -99,6 +141,8 @@ export function useCentralCash() {
         balance,
         loading,
         refresh: fetchMovements,
-        addMovement
+        addMovement,
+        updateMovement,
+        deleteMovement
     };
 }

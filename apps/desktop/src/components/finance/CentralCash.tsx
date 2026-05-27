@@ -3,11 +3,55 @@ import React, { useState, useEffect } from 'react';
 import { useCentralCash } from '../../hooks/useCentralCash';
 
 export const CentralCash = () => {
-    const { movements, balance, loading, addMovement } = useCentralCash();
+    const { movements, balance, loading, addMovement, updateMovement, deleteMovement } = useCentralCash();
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
     const [type, setType] = useState<'income' | 'expense'>('expense');
     const [processing, setProcessing] = useState(false);
+
+    // Edit state
+    const [editingMovement, setEditingMovement] = useState<any>(null);
+    const [editAmount, setEditAmount] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [editType, setEditType] = useState<'income' | 'expense'>('expense');
+
+    const startEdit = (mov: any) => {
+        setEditingMovement(mov);
+        setEditAmount(mov.amount.toString());
+        setEditDescription(mov.description);
+        setEditType(mov.type);
+    };
+
+    const handleUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseFloat(editAmount);
+        if (!val || val <= 0 || !editDescription) {
+            alert('Por favor completa todos los campos correctamente');
+            return;
+        }
+        setProcessing(true);
+        const res = await updateMovement(editingMovement.id, editType, val, editDescription);
+        setProcessing(false);
+        if (res.success) {
+            setEditingMovement(null);
+            alert('Movimiento actualizado exitosamente');
+        } else {
+            alert(`Error: ${res.error?.message || JSON.stringify(res.error)}`);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (confirm('¿Estás seguro de que deseas eliminar este movimiento? Esta acción no se puede deshacer.')) {
+            setProcessing(true);
+            const res = await deleteMovement(id);
+            setProcessing(false);
+            if (res.success) {
+                alert('Movimiento eliminado exitosamente');
+            } else {
+                alert(`Error: ${res.error?.message || JSON.stringify(res.error)}`);
+            }
+        }
+    };
 
     useEffect(() => {
         console.log('🎨 Component received movements update:', movements.length, movements);
@@ -155,16 +199,119 @@ export const CentralCash = () => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="text-right pl-4 flex-shrink-0">
-                                    <p className={`text-xl font-black tabular-nums ${mov.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                        {mov.type === 'income' ? '+' : '-'}${mov.amount.toLocaleString()}
-                                    </p>
+                                <div className="flex items-center gap-4 pl-4 flex-shrink-0">
+                                    <div className="text-right">
+                                        <p className={`text-xl font-black tabular-nums ${mov.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                            {mov.type === 'income' ? '+' : '-'}${mov.amount.toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={() => startEdit(mov)}
+                                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-primary rounded-lg transition-colors"
+                                            title="Editar"
+                                        >
+                                            <span className="material-symbols-outlined !text-lg">edit</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(mov.id)}
+                                            className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-rose-500 rounded-lg transition-colors"
+                                            title="Eliminar"
+                                        >
+                                            <span className="material-symbols-outlined !text-lg">delete</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))
                     )}
                 </div>
             </div>
+
+            {editingMovement && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col p-6 border border-slate-100 dark:border-slate-700">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-primary">edit</span>
+                                Editar Movimiento
+                            </h3>
+                            <button
+                                onClick={() => setEditingMovement(null)}
+                                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUpdate} className="space-y-4">
+                            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditType('expense')}
+                                    className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${editType === 'expense' ? 'bg-white dark:bg-slate-800 text-rose-500 shadow-sm' : 'text-slate-400'}`}
+                                >
+                                    Egreso
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setEditType('income')}
+                                    className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${editType === 'income' ? 'bg-white dark:bg-slate-800 text-emerald-500 shadow-sm' : 'text-slate-400'}`}
+                                >
+                                    Ingreso
+                                </button>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Monto</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">$</span>
+                                    <input
+                                        type="number"
+                                        value={editAmount}
+                                        onChange={(e) => setEditAmount(e.target.value)}
+                                        placeholder="0.00"
+                                        className="w-full pl-8 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-primary font-bold text-slate-900 dark:text-white"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Concepto / Descripción</label>
+                                <textarea
+                                    value={editDescription}
+                                    onChange={(e) => setEditDescription(e.target.value)}
+                                    placeholder="Ej: Pago de arriendo, Nómina..."
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-primary font-bold text-slate-900 dark:text-white resize-none h-[100px]"
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingMovement(null)}
+                                    className="flex-1 py-3 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={processing}
+                                    className="flex-1 py-3 bg-primary hover:bg-primary-dark text-white rounded-xl text-xs font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                                >
+                                    {processing ? (
+                                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                                    ) : (
+                                        'Guardar'
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

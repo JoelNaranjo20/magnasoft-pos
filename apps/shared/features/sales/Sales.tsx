@@ -64,6 +64,8 @@ export const SalesPage = () => {
     const [movements, setMovements] = useState<any[]>([]);
     const [debtPayments, setDebtPayments] = useState<any[]>([]);
     const [sessionOpeningBalance, setSessionOpeningBalance] = useState(0);
+    const [expandedReconRows, setExpandedReconRows] = useState<Record<string, boolean>>({});
+    const [expandedServices, setExpandedServices] = useState<Record<string, boolean>>({});
 
     // Column Configuration based on Business Type
     const columnConfig = useMemo(() => {
@@ -321,9 +323,13 @@ export const SalesPage = () => {
             sales_cash: 0,
             sales_digital: 0,
             sales_credit: 0,
+            tips_cash: 0,
+            tips_digital: 0,
             abonos_cash: 0,
             abonos_digital: 0,
             expenses: 0,
+            liquidaciones: 0,
+            uso_interno: 0,
             promociones: 0,
             rebajas: 0,
             canjes_net_cash: 0,
@@ -353,15 +359,35 @@ export const SalesPage = () => {
             // Ensure rebajas doesn't go below 0 due to floating point inaccuracies
             if (totals.rebajas < 0) totals.rebajas = 0;
 
+            const tip = sale.metadata?.tip_amount || 0;
+
             if (sale.payment_method === 'mixed') {
                 // Use precise sub-amounts for mixed payments
-                totals.sales_cash += sale.cash_amount || 0;
-                totals.sales_digital += (sale.card_amount || 0) + (sale.transfer_amount || 0);
-                totals.sales_credit += sale.credit_amount || 0;
+                let cashPart = sale.cash_amount || 0;
+                let digitalPart = (sale.card_amount || 0) + (sale.transfer_amount || 0);
+                let creditPart = sale.credit_amount || 0;
+                
+                if (tip > 0) {
+                    if (cashPart >= tip) {
+                        cashPart -= tip;
+                        totals.tips_cash += tip;
+                    } else if (digitalPart >= tip) {
+                        digitalPart -= tip;
+                        totals.tips_digital += tip;
+                    } else {
+                        totals.tips_cash += tip;
+                    }
+                }
+                
+                totals.sales_cash += cashPart;
+                totals.sales_digital += digitalPart;
+                totals.sales_credit += creditPart;
             } else if (sale.payment_method === 'cash') {
                 totals.sales_cash += tot;
+                totals.tips_cash += tip;
             } else if (sale.payment_method === 'card' || sale.payment_method === 'transfer') {
                 totals.sales_digital += tot;
+                totals.tips_digital += tip;
             } else if (sale.payment_method === 'credit') {
                 totals.sales_credit += tot;
             }
@@ -374,7 +400,13 @@ export const SalesPage = () => {
             
             if (m.type === 'expense') {
                 if (!isCanje) {
-                    totals.expenses += m.amount || 0;
+                    if (desc.includes('pago de comisiones')) {
+                        totals.liquidaciones += m.amount || 0;
+                    } else if (desc.startsWith('[uso interno]')) {
+                        totals.uso_interno += m.amount || 0;
+                    } else {
+                        totals.expenses += m.amount || 0;
+                    }
                 } else {
                     // Canje Out (Usually Cash)
                     if (m.payment_method === 'cash' || !m.payment_method) {
@@ -420,35 +452,167 @@ export const SalesPage = () => {
         return totals;
     }, [filteredSales, movements, debtPayments]);
 
+    // ── Desglose detallado para cada fila de conciliación ──────────────
+    const reconciliationDetails = useMemo(() => {
+        const d: Record<string, Array<{label: string; sub?: string; amount: number; time?: string}>> = {
+            sales_cash: [], sales_digital: [], sales_credit: [],
+            tips_cash: [], tips_digital: [],
+            abonos_cash: [], abonos_digital: [],
+            expenses: [], liquidaciones: [], uso_interno: [],
+            rebajas: [], promociones: [],
+        };
+
+        filteredSales.forEach(sale => {
+            const rid = sale.id ? sale.id.slice(-6).toUpperCase() : '—';
+            const cname = (sale as any).customer?.name || 'Venta Rápida';
+            const t = sale.created_at ? new Date(sale.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+            const tot = sale.total_amount || 0;
+            const tip = (sale as any).metadata?.tip_amount || 0;
+
+            // Discount breakdown
+            let totalDisc = (sale as any).total_discount || 0;
+            let promos = 0;
+            (sale as any).items?.forEach((item: any) => {
+                if (item.unit_price === 0) {
+                    promos += ((item.service?.price || item.product?.price || 0) * (item.quantity || 1));
+                }
+            });
+            const manualDisc = Math.max(0, totalDisc - promos);
+            if (manualDisc > 0) d.rebajas.push({ label: `#${rid}`, sub: cname, amount: manualDisc, time: t });
+            if (promos > 0) d.promociones.push({ label: `#${rid}`, sub: cname, amount: promos, time: t });
+
+            if (sale.payment_method === 'mixed') {
+                let cash = (sale as any).cash_amount || 0;
+                let digital = ((sale as any).card_amount || 0) + ((sale as any).transfer_amount || 0);
+                const credit = (sale as any).credit_amount || 0;
+                if (tip > 0) {
+                    if (cash >= tip) { cash -= tip; d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t }); }
+                    else if (digital >= tip) { digital -= tip; d.tips_digital.push({ label: `#${rid}`, sub: cname, amount: tip, time: t }); }
+                    else { d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t }); }
+                }
+                if (cash > 0) d.sales_cash.push({ label: `#${rid}`, sub: cname, amount: cash, time: t });
+                if (digital > 0) d.sales_digital.push({ label: `#${rid}`, sub: cname, amount: digital, time: t });
+                if (credit > 0) d.sales_credit.push({ label: `#${rid}`, sub: cname, amount: credit, time: t });
+            } else if (sale.payment_method === 'cash') {
+                d.sales_cash.push({ label: `#${rid}`, sub: cname, amount: tot, time: t });
+                if (tip > 0) d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+            } else if (sale.payment_method === 'card' || sale.payment_method === 'transfer') {
+                d.sales_digital.push({ label: `#${rid}`, sub: cname, amount: tot, time: t });
+                if (tip > 0) d.tips_digital.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+            } else if (sale.payment_method === 'credit') {
+                d.sales_credit.push({ label: `#${rid}`, sub: cname, amount: tot, time: t });
+            }
+        });
+
+        movements.forEach(m => {
+            const desc = (m.description || '').toLowerCase();
+            const isCanje = desc.startsWith('[canje]');
+            const t = m.created_at ? new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+            if (m.type === 'expense' && !isCanje) {
+                if (desc.includes('pago de comisiones')) {
+                    d.liquidaciones.push({ label: m.description || 'Liquidación', amount: m.amount || 0, time: t });
+                } else if (desc.startsWith('[uso interno]')) {
+                    d.uso_interno.push({ label: (m.description || '').replace(/^\[Uso Interno\]\s*/i, ''), amount: m.amount || 0, time: t });
+                } else {
+                    d.expenses.push({ label: m.description || 'Salida', amount: m.amount || 0, time: t });
+                }
+            }
+        });
+
+        debtPayments.forEach((dp: any) => {
+            const t = dp.created_at ? new Date(dp.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+            const client = dp.sale?.customer?.name || dp.sale?.customer_name || 'Cliente';
+            if (dp.payment_method === 'cash') {
+                d.abonos_cash.push({ label: client, amount: dp.amount || 0, time: t });
+            } else {
+                d.abonos_digital.push({ label: client, amount: dp.amount || 0, time: t });
+            }
+        });
+
+        return d;
+    }, [filteredSales, movements, debtPayments]);
+
+    const toggleReconRow = (key: string) => setExpandedReconRows(prev => ({ ...prev, [key]: !prev[key] }));
+
+    const renderReconRow = (rKey: string, label: string, amount: number, dotColor: string, valueColor: string, sign: string, hoverBg: string, items: Array<{label: string; sub?: string; amount: number; time?: string}>) => {
+        const isOpen = expandedReconRows[rKey] || false;
+        const has = items.length > 0;
+        return (
+            <div key={rKey}>
+                <div onClick={has ? () => toggleReconRow(rKey) : undefined}
+                    className={`flex items-center justify-between py-1.5 px-2 rounded-lg ${hoverBg} transition-colors ${has ? 'cursor-pointer group' : ''}`}>
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5 select-none">
+                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`}></span>
+                        {label}
+                        {has && <span className={`material-symbols-outlined !text-[14px] text-slate-400 dark:text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>keyboard_arrow_down</span>}
+                    </span>
+                    <span className={`text-xs font-black ${valueColor} tabular-nums`}>{sign}${amount.toLocaleString()}</span>
+                </div>
+                {isOpen && has && (
+                    <div className={`pl-4 pr-2 py-1 space-y-0 rounded-lg border border-dashed max-h-[150px] overflow-y-auto custom-scrollbar my-1 animate-in slide-in-from-top-1 duration-150 ${
+                        sign === '+' ? 'bg-emerald-50/20 dark:bg-emerald-900/5 border-emerald-100 dark:border-emerald-900/20' : 'bg-rose-50/20 dark:bg-rose-900/5 border-rose-100 dark:border-rose-900/20'
+                    }`}>
+                        {items.map((item, i) => (
+                            <div key={i} className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 py-1 border-b border-slate-100/50 dark:border-slate-800/30 last:border-b-0">
+                                <div className="pr-2 truncate flex items-center gap-1.5">
+                                    <span className="font-mono text-slate-400">{item.label}</span>
+                                    {item.sub && <span className="font-bold text-slate-700 dark:text-slate-300 truncate max-w-[100px]">{item.sub}</span>}
+                                    {item.time && <span className="text-[9px] text-slate-400">({item.time})</span>}
+                                </div>
+                                <span className={`font-black tabular-nums whitespace-nowrap ${
+                                    sign === '+' ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
+                                }`}>{sign}${item.amount.toLocaleString()}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     // ── Desglose por servicio/producto (como el cuaderno) ─────────────
     const salesByService = useMemo(() => {
-        const map: Record<string, number> = {};
+        const map: Record<string, { total: number; details: any[] }> = {};
         filteredSales.forEach(sale => {
+            const dateStr = sale.created_at ? new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            const customerName = sale.customer?.name || 'Venta Rápida';
+            const receiptId = sale.id ? `#${sale.id.slice(-6).toUpperCase()}` : '';
+
             sale.items?.forEach((item: any) => {
                 const name = (item.name || 'Otro').trim();
                 const qty = item.quantity || 1;
-                let amount = item.total_price || (item.unit_price * qty) || 0;
+                
+                // Calculate gross (real/original) amount using original_price
+                const originalUnitPrice = Number(item.original_price || item.unit_price || item.price || 0);
+                const amount = originalUnitPrice * qty;
 
-                // Si fue redimido por fidelidad (precio 0), usar el precio original
-                if (item.unit_price === 0) {
-                    const originalPrice = item.service?.price || item.product?.price || 0;
-                    amount = originalPrice * qty;
+                if (!map[name]) {
+                    map[name] = { total: 0, details: [] };
                 }
 
-                map[name] = (map[name] || 0) + amount;
+                map[name].total += amount;
+                map[name].details.push({
+                    receiptId,
+                    customerName,
+                    qty,
+                    amount,
+                    dateStr,
+                    isPromo: item.unit_price === 0
+                });
             });
         });
-        // Ordenar de mayor a menor
+
+        // Ordenar de mayor a menor por total
         return Object.entries(map)
-            .sort(([, a], [, b]) => b - a)
-            .map(([name, total]) => ({ name, total }));
+            .sort(([, a], [, b]) => b.total - a.total)
+            .map(([name, data]) => ({ name, total: data.total, details: data.details }));
     }, [filteredSales]);
 
 
 
     const cashFlowTotal = useMemo(() => {
         const base = sessionOpeningBalance;
-        return base + (reconciliation.sales_cash + reconciliation.abonos_cash + reconciliation.canjes_net_cash) - reconciliation.expenses;
+        return base + (reconciliation.sales_cash + reconciliation.tips_cash + reconciliation.abonos_cash + reconciliation.canjes_net_cash) - reconciliation.expenses - reconciliation.liquidaciones;
     }, [reconciliation, sessionOpeningBalance]);
 
     // Pagination Logic
@@ -624,12 +788,52 @@ export const SalesPage = () => {
                                     {salesByService.length === 0 ? (
                                         <p className="text-xs text-slate-400 italic py-6 text-center">Sin ventas en este turno</p>
                                     ) : (
-                                        salesByService.map((item, i) => (
-                                            <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                                                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate mr-3 capitalize">{item.name}</span>
-                                                <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums whitespace-nowrap">= ${item.total.toLocaleString()}</span>
-                                            </div>
-                                        ))
+                                        salesByService.map((item, i) => {
+                                            const isExpanded = !!expandedServices[item.name];
+                                            return (
+                                                <div key={i} className="border-b border-slate-100 dark:border-slate-800/40 last:border-b-0 py-1">
+                                                    <div 
+                                                        onClick={() => {
+                                                            setExpandedServices(prev => ({
+                                                                ...prev,
+                                                                [item.name]: !prev[item.name]
+                                                            }));
+                                                        }}
+                                                        className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer select-none"
+                                                    >
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 capitalize">
+                                                            <span className={`material-symbols-outlined !text-[16px] text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                                                                keyboard_arrow_down
+                                                            </span>
+                                                            {item.name}
+                                                        </span>
+                                                        <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums whitespace-nowrap">
+                                                            = ${item.total.toLocaleString()}
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    {isExpanded && (
+                                                        <div className="pl-6 pr-2 py-1.5 space-y-1 bg-slate-50/50 dark:bg-slate-900/10 rounded-lg border border-dashed border-slate-200 dark:border-slate-800/60 max-h-[180px] overflow-y-auto custom-scrollbar my-1 animate-in slide-in-from-top-1 duration-150">
+                                                            {item.details.map((detail, dIdx) => (
+                                                                <div key={dIdx} className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 py-1 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+                                                                    <div className="flex items-center gap-2 truncate mr-4">
+                                                                        <span className="font-mono text-slate-400">{detail.receiptId}</span>
+                                                                        <span className="font-bold text-slate-700 dark:text-slate-300 truncate max-w-[120px]">{detail.customerName}</span>
+                                                                        <span className="text-slate-400 text-[9px]">({detail.dateStr})</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 font-black tabular-nums">
+                                                                        <span className="text-slate-400">x{detail.qty}</span>
+                                                                        <span className={detail.isPromo ? 'text-purple-600 dark:text-purple-400' : 'text-slate-800 dark:text-slate-200'}>
+                                                                            ${detail.amount.toLocaleString()}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
                                     )}
                                 </div>
 
@@ -638,7 +842,7 @@ export const SalesPage = () => {
                                     <div className="mt-3 pt-3 border-t-2 border-slate-900 dark:border-white px-2 flex items-center justify-between">
                                         <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Venta Total</span>
                                         <span className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
-                                            ${(reconciliation.sales_cash + reconciliation.sales_digital + reconciliation.sales_credit + reconciliation.promociones + reconciliation.rebajas).toLocaleString()}
+                                            ${salesByService.reduce((sum, s) => sum + s.total, 0).toLocaleString()}
                                         </span>
                                     </div>
                                 )}
@@ -656,89 +860,39 @@ export const SalesPage = () => {
                                     <div className="px-2 py-1">
                                         <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">+ Entradas</span>
                                     </div>
-                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
-                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                            Ventas Efectivo
+                                    {renderReconRow('sales_cash', 'Ventas Efectivo', reconciliation.sales_cash, 'bg-emerald-500', 'text-emerald-600 dark:text-emerald-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.sales_cash)}
+                                    {renderReconRow('sales_digital', 'Transferencias / Tarjeta', reconciliation.sales_digital, 'bg-indigo-500', 'text-indigo-600 dark:text-indigo-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.sales_digital)}
+                                    {renderReconRow('abonos_cash', 'Abonos en Efectivo', reconciliation.abonos_cash, 'bg-sky-500', 'text-sky-600 dark:text-sky-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.abonos_cash)}
+                                    {renderReconRow('abonos_digital', 'Abonos en Transferencia', reconciliation.abonos_digital, 'bg-blue-500', 'text-blue-600 dark:text-blue-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.abonos_digital)}
+                                    {reconciliation.tips_cash > 0 && renderReconRow('tips_cash', 'Propinas (Efectivo)', reconciliation.tips_cash, 'bg-amber-500', 'text-emerald-600 dark:text-emerald-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.tips_cash)}
+                                    {reconciliation.tips_digital > 0 && renderReconRow('tips_digital', 'Propinas (Digital)', reconciliation.tips_digital, 'bg-orange-500', 'text-indigo-600 dark:text-indigo-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.tips_digital)}
+
+                                    {/* Subtotal Entradas (Efectivo) */}
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-emerald-50/30 dark:bg-emerald-950/10 mt-2 border-t border-emerald-100 dark:border-emerald-900/30 font-bold">
+                                        <span className="text-xs text-emerald-700 dark:text-emerald-400">Total Entradas (Efectivo)</span>
+                                        <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 tabular-nums">
+                                            +${(reconciliation.sales_cash + reconciliation.tips_cash + reconciliation.abonos_cash + reconciliation.canjes_net_cash).toLocaleString()}
                                         </span>
-                                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 tabular-nums">+${reconciliation.sales_cash.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
-                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                                            Transferencias / Tarjeta
-                                        </span>
-                                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 tabular-nums">+${reconciliation.sales_digital.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
-                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-                                            Abonos en Efectivo
-                                        </span>
-                                        <span className="text-xs font-black text-sky-600 dark:text-sky-400 tabular-nums">+${reconciliation.abonos_cash.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 transition-colors">
-                                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                            Abonos en Transferencia
-                                        </span>
-                                        <span className="text-xs font-black text-blue-600 dark:text-blue-400 tabular-nums">+${reconciliation.abonos_digital.toLocaleString()}</span>
                                     </div>
 
                                     {/* ── SALIDAS (−) ── */}
                                     <div className="px-2 py-1 mt-2">
                                         <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">− Salidas</span>
                                     </div>
-                                    {reconciliation.sales_credit > 0 && (
-                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
-                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                                                Venta a Crédito
-                                            </span>
-                                            <span className="text-xs font-black text-orange-600 dark:text-orange-400 tabular-nums">−${reconciliation.sales_credit.toLocaleString()}</span>
-                                        </div>
-                                    )}
-                                    {(() => {
-                                        const liquidaciones = movements
-                                            .filter(m => m.type === 'expense' && (m.description || '').toLowerCase().includes('pago de comisiones'))
-                                            .reduce((sum, m) => sum + (m.amount || 0), 0);
-                                        return liquidaciones > 0 ? (
-                                            <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
-                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                    Liquidación Pagada
-                                                </span>
-                                                <span className="text-xs font-black text-amber-600 dark:text-amber-400 tabular-nums">−${liquidaciones.toLocaleString()}</span>
-                                            </div>
-                                        ) : null;
-                                    })()}
-                                    {reconciliation.expenses > 0 && (
-                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
-                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                                                Salidas de Caja
-                                            </span>
-                                            <span className="text-xs font-black text-rose-600 dark:text-rose-400 tabular-nums">−${reconciliation.expenses.toLocaleString()}</span>
-                                        </div>
-                                    )}
-                                    {reconciliation.rebajas > 0 && (
-                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
-                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                Descuentos
-                                            </span>
-                                            <span className="text-xs font-black text-amber-600 dark:text-amber-400 tabular-nums">−${reconciliation.rebajas.toLocaleString()}</span>
-                                        </div>
-                                    )}
-                                    {reconciliation.promociones > 0 && (
-                                        <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-rose-50/50 dark:hover:bg-rose-900/10 transition-colors">
-                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                                                Promociones (Fidelidad)
-                                            </span>
-                                            <span className="text-xs font-black text-purple-600 dark:text-purple-400 tabular-nums">−${reconciliation.promociones.toLocaleString()}</span>
-                                        </div>
-                                    )}
+                                    {reconciliation.sales_credit > 0 && renderReconRow('sales_credit', 'Venta a Crédito', reconciliation.sales_credit, 'bg-orange-500', 'text-orange-600 dark:text-orange-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.sales_credit)}
+                                    {reconciliation.liquidaciones > 0 && renderReconRow('liquidaciones', 'Pago Comisiones / Propinas', reconciliation.liquidaciones, 'bg-amber-500', 'text-rose-600 dark:text-rose-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.liquidaciones)}
+                                    {reconciliation.expenses > 0 && renderReconRow('expenses', 'Salidas de Caja', reconciliation.expenses, 'bg-rose-500', 'text-rose-600 dark:text-rose-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.expenses)}
+                                    {reconciliation.uso_interno > 0 && renderReconRow('uso_interno', 'Uso Interno', reconciliation.uso_interno, 'bg-orange-500', 'text-orange-600 dark:text-orange-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.uso_interno)}
+                                    {reconciliation.rebajas > 0 && renderReconRow('rebajas', 'Descuentos', reconciliation.rebajas, 'bg-amber-500', 'text-amber-600 dark:text-amber-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.rebajas)}
+                                    {reconciliation.promociones > 0 && renderReconRow('promociones', 'Promociones (Fidelidad)', reconciliation.promociones, 'bg-purple-500', 'text-purple-600 dark:text-purple-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.promociones)}
+
+                                    {/* Subtotal Salidas (Efectivo) */}
+                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-rose-50/30 dark:bg-rose-950/10 mt-2 border-t border-rose-100 dark:border-rose-900/30 font-bold">
+                                        <span className="text-xs text-rose-700 dark:text-rose-400">Total Salidas (Efectivo)</span>
+                                        <span className="text-xs font-black text-rose-700 dark:text-rose-400 tabular-nums">
+                                            −${(reconciliation.expenses + reconciliation.liquidaciones).toLocaleString()}
+                                        </span>
+                                    </div>
                                 </div>
 
                                 {/* ── RESULTADO ── */}

@@ -319,6 +319,8 @@ export const SessionHistory = () => {
                                                 const start = sessionDetails?.session?.opening_balance || 0;
                                                 const cashSales = sessionDetails?.sales?.filter(s => s.payment_method === 'cash').reduce((sum, s) => sum + s.total_amount, 0) || 0;
                                                 const movementBalance = (sessionDetails?.movements || []).reduce((acc, mov) => {
+                                                    const isCash = mov.payment_method === 'cash' || !mov.payment_method;
+                                                    if (!isCash) return acc;
                                                     return mov.type === 'income' ? acc + mov.amount : acc - mov.amount;
                                                 }, 0);
                                                 return (start + cashSales + movementBalance).toLocaleString();

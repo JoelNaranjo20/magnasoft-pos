@@ -6,10 +6,10 @@ import { useBusinessStore } from '@shared/store/useBusinessStore';
 // CONFIGURACIÓN DEL MODAL DE NOVEDADES
 // ==========================================
 // 1. Cambia esto a la versión actual para mostrar el modal de nuevo a todos.
-const CURRENT_VERSION = '1.0.27';
+const CURRENT_VERSION = '1.0.38';
 
 // 2. Apaga (false) o enciende (true) el modal por completo.
-const IS_MODAL_ACTIVE = false;
+const IS_MODAL_ACTIVE = true;
 
 // 3. Define a qué tipo de negocios quieres que les salga este modal.
 // Si quieres que le salga a TODOS sin importar el tipo, déjalo como un array con un asterisco: ['*']
@@ -38,21 +38,21 @@ export const WhatsNewModal = () => {
             icon: BookOpen,
             color: 'text-emerald-500',
             bg: 'bg-emerald-100 dark:bg-emerald-900/30',
-            title: 'Fiados y Deudas Manuales',
-            desc: 'Ahora puedes registrar fiados a clientes de forma manual y rápida directamente desde el panel de Cartera.'
+            title: 'Desglose en Conciliación',
+            desc: 'Ahora puedes expandir cada fila en el resumen de caja para ver el detalle exacto de cada transacción (Ventas, Abonos, Salidas, etc).'
         },
         {
             icon: Calculator,
             color: 'text-indigo-500',
             bg: 'bg-indigo-100 dark:bg-indigo-900/30',
-            title: 'Comisiones Fijas por Cantidad',
-            desc: 'Al vender varias unidades de un producto, la comisión fija para tu trabajador se multiplica automáticamente por la cantidad vendida.'
+            title: 'Uso Interno',
+            desc: 'Los productos de uso interno ya no se registran como salida de efectivo en la caja, sino como valor de producto usado.'
         },
         {
             icon: Tag,
             color: 'text-purple-500',
             bg: 'bg-purple-100 dark:bg-purple-900/30',
-            title: 'Descuento Global en el Carrito',
+            title: 'Descuentos Globales Seguros',
             desc: 'Aplica un descuento sobre el total de la venta o modifica el precio final usando un PIN de seguridad. ¡Se acabaron los cálculos por ítem!'
         },
         {
@@ -60,7 +60,7 @@ export const WhatsNewModal = () => {
             color: 'text-blue-500',
             bg: 'bg-blue-100 dark:bg-blue-900/30',
             title: 'Reportes Financieros Reales',
-            desc: 'Optimizamos el Dashboard y Estado de Caja. Los canjes (cambio Efectivo a Digital) ya no sumarán como "Gastos", evitando cruces confusos.'
+            desc: 'Mejoramos la conciliación para que las promociones y descuentos se resten correctamente y reflejen el valor real de tu negocio.'
         }
     ];
 

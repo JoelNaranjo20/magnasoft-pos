@@ -42,7 +42,7 @@ export const CloseSessionModal = () => {
             // 1. Get cash and mixed sales for this session
             const { data: cashSales } = await (supabase as any)
                 .from('sales')
-                .select('total_amount, cash_amount, payment_method')
+                .select('total_amount, cash_amount, payment_method, metadata')
                 .eq('session_id', cashSession.id)
                 .eq('business_id', businessId)
                 .eq('status', 'completed')
@@ -50,7 +50,24 @@ export const CloseSessionModal = () => {
 
             const cashSalesTotal = cashSales?.reduce((acc: number, sale: any) => {
                 if (sale.payment_method === 'mixed') return acc + Number(sale.cash_amount || 0);
-                return acc + Number(sale.total_amount || 0);
+                const tip = sale.metadata?.tip_amount || 0;
+                return acc + Math.max(Number(sale.cash_amount || 0), Number(sale.total_amount || 0) + Number(tip));
+            }, 0) || 0;
+
+            // 1.b Get digital and mixed sales
+            const { data: digitalSales } = await (supabase as any)
+                .from('sales')
+                .select('total_amount, transfer_amount, card_amount, payment_method, metadata')
+                .eq('session_id', cashSession.id)
+                .eq('business_id', businessId)
+                .eq('status', 'completed')
+                .in('payment_method', ['transfer', 'card', 'mixed']);
+
+            const digitalSalesTotal = digitalSales?.reduce((acc: number, sale: any) => {
+                if (sale.payment_method === 'mixed') return acc + Number(sale.transfer_amount || 0) + Number(sale.card_amount || 0);
+                const tip = sale.metadata?.tip_amount || 0;
+                const amt = sale.payment_method === 'transfer' ? Number(sale.transfer_amount || 0) : Number(sale.card_amount || 0);
+                return acc + Math.max(amt, Number(sale.total_amount || 0) + Number(tip));
             }, 0) || 0;
 
             // 2. Get all movements (cash, transfer, card)
@@ -87,10 +104,15 @@ export const CloseSessionModal = () => {
 
             let cashAbonosTotal = 0;
             let digitalAbonosTotal = 0;
+            let digitalAbonosCount = 0;
             debtPayments?.forEach((dp: any) => {
                 const amt = Number(dp.amount);
-                if (dp.payment_method === 'cash') cashAbonosTotal += amt;
-                else digitalAbonosTotal += amt;
+                if (dp.payment_method === 'cash') {
+                    cashAbonosTotal += amt;
+                } else {
+                    digitalAbonosTotal += amt;
+                    digitalAbonosCount++;
+                }
             });
 
             // Expected Cash: Base + Cash Sales + Cash Movements + Cash Abonos
@@ -99,7 +121,7 @@ export const CloseSessionModal = () => {
             // DIGITAL SISTEMA = Digital Sales + Digital Abonos + Digital Movements (Favors)
             const totalDigitalSistema = digitalSalesTotal + digitalAbonosTotal + digitalMovementBalance;
             setExpectedDigitalTotal(totalDigitalSistema);
-            setDigitalCount((digitalSales?.length || 0) + (digitalAbonos?.length || 0) + (movements?.filter(m => m.payment_method === 'transfer' || m.payment_method === 'card').length || 0));
+            setDigitalCount((digitalSales?.length || 0) + digitalAbonosCount + (movements?.filter(m => m.payment_method === 'transfer' || m.payment_method === 'card').length || 0));
             setManualDigitalAmount(totalDigitalSistema); // Default to expected
 
             // 5. Get commission data for this session

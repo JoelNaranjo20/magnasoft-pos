@@ -7,6 +7,7 @@ interface Product {
     id: string;
     name: string;
     stock: number;
+    price?: number;
     cost_price?: number;
 }
 
@@ -37,8 +38,8 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
 
     const qty = parseInt(quantity) || 0;
     const finalReason = reason === 'Otro' ? customReason : reason;
-    const [registerExpense, setRegisterExpense] = useState(false);
-    const cost = (product.cost_price || 0) * qty;
+    const [registerExpense, setRegisterExpense] = useState(true);
+    const cost = (product.price || product.cost_price || 0) * qty;
 
     const handleConfirm = async () => {
         if (qty <= 0) { alert('Ingresa una cantidad válida.'); return; }
@@ -56,12 +57,15 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
 
             // 2. Optionally register as cash expense in the current session
             if (registerExpense && cost > 0) {
-                const sessionId = useSessionStore.getState().currentSession?.id;
+                const cashSession = useSessionStore.getState().cashSession;
+                const businessId = (await import('@shared/store/useBusinessStore')).useBusinessStore.getState().id;
                 const { error: expError } = await supabase.from('cash_movements').insert({
-                    session_id: sessionId || null,
+                    session_id: cashSession?.id || null,
+                    business_id: businessId,
                     type: 'expense',
                     amount: cost,
-                    description: `Uso Interno – ${product.name} (x${qty}): ${finalReason}`,
+                    description: `[USO INTERNO] ${product.name} (x${qty}): ${finalReason}`,
+                    payment_method: 'none',
                 });
                 if (expError) console.error('Error registrando egreso:', expError);
             }
@@ -164,7 +168,7 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
                         </div>
 
                         {/* Expense toggle */}
-                        {(product.cost_price || 0) > 0 && (
+                        {(product.price || product.cost_price || 0) > 0 && (
                             <div
                                 onClick={() => setRegisterExpense(v => !v)}
                                 className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${registerExpense
@@ -175,7 +179,7 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
                                 <div>
                                     <p className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider">Registrar como gasto</p>
                                     <p className="text-[10px] text-slate-400 mt-0.5">
-                                        Costo estimado: <span className="font-bold">${cost.toLocaleString()}</span> (${(product.cost_price || 0).toLocaleString()} × {qty})
+                                        Precio actual: <span className="font-bold">${cost.toLocaleString()}</span> (${(product.price || product.cost_price || 0).toLocaleString()} × {qty})
                                     </p>
                                 </div>
                                 <div className={`relative w-10 h-6 rounded-full transition-colors ${registerExpense ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-600'}`}>

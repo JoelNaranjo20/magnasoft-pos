@@ -411,6 +411,19 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
 
             // 1. Insert Sale
             const businessId = useBusinessStore.getState().id;
+
+            // Allocate tips for mixed payments
+            let mixedCash = parseFloat(splitAmounts.cash) || 0;
+            let mixedTransfer = parseFloat(splitAmounts.transfer) || 0;
+            let mixedCard = parseFloat(splitAmounts.card) || 0;
+            
+            if (method === 'mixed' && numericTip > 0) {
+                if (mixedCash > 0) mixedCash += numericTip;
+                else if (mixedTransfer > 0) mixedTransfer += numericTip;
+                else if (mixedCard > 0) mixedCard += numericTip;
+                else mixedCash += numericTip;
+            }
+
             const salePayload = {
                 session_id: cashSession.id,
                 business_id: businessId,
@@ -420,9 +433,9 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                 total_amount: total,
                 total_discount: items.reduce((sum, i) => sum + (i.originalPrice ? (i.originalPrice - i.price) * i.quantity : 0), 0),
                 payment_method: method,
-                cash_amount: method === 'cash' ? total : method === 'mixed' ? (parseFloat(splitAmounts.cash) || 0) : 0,
-                transfer_amount: method === 'transfer' ? (parseFloat(transferAmount) || total) : method === 'mixed' ? (parseFloat(splitAmounts.transfer) || 0) : 0,
-                card_amount: method === 'card' ? (parseFloat(cardAmount) || total) : method === 'mixed' ? (parseFloat(splitAmounts.card) || 0) : 0,
+                cash_amount: method === 'cash' ? (total + numericTip) : method === 'mixed' ? mixedCash : 0,
+                transfer_amount: method === 'transfer' ? Math.max(parseFloat(transferAmount) || 0, total + numericTip) : method === 'mixed' ? mixedTransfer : 0,
+                card_amount: method === 'card' ? Math.max(parseFloat(cardAmount) || 0, total + numericTip) : method === 'mixed' ? mixedCard : 0,
                 credit_amount: method === 'credit' ? total : method === 'mixed' ? (parseFloat(splitAmounts.credit) || 0) : 0,
                 status: 'completed',
                 metadata: {

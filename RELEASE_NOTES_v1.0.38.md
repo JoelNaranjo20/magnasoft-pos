@@ -8,3 +8,8 @@
 - DiferenciaciÃ³n de Abonos (Efectivo vs Transferencia) en el Resumen del Turno
 - SesiÃ³n persistente (no pide login al reiniciar la app)
 - PIN de seguridad para modificar precios en POS con toggle en configuraciÃ³n
+
+## Mejoras Recientes
+- **Desglose en Conciliación**: Ahora puedes expandir cada fila en el resumen de caja para ver el detalle exacto de cada transacción (Ventas, Abonos, Salidas, etc).
+- **Uso Interno**: Los productos de uso interno ya no se registran como salida de efectivo en la caja, sino como valor de producto usado.
+- **Reportes Financieros Reales**: Mejoramos la conciliación para que las promociones y descuentos se resten correctamente y reflejen el valor real de tu negocio en la liquidación y resumen de turnos.
