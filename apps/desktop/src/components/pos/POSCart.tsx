@@ -80,6 +80,7 @@ export const POSCart = () => {
     } = useCartStore();
     const { business, profile } = useAuthStore();
     const isAdmin = useAuthStore(selectIsAdmin);
+    const protectedModules = useBusinessStore(state => state.protectedModules);
     const isRestaurant = business?.business_type === 'restaurant';
     // Module-based feature flags — replaces hardcoded business_type checks
     const hasVehicles = useModule('vehicles');
@@ -843,7 +844,8 @@ export const POSCart = () => {
                             <button
                                 onClick={() => {
                                     if (items.length > 0) {
-                                        if (isAdmin) {
+                                        const isPriceProtected = protectedModules.includes('pos_edit_price');
+                                        if (isAdmin || !isPriceProtected) {
                                             const currentTotal = items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
                                             const originalTotal = items.reduce((acc, i) => acc + ((i.originalPrice || i.price) * i.quantity), 0);
                                             setPriceEditModal({

@@ -4,10 +4,12 @@ import { useCartStore } from '../../store/useCartStore';
 import { useTableStore } from '../../store/useTableStore';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
+import { useAuthStore, selectIsAdmin } from '@shared/store/useAuthStore';
 import { POSProductGrid } from '../pos/POSProductGrid';
 import { CategoryTabs } from '../pos/CategoryTabs';
 import { PaymentModal } from './PaymentModal';
 import { EditPriceModal } from './EditPriceModal';
+import { SecurityPinModal } from './SecurityPinModal';
 import { supabase } from '../../lib/supabase';
 import {
     Package, Scissors, Coffee, Shirt,
@@ -39,6 +41,10 @@ export const TableOrderModal = ({ isOpen, onClose }: TableOrderModalProps) => {
     const [showCustomerToggle, setShowCustomerToggle] = useState(false);
 
     const businessId = useBusinessStore(state => state.id);
+    const isAdmin = useAuthStore(selectIsAdmin);
+    const protectedModules = useBusinessStore(state => state.protectedModules);
+    const [isSecurityPinOpen, setIsSecurityPinOpen] = useState(false);
+    const [pendingPriceEditItem, setPendingPriceEditItem] = useState<any>(null);
 
     // Fetch workers
     useEffect(() => {
@@ -189,17 +195,27 @@ export const TableOrderModal = ({ isOpen, onClose }: TableOrderModalProps) => {
                                                         {item.quantity} x ${(item.price).toLocaleString()}
                                                     </div>
                                                     <button
-                                                        onClick={() => setPriceEditModal({
-                                                            isOpen: true,
-                                                            itemId: item.cartId,
-                                                            currentPrice: item.price,
-                                                            originalPrice: item.originalPrice || item.price,
-                                                            name: item.name
-                                                        })}
+                                                        onClick={() => {
+                                                            const isPriceProtected = protectedModules.includes('pos_edit_price');
+                                                            const priceEditData = {
+                                                                isOpen: true,
+                                                                itemId: item.cartId,
+                                                                currentPrice: item.price,
+                                                                originalPrice: item.originalPrice || item.price,
+                                                                name: item.name
+                                                            };
+                                                            if (isAdmin || !isPriceProtected) {
+                                                                setPriceEditModal(priceEditData);
+                                                            } else {
+                                                                setPendingPriceEditItem(priceEditData);
+                                                                setIsSecurityPinOpen(true);
+                                                            }
+                                                        }}
                                                         className="p-1 text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
-                                                        title="Modificar precio"
+                                                        title={isAdmin || !protectedModules.includes('pos_edit_price') ? 'Modificar precio' : 'Modificar precio (requiere PIN)'}
                                                     >
                                                         <span className="material-symbols-outlined !text-[14px]">edit</span>
+                                                        {!isAdmin && protectedModules.includes('pos_edit_price') && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 bg-amber-400 rounded-full border border-white dark:border-slate-800" title="Requiere autorización"></span>}
                                                     </button>
                                                 </div>
 
@@ -327,6 +343,22 @@ export const TableOrderModal = ({ isOpen, onClose }: TableOrderModalProps) => {
                     originalPrice={priceEditModal.originalPrice}
                     itemName={priceEditModal.name}
                     onSave={handlePriceEditSave}
+                />
+            )}
+
+            {isSecurityPinOpen && pendingPriceEditItem && (
+                <SecurityPinModal
+                    onCancel={() => {
+                        setIsSecurityPinOpen(false);
+                        setPendingPriceEditItem(null);
+                    }}
+                    onSuccess={() => {
+                        setIsSecurityPinOpen(false);
+                        setPriceEditModal(pendingPriceEditItem);
+                        setPendingPriceEditItem(null);
+                    }}
+                    title="Autorización Requerida"
+                    description={`Ingrese el PIN Maestro del negocio para autorizar la modificación del precio de: ${pendingPriceEditItem.name}.`}
                 />
             )}
         </>

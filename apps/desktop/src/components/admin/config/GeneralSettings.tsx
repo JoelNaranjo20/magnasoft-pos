@@ -55,6 +55,7 @@ export const GeneralSettings = () => {
         { id: 'inventory', label: 'Inventario', icon: 'category', description: 'Gestión de productos, categorías y comisiones.' },
         { id: 'config', label: 'Configuración', icon: 'settings', description: 'Ajustes del sistema y administración.' },
         { id: 'pos', label: 'Punto de Venta (POS)', icon: 'point_of_sale', description: 'Módulo de facturación y ventas en vivo.' },
+        { id: 'pos_edit_price', label: 'Modificar Precio (POS)', icon: 'edit_note', description: 'Solicitar PIN de seguridad al intentar modificar el precio de un artículo o total en el POS.' },
     ];
 
     useEffect(() => {
