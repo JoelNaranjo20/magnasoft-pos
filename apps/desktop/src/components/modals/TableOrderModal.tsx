@@ -204,7 +204,7 @@ export const TableOrderModal = ({ isOpen, onClose }: TableOrderModalProps) => {
                                                                 originalPrice: item.originalPrice || item.price,
                                                                 name: item.name
                                                             };
-                                                            if (isAdmin || !isPriceProtected) {
+                                                            if (!isPriceProtected) {
                                                                 setPriceEditModal(priceEditData);
                                                             } else {
                                                                 setPendingPriceEditItem(priceEditData);

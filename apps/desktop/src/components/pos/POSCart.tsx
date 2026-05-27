@@ -845,7 +845,7 @@ export const POSCart = () => {
                                 onClick={() => {
                                     if (items.length > 0) {
                                         const isPriceProtected = protectedModules.includes('pos_edit_price');
-                                        if (isAdmin || !isPriceProtected) {
+                                        if (!isPriceProtected) {
                                             const currentTotal = items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
                                             const originalTotal = items.reduce((acc, i) => acc + ((i.originalPrice || i.price) * i.quantity), 0);
                                             setPriceEditModal({
