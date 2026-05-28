@@ -547,7 +547,6 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
             }
 
             // 3.5 Save Tip as worker commission (if any)
-            const numericTip = parseFloat(tipAmount) || 0;
             // Fallback: if no explicit tip worker was selected, use the general worker
             const resolvedTipWorkerId = tipWorkerId || generalWorkerId;
             if (numericTip > 0 && resolvedTipWorkerId) {
