@@ -814,7 +814,9 @@ export const POSCart = () => {
                     </label>
                     <div className={`relative flex items-center bg-slate-50 dark:bg-slate-800 border rounded-xl transition-all ${globalWorkerId
                         ? 'border-blue-200 dark:border-blue-800/50 bg-blue-50/50 dark:bg-blue-900/10'
-                        : 'border-slate-200 dark:border-slate-700'
+                        : hasCommissions && items.some(i => i.type === 'service')
+                            ? 'border-rose-400 dark:border-rose-800/60 bg-rose-50/20 dark:bg-rose-950/10 animate-pulse'
+                            : 'border-slate-200 dark:border-slate-700'
                         }`}>
                         <span className={`material-symbols-outlined absolute left-3 !text-[20px] ${globalWorkerId ? 'text-blue-500' : 'text-slate-400'}`}>badge</span>
                         <select

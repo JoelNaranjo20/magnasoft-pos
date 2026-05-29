@@ -282,7 +282,20 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
     const change = method === 'cash' ? numericAmount - total - numericTip : 0;
     const mixedTotal = (parseFloat(splitAmounts.cash) || 0) + (parseFloat(splitAmounts.transfer) || 0) + (parseFloat(splitAmounts.card) || 0) + (parseFloat(splitAmounts.credit) || 0);
     const mixedValid = method === 'mixed' ? Math.abs(mixedTotal - total) < 1 : true;
-    const canConfirm = method === 'cash' ? numericAmount >= total : method === 'credit' ? !!customer : method === 'mixed' ? mixedValid : true;
+
+    // Reactive validations
+    const hasServicesInCart = items.some(i => i.type === 'service');
+    const isMissingVehicle = hasVehicles && hasServicesInCart && customer?.name !== 'Público General' && !vehicle?.id;
+    const isMissingWorker = itemsMissingWorker.length > 0;
+
+    const activeError = error || 
+        (isMissingVehicle ? 'Debes seleccionar un vehículo para registrar servicios automotrices.' : null) || 
+        (isMissingWorker ? 'Faltan profesionales por asignar en ítems con comisión obligatoria.' : null);
+
+    const canConfirm = 
+        !isMissingVehicle &&
+        !isMissingWorker &&
+        (method === 'cash' ? numericAmount >= total : method === 'credit' ? !!customer : method === 'mixed' ? mixedValid : true);
 
     const handleNumpad = (num: string) => {
         if (num === 'backspace') {
@@ -1408,10 +1421,10 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                         </div>
                     )}
 
-                    {error && (
+                    {activeError && (
                         <div className="mt-4 p-4 bg-rose-50 text-rose-600 border border-rose-100 rounded-2xl text-xs font-bold text-center flex items-center justify-center gap-2 animate-in slide-in-from-top-4">
                             <span className="material-symbols-outlined !text-[18px]">error</span>
-                            {error}
+                            {activeError}
                         </div>
                     )}
 

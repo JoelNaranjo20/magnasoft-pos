@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 
@@ -8,9 +9,17 @@ interface ConfigGuardProps {
 }
 
 export const ConfigGuard = ({ children, moduleId }: ConfigGuardProps) => {
+    const location = useLocation();
     // Local state: resets to false every time the component mounts (= every module visit)
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const protectedModules = useBusinessStore((state) => state.protectedModules);
+
+    // Reactively reset PIN authentication when the user navigates to a different route
+    useEffect(() => {
+        setIsAuthenticated(false);
+        setPin('');
+        setError('');
+    }, [location.pathname]);
 
     const isProtected = protectedModules.includes(moduleId);
 

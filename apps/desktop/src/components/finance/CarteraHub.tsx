@@ -3,6 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { Pagination } from '../ui/Pagination';
+import { useAuthStore, selectIsAdmin } from '@shared/store/useAuthStore';
+import { EditDebtModal } from '../modals/EditDebtModal';
 
 interface CombinedDebt {
     id: string;
@@ -14,6 +16,8 @@ interface CombinedDebt {
     date: string;
     id_ref: string;
     description?: string;
+    customer_id?: string;
+    worker_id?: string;
 }
 
 interface CombinedPayment {
@@ -36,6 +40,11 @@ export const CarteraHub = () => {
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
     const [cashTarget, setCashTarget] = useState<'daily' | 'central'>('daily');
+
+    // Edit Debt CRUD State
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [selectedEditItem, setSelectedEditItem] = useState<CombinedDebt | null>(null);
+    const isAdmin = useAuthStore(selectIsAdmin);
 
     // Derived: whether the selected item's credit was created today
     const isCreditFromToday = selectedItem
@@ -111,7 +120,8 @@ export const CarteraHub = () => {
                         status: d.status,
                         date: d.created_at,
                         id_ref: d.sale_id ? d.sale_id.split('-')[0] : 'MANUAL',
-                        description: desc
+                        description: desc,
+                        customer_id: d.customer_id
                     };
                 }),
                 ...(workerLoans || []).map((l: any) => ({
@@ -123,7 +133,8 @@ export const CarteraHub = () => {
                     status: l.status,
                     date: l.created_at,
                     id_ref: 'PRESTAMO',
-                    description: l.notes || 'Préstamo / Adelanto'
+                    description: l.notes || 'Préstamo / Adelanto',
+                    worker_id: l.worker_id
                 }))
             ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -218,6 +229,11 @@ export const CarteraHub = () => {
     useEffect(() => {
         fetchData();
     }, [cashSession?.id]);
+
+    useEffect(() => {
+        setPendingPage(1);
+        setHistoryPage(1);
+    }, [searchTerm]);
 
     useEffect(() => {
         if (!showNewDebtModal) return;
@@ -629,15 +645,29 @@ export const CarteraHub = () => {
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 text-right">
-                                                        <button
-                                                            onClick={() => {
-                                                                setSelectedItem(item);
-                                                                setShowPaymentModal(true);
-                                                            }}
-                                                            className="px-4 py-1.5 bg-primary text-white text-[11px] font-black rounded-lg hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95 uppercase"
-                                                        >
-                                                            Abonar
-                                                        </button>
+                                                         <div className="flex items-center justify-end gap-2">
+                                                             {isAdmin && (
+                                                                 <button
+                                                                     onClick={() => {
+                                                                         setSelectedEditItem(item);
+                                                                         setShowEditModal(true);
+                                                                     }}
+                                                                     title="Editar registro"
+                                                                     className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex items-center justify-center"
+                                                                 >
+                                                                     <span className="material-symbols-outlined !text-[18px]">edit</span>
+                                                                 </button>
+                                                             )}
+                                                             <button
+                                                                 onClick={() => {
+                                                                     setSelectedItem(item);
+                                                                     setShowPaymentModal(true);
+                                                                 }}
+                                                                 className="px-4 py-1.5 bg-primary text-white text-[11px] font-black rounded-lg hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95 uppercase"
+                                                             >
+                                                                 Abonar
+                                                             </button>
+                                                         </div>
                                                     </td>
                                                 </tr>
                                             ))
@@ -1034,6 +1064,17 @@ export const CarteraHub = () => {
                     </div>
                 </div>
             )}
+
+            {/* Edit Debt Modal */}
+            <EditDebtModal
+                isOpen={showEditModal}
+                onClose={() => {
+                    setShowEditModal(false);
+                    setSelectedEditItem(null);
+                }}
+                item={selectedEditItem}
+                onSaveSuccess={fetchData}
+            />
         </div>
     );
 };

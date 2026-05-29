@@ -1,145 +1,144 @@
-# 🏛️ La Constitución de Magnasoft: Spec-Kit y Manual de Arquitectura
+# Constitución del Proyecto: Magnasoft POS
 
-Bienvenido a la **Constitución de Magnasoft / Servicar OV**. Este documento sirve como la **Única Fuente de Verdad (Single Source of Truth)** para el desarrollo, diseño, arquitectura y estándares operativos del sistema. Todos los ingenieros que colaboren en el proyecto deben seguir rigurosamente estas pautas para mantener un código saludable, mantenible y escalable.
-
----
-
-## 🗺️ 1. Arquitectura del Monorepo
-
-Magnasoft está estructurado como un monorepo administrado con **pnpm**. Esto nos permite separar la lógica de negocio del frontend específico de cada plataforma.
-
-```mermaid
-graph TD
-    Shared["@shared/logic (Zustand & Supabase)"]
-    Desktop["apps/desktop (Electron + React + Vite)"]
-    Web["apps/web (Next.js 16)"]
-
-    Desktop --> Shared
-    Web --> Shared
-```
-
-### Componentes de la Arquitectura:
-1. **`apps/desktop`**: El Punto de Venta (POS) rápido. Se ejecuta localmente usando **Electron** y **Vite**, garantizando integración nativa con impresoras térmicas (58mm/80mm), bajo retardo y alta fiabilidad en caja.
-2. **`apps/web`**: El Tablero de Monitoreo Remoto para el Dueño. Creado con **Next.js**, optimizado para SEO, carga instantánea y responsivo para celulares.
-3. **`apps/shared`**: Biblioteca interna compartida. Contiene la integración directa con **Supabase**, tipos de datos de TypeScript unificados, y las tiendas globales de **Zustand** (`useAuthStore`, `useSessionStore`, etc.).
+Esta es la guía suprema y el conjunto de estándares técnicos que gobiernan el desarrollo en el repositorio de **Magnasoft**. Cualquier agente de IA o desarrollador humano debe apegarse rigurosamente a estas reglas.
 
 ---
 
-## 🎨 2. Spec-Kit: Sistema de Diseño e Identidad Visual
+## 1. Arquitectura y Tecnologías Core
 
-Para que Servicar OV se sienta moderno, sofisticado y de alta gama, se deben respetar las siguientes reglas estéticas. **Queda estrictamente prohibido usar colores crudos o plantillas genéricas.**
+Magnasoft es un **monorepo** administrado con `pnpm workspaces` que consta de tres subproyectos:
 
-### 🎨 Paleta de Colores Curada (HSL)
+*   **`apps/desktop`**: Aplicación de punto de venta (POS) construida sobre **Electron**, **React 19**, **TypeScript** y **Vite**. Es la aplicación principal de cara a los negocios.
+*   **`apps/web`**: Aplicación web administrativa desarrollada con **Next.js** (React 19) y **TypeScript**.
+*   **`apps/shared`**: Lógica de negocio compartida entre `desktop` y `web` (stores de Zustand, servicios de Supabase, hooks comunes y el registro de módulos).
 
-Usamos un esquema de color vibrante, moderno y con alto contraste, inclinado a tonos premium (Dark Mode por defecto en el POS).
-
-| Token | Propósito | Valor HSL / Hex | Muestra Visual |
-| :--- | :--- | :--- | :--- |
-| **`Primary`** | Botones principales, acentos activos | `hsl(217.2, 91.2%, 59.8%)` | Azul Eléctrico |
-| **`Success`** | Balances positivos, cobros exitosos | `hsl(142.1, 70.6%, 45.3%)` | Verde Esmeralda |
-| **`Destructive`**| Anulaciones, egresos rápidos | `hsl(346.8, 84.1%, 50.2%)` | Rojo Rubí |
-| **`Background`** | Fondos generales de pantallas | `hsl(222.2, 84%, 4.9%)` | Azul Noche Profundo |
-| **`Card`** | Contenedores y modales (Efecto Cristal) | `hsla(222.2, 84%, 7%, 0.7)` | Negro Traslúcido |
-
-### ✨ Estilo Glassmorphism (Efecto de Cristal Templado)
-Los modales y tarjetas interactivas del POS deben usar un diseño semitransparente con desenfoque de fondo:
-```css
-.glass-panel {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-```
-
-### ⚡ Micro-animaciones Obligatorias
-Cada elemento interactivo (botones de cobro, tarjetas de trabajadores, filas) debe reaccionar de forma fluida:
-*   **Hover**: Transición suave de 150ms (`transition-all duration-150 ease-out`).
-*   **Active/Click**: Efecto de presión tridimensional (`active:scale-[0.98] active:brightness-90`).
+### Stack Tecnológico
+*   **Base de Datos y Autenticación**: Supabase (`@supabase/supabase-js`). Instancia compartida accedida mediante el cliente en `@shared/lib/supabase`.
+*   **Gestión de Estado**: Zustand (`zustand`) — ver sección 2.3 para el mapa completo de stores.
+*   **Estilos y CSS**: Tailwind CSS para componentes responsivos. Vanilla CSS para personalizaciones específicas.
+*   **UI e Iconos**: Lucide React (`lucide-react`).
 
 ---
 
-## 🛠️ 3. Constitución de Código y Estándares de Programación
+## 2. Reglas de Programación y Buenas Prácticas
 
-Para evitar bugs difíciles de depurar en producción (como los errores de ámbito de variables y TDZ), seguimos estas leyes inquebrantables.
+### 2.1 TypeScript Estricto
+*   Siempre define tipos y interfaces explícitos para props, estados y respuestas de API.
+*   Evita el uso de `any` a toda costa. Usa tipos genéricos o `unknown` si es necesario.
+*   Mantén las interfaces de base de datos sincronizadas con el esquema de Supabase. El tipo generado central está en `apps/desktop/src/types/supabase.ts`.
 
-### 🚫 Ley #1: Cero Sombreado de Variables (No Variable Shadowing)
-Nunca reutilices el nombre de una variable del ámbito superior dentro de una función o bloque interno. Esto causa el temido error **Temporal Dead Zone (TDZ)** al minificar.
+### 2.2 Gestión de Ámbitos — Evitar Errores TDZ (CRÍTICO)
+*   **Cero Redundancias de Variables**: Nunca declares una variable con el mismo nombre en un ámbito interno si ya existe en el ámbito superior de la misma función (*shadowing*). Esto provoca errores de **Temporal Dead Zone (TDZ)** al minificar para producción con Vite (ej. `ReferenceError: Cannot access 'X' before initialization`).
+*   **Verificación Obligatoria**: Antes de hacer `pnpm build`, revisa todos los scopes anidados de las funciones que modificaste en busca de redeclaraciones de variables.
+
+### 2.3 Mapa Completo de Stores de Zustand
+
+El proyecto usa **5 stores de Zustand** divididos en dos niveles:
+
+#### Stores Compartidos — `apps/shared/store/` (Impactan Desktop Y Web)
 
 > [!CAUTION]
-> **CÓDIGO PROHIBIDO ❌**
-> ```typescript
-> const numericTip = 0; // Ámbito superior
-> 
-> function handleConfirm() {
->   // ... código
->   const numericTip = parseFloat(tipAmount); // ❌ Redefinición interna. Causa bug fatal en producción (Cannot access 'numericTip' before initialization)
-> }
-> ```
+> Modificar estos stores puede afectar simultáneamente a `apps/desktop` (Electron) y a `apps/web` (Next.js). **Busca todas las referencias en el monorepo completo** antes de cambiar cualquier firma de función o propiedad de estado.
 
-> [!TIP]
-> **CÓDIGO CORRECTO ✅**
-> ```typescript
-> let numericTip = 0;
-> 
-> function handleConfirm() {
->   // Simplemente reasigna el valor o usa un nombre distinto
->   numericTip = parseFloat(tipAmount) || 0; 
-> }
-> ```
+| Store | Ruta | Responsabilidad Principal |
+|---|---|---|
+| `useAuthStore` | `apps/shared/store/useAuthStore.ts` | Sesión SaaS de Supabase, `profile` del usuario, datos del `business`, flag `isSuperAdmin`, y el selector exportado `selectIsAdmin` (roles `admin` / `super_admin`). |
+| `useBusinessStore` | `apps/shared/store/useBusinessStore.ts` | Perfil del negocio (`businessType`, `logoUrl`), el objeto `config` JSONB con los flags de módulos activos, presets de industria, y suscripción en tiempo real a cambios del negocio en Supabase. |
+| `useSessionStore` | `apps/shared/store/useSessionStore.ts` | Sesión de caja activa (`cashSession`), roles del turno (`workerRole`, `isWorkerAdmin`), estado de cierre (`isClosing`), y PIN de configuración (`isConfigAuthenticated` — **no se persiste**). Usa `createElectronZustandStorage` para guardar en disco via IPC → `app-storage.json`. |
 
-### 📦 Ley #2: Evitar Importaciones Estáticas y Dinámicas Cruzadas
-Para evitar advertencias de compilación y optimizaciones ineficientes de Rollup:
-- Los archivos de `@shared/logic` que tengan dependencias mutuas no deben mezclarse en importaciones estáticas y dinámicas simultáneamente.
-- Si una Store (como `useSessionStore`) requiere datos de `useAuthStore`, accede a ellos mediante los selectores o métodos internos del store, no importándolos de forma estática redundante en cada render.
+#### Stores Locales del POS — `apps/desktop/src/store/` (Solo Electron)
 
-### 🛡️ Ley #3: Manejo Seguro de Nulos en Supabase
-El backend en Supabase es dinámico. Las columnas de tipo `jsonb` o metadatos dinámicos pueden no estar completamente estructuradas o contener valores nulos.
-- **Siempre** usa encadenamiento opcional (`product.metadata?.color`) y valores por defecto (`product.metadata?.color ?? 'N/A'`).
+| Store | Ruta | Responsabilidad Principal |
+|---|---|---|
+| `useCartStore` | `apps/desktop/src/store/useCartStore.ts` | Carrito multi-mesa: `carts: Record<cartId, CartData>`. Cada `CartData` contiene `items: CartItem[]`, `total`, `metadata: Partial<SaleMetadata>`, `selectedCustomer`, `selectedVehicle`. Expone también `globalWorkerId` para el trabajador activo del turno. |
+| `useTableStore` | `apps/desktop/src/store/useTableStore.ts` | Estado de las mesas de restaurante (`restaurant_tables` en Supabase): carga, creación, actualización de estado (`available`, `occupied`, `reserved`) y subscripción en tiempo real. |
 
----
+### 2.4 Sistema de Módulos y Feature Flags (`MODULE_REGISTRY`)
 
-## 🚀 4. Guías de Optimización de Rendimiento Frontend
+Los módulos del negocio se controlan mediante el registro central `MODULE_REGISTRY` definido en `apps/shared/modules.ts`. Las **10 claves semánticas** disponibles son:
 
-### 1. Virtualización Obligatoria para Listas Grandes (>100 filas)
-No renderices cientos de servicios o productos de golpe. Esto satura el DOM y ralentiza el POS.
-*   Usa **TanStack Virtual** (`@tanstack/react-virtual`).
-*   Configura tamaños estimados consistentes para evitar saltos bruscos en el scroll (CLS).
+| Clave Semántica | Config Key en DB | Descripción |
+|---|---|---|
+| `pos` | `module_pos` | Módulo principal de ventas y cobros. Activo por defecto. |
+| `vehicles` | `module_vehicles` | Registro de clientes por placa y tipo de vehículo. |
+| `vehicle_queue` | `module_service_queue` | Cola de espera para servicios automotrices. |
+| `tables` | `module_tables` | Gestión de mesas y comandas para restaurantes. |
+| `commissions` | `module_commissions` | Cálculo y asignación de comisiones a trabajadores. |
+| `commission_payment` | `module_commission_payment` | Liquidación y pago de comisiones. |
+| `customers` | `module_customers` | Base de datos de clientes y fidelización. Activo por defecto. |
+| `inventory` | `module_inventory` | Control de stock y productos. Activo por defecto. |
+| `payroll` | `module_payroll` | Salarios y pagos a trabajadores. |
+| `appointments` | `module_appointments` | Gestión de citas y calendario. |
 
-### 2. Parseo Memoizado de JSONB
-Nunca uses `JSON.parse` directamente en la función de renderizado de un componente React.
-*   Implementa `useMemo` para calcular las propiedades complejas únicamente cuando el registro de Supabase cambie.
+**Uso en componentes**: Siempre usar el hook reactivo `useModule(key)` o `useModules([keys])` desde `apps/desktop/src/hooks/useModule.ts`. **Nunca** leer el objeto `config` del store directamente en los componentes.
 
-```tsx
-const parsedMetadata = useMemo(() => {
-  if (!product.metadata) return {};
-  return typeof product.metadata === 'string' 
-    ? JSON.parse(product.metadata) 
-    : product.metadata;
-}, [product.metadata]);
+```ts
+// ✅ CORRECTO
+const hasCommissions = useModule('commissions');
+const { vehicles, tables } = useModules(['vehicles', 'tables']);
+
+// ❌ INCORRECTO — no es reactivo a cambios en tiempo real
+const config = useBusinessStore(state => state.config);
 ```
 
-### 3. Filtros del Lado del Servidor (Supabase Text Search)
-La búsqueda rápida de patentes (placas de vehículos), clientes y servicios debe ocurrir en Supabase usando índices de texto completo. Evita a toda costa descargar miles de registros para filtrarlos con `.filter()` de JS en la aplicación del cliente.
+Los módulos se activan masivamente mediante **presets de industria** (`INDUSTRY_PRESETS`): `automotive`, `barbershop`, `restaurant`, `retail`, `beauty_salon`, `hotel`.
 
----
+### 2.5 Persistencia Híbrida de Sesión (Electron IPC)
+*   `useSessionStore` usa `createElectronZustandStorage` en lugar de `localStorage` para que los datos de caja activa sobrevivan a reinicios de Electron y funcionen sin conexión.
+*   El archivo de estado local es `app-storage.json` y se escribe/lee mediante canales IPC en el proceso principal.
+*   **Regla**: `isConfigAuthenticated` (PIN) se excluye deliberadamente de la persistencia. Siempre debe volver a `false` al reiniciar la app.
 
-## 📝 5. Flujo de Lanzamiento y Despliegues
+### 2.6 Control de Errores y Logs
+*   Todas las operaciones con Supabase u APIs externas deben estar envueltas en bloques `try/catch`.
+*   Registra errores de manera descriptiva en consola de desarrollo usando `console.error('[Módulo] mensaje descriptivo:', error)`.
 
-Cuando se integre una nueva característica o corrección al proyecto, el flujo oficial para actualizar es:
+### 2.7 Regla de No Regresión (Evitar Efectos Secundarios)
+*   **Análisis de Impacto Obligatorio**: Antes de modificar un store compartido, hook de `@shared`, componente común, o esquema de base de datos, busca todas las referencias en el monorepo para identificar qué otros módulos dependen de él.
+*   **Preservar Funcionalidad Existente**: Un cambio en lógica compartida debe ser retrocompatible o actualizar coordinadamente todos los consumidores. No se permiten cambios "a ciegas".
+*   **Proteger el Módulo de Cobros**: `PaymentModal.tsx` es el componente más crítico del POS. Cualquier cambio que lo afecte debe pasar por revisión exhaustiva de no regresión.
 
-```mermaid
-graph LR
-    Code["1. Resolver Bug / Crear Feature"] --> Bump["2. Incrementar Versión (package.json)"]
-    Bump --> Push["3. Git Commit & Push (GitHub)"]
-    Push --> Compile["4. Compilar & Publicar (pnpm electron:publish)"]
+### 2.8 Dinamismo y Prohibición de Hardcoding (CRÍTICO)
+
+Magnasoft POS es un sistema **multi-industria dinámico**. El mismo código base sirve a talleres automotrices, restaurantes, barberías, salones de belleza, hoteles y tiendas retail. Esta flexibilidad se logra **exclusivamente** a través del sistema de módulos — nunca con condicionales hardcodeadas por tipo de negocio.
+
+> [!CAUTION]
+> **Está PROHIBIDO** condicionar lógica de negocio, visibilidad de UI o funcionalidad usando `business_type` directamente. Este patrón rompe el dinamismo del sistema y acopla la lógica a un tipo de negocio específico.
+
+**Patrón INCORRECTO (hardcoded, no reactivo)**:
+```ts
+// ❌ NUNCA HACER ESTO
+const isRestaurant = business?.business_type === 'restaurant';
+if (isRestaurant) { /* mostrar mesas */ }
 ```
 
-1.  **Validar**: Ejecutar la app localmente con `pnpm electron:dev`.
-2.  **Versionar**: Incrementar el patch en `package.json` (ej. `1.0.39`).
-3.  **Documentar**: Crear el archivo de notas de lanzamiento `RELEASE_NOTES_v[Versión].md`.
-4.  **Desplegar**: Correr el comando de publicación para subir el instalador compilado de forma automática a los Releases de GitHub, asegurando la distribución instantánea de actualizaciones a todos los clientes.
+**Patrón CORRECTO (dinámico, reactivo)**:
+```ts
+// ✅ SIEMPRE USAR EL SISTEMA DE MÓDULOS
+const hasTables = useModule('tables');
+if (hasTables) { /* mostrar mesas */ }
+```
+
+**Reglas**:
+- Toda lógica condicional por industria debe usar `useModule(key)` o `useModules([keys])`.
+- Los **presets de industria** (`INDUSTRY_PRESETS` en `apps/shared/modules.ts`) son el único lugar donde `business_type` determina qué módulos activar — y solo en el momento de crear o cambiar el tipo de negocio.
+- **Deuda técnica conocida**: `apps/desktop/src/components/pos/POSLayout.tsx` y `apps/desktop/src/components/pos/POSCart.tsx` aún contienen `const isRestaurant = business?.business_type === 'restaurant'` como residuo del sistema anterior. Deben migrarse a `useModule('tables')` en una tarea futura.
 
 ---
 
-*Esta Constitución se revisa y actualiza dinámicamente con el crecimiento técnico de Magnasoft.*
+## 3. Estándares de Diseño y UX
+
+1.  **Estética Premium y Moderna**: Paletas de colores armoniosas, diseño limpio con bordes redondeados consistentes y transiciones suaves.
+2.  **Interactividad Viva**: Todos los botones y elementos interactivos deben tener estados claros de `hover`, `active` y `disabled`. Micro-animaciones sutiles (spinners al cargar, transiciones al abrir modales).
+3.  **Evitar Layout Shifts (CLS)**: Define alturas mínimas para contenedores dinámicos. Usa esqueletos de carga (Skeletons) en lugar de pantallas vacías mientras se obtienen datos de Supabase.
+
+---
+
+## 4. Flujo de Trabajo — Spec-Driven Development (SDD)
+
+Para cualquier cambio no trivial, el flujo **obligatorio** debe seguir el protocolo de Spec-Kit ubicado en `docs/spec-kit/`:
+
+1.  **Especificar** (`specification_template.md`): Definir objetivos, requerimientos, UI afectada y análisis técnico de stores y módulos.
+2.  **Planificar** (`implementation_plan_template.md`): Detallar los archivos a crear, modificar o eliminar, y el análisis de impacto y no regresión.
+3.  **Tareas** (`task_template.md`): Desglosar el plan en una lista de tareas ordenada por fases.
+4.  **Implementar**: Realizar los cambios de código archivo por archivo siguiendo el plan aprobado.
+5.  **Verificar** (`walkthrough_template.md`): Probar en `pnpm electron:dev`, compilar con `pnpm build` para descartar TDZ, y documentar los resultados.
