@@ -187,3 +187,20 @@ Para evitar que se inserte la venta en la tabla `sales` pero falle la inserción
 3.  Verifica que el botón **CONFIRMAR PAGO** se muestre deshabilitado (`disabled`) y se visualice un mensaje de error claro en pantalla indicando la falta de asignación de trabajador.
 4.  Asigna el trabajador correspondiente en la vista. Verifica que el error desaparezca y el botón de confirmación se habilite de inmediato.
 5.  *(Prueba de robustez)*: Provoca un error de red o de permisos SQL durante la inserción de ítems y verifica que el registro de venta principal no quede guardado en la base de datos (rollback o prevención).
+
+---
+
+## 6. Arquitectura de Estabilidad: Prevención Global de JWT Expired
+
+Para garantizar de forma definitiva que las operaciones atómicas de guardado (como las ventas o el cierre de caja) no fallen por sesiones caducadas, se implementó un modelo de validación e intercepción profunda a nivel del cliente de Supabase (`apps/desktop/src/lib/supabase.ts`).
+
+### Modelo de Inicialización Segura (Fetch Interceptor)
+
+1.  **Interceptación Global (`global.fetch`)**: En lugar de requerir llamadas manuales a `ensureSession()` antes de cada operación, el cliente Supabase intercepta *todas* las peticiones HTTP salientes (excepto las de Auth).
+2.  **Validación Activa**: Antes de despachar la petición de lectura/escritura (REST o RPC), se valida localmente si el token expirará en menos de 120 segundos.
+3.  **Prevención de Recursión y Bloqueo Concurrente (Debouncing)**: 
+    *   Si múltiples componentes realizan peticiones simultáneas, un mecanismo de promesa compartida (`refreshPromise`) pone en cola todas las peticiones hasta que el token es refrescado con éxito de manera única.
+    *   Una bandera `isInitialized` protege contra condiciones de carrera y errores del Temporal Dead Zone (TDZ) durante el arranque inicial del cliente.
+
+> [!IMPORTANT]  
+> Cualquier nueva petición a la base de datos que se agregue en el futuro está automáticamente protegida contra el error de `JWT Expired` gracias a esta estructura de middleware.
