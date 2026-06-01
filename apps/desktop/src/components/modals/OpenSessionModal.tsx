@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { supabase, ensureSession } from '../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
@@ -76,6 +76,8 @@ export const OpenSessionModal = () => {
         setLoading(true);
 
         try {
+            await ensureSession();
+
             // 1. First check if there's already an open session
             const { data: existingSessions, error: checkError } = await (supabase as any)
                 .from('cash_sessions')

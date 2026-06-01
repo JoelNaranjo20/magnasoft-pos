@@ -22,6 +22,9 @@ Verifica que:
 }
 
 
+let isInitialized = false;
+let refreshPromise: Promise<void> | null = null;
+
 export const supabase = createClient<Database>(
     supabaseUrl,
     supabaseAnonKey,
@@ -31,16 +34,37 @@ export const supabase = createClient<Database>(
             autoRefreshToken: true,
             persistSession: true,
             detectSessionInUrl: false
+        },
+        global: {
+            fetch: async (url, options) => {
+                const urlStr = typeof url === 'string' ? url : (url as any).url || url.toString();
+                // Avoid recursion: do not run ensureSession for auth-related requests (token refresh, etc.)
+                if (!urlStr.includes('/auth/v1/')) {
+                    try {
+                        await ensureSession();
+                    } catch (e) {
+                        console.error('[Supabase Fetch Interceptor] Error ensuring session:', e);
+                    }
+                }
+                return fetch(url, options);
+            }
         }
     }
 );
+
+isInitialized = true;
 
 /**
  * Ensures the current session is valid. If the JWT is expired or close to
  * expiring (< 120 s), it forces a token refresh before the caller proceeds.
  * Call this at the beginning of any write operation to avoid JWT-expired errors.
  */
-export const ensureSession = async (): Promise<void> => {
+export async function ensureSession(): Promise<void> {
+    if (!isInitialized) return;
+    if (refreshPromise) {
+        return refreshPromise;
+    }
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
@@ -50,14 +74,23 @@ export const ensureSession = async (): Promise<void> => {
 
     if (secondsLeft < 120) {
         // Token expired or expiring soon — force refresh
-        const { error } = await supabase.auth.refreshSession();
-        if (error) {
-            console.warn('[ensureSession] Could not refresh session:', error.message);
-        } else {
-            console.log('[SessionKeeper] Token refreshed successfully.');
-        }
+        refreshPromise = (async () => {
+            try {
+                const { error } = await supabase.auth.refreshSession();
+                if (error) {
+                    console.warn('[ensureSession] Could not refresh session:', error.message);
+                } else {
+                    console.log('[SessionKeeper] Token refreshed successfully.');
+                }
+            } catch (err) {
+                console.error('[ensureSession] Exception during refresh:', err);
+            } finally {
+                refreshPromise = null;
+            }
+        })();
+        return refreshPromise;
     }
-};
+}
 
 // ═══════════════════════════════════════════════════════════
 // GLOBAL SESSION KEEPER — Prevents JWT Expired errors

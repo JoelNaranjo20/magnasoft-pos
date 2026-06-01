@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect } from 'react';
-import { supabase } from "../../lib/supabase";
+import { supabase, ensureSession } from "../../lib/supabase";
 import { useAuthStore } from '@shared/store/useAuthStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { getPresetModules } from '../../shared/modules';
@@ -30,6 +30,9 @@ export const DesktopSetup = () => {
         setLoading(true);
 
         try {
+            // Ensure session is fresh before doing write operations
+            await ensureSession();
+
             // RPC: Create Business & Link Profile (Atomic Transaction) without Serial
             const { data: business, error: rpcError } = await supabase.rpc('create_business_without_serial', {
                 p_name: businessName
