@@ -52,6 +52,10 @@ export const CarteraHub = () => {
         : false;
 
     const [searchTerm, setSearchTerm] = useState('');
+    const [customerFilterId, setCustomerFilterId] = useState<string | null>(null);
+    const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+    const [processingDelete, setProcessingDelete] = useState(false);
 
     // --- New Manual Debt State ---
     const [debtMode, setDebtMode] = useState<'single' | 'bulk'>('single');
@@ -375,6 +379,69 @@ export const CarteraHub = () => {
         }
     };
 
+    const handleDeleteDebt = async (item: CombinedDebt) => {
+        setProcessingDelete(true);
+        try {
+            if (item.type === 'customer') {
+                // Only allow deleting customer debts with no payments
+                const { data: payments, error: checkError } = await (supabase as any)
+                    .from('debt_payments')
+                    .select('id')
+                    .eq('debt_id', item.id)
+                    .limit(1);
+
+                if (checkError) throw checkError;
+
+                if (payments && payments.length > 0) {
+                    alert('No se puede eliminar: esta deuda ya tiene abonos registrados. Anúlala desde el panel de administración.');
+                    setConfirmDeleteId(null);
+                    setProcessingDelete(false);
+                    return;
+                }
+
+                const { error } = await (supabase as any)
+                    .from('customer_debts')
+                    .delete()
+                    .eq('id', item.id);
+
+                if (error) throw error;
+                console.log('[CarteraHub] Customer debt deleted:', item.id);
+            } else {
+                // Worker loan — only delete if no payments
+                const { data: loanPayments, error: lpError } = await (supabase as any)
+                    .from('worker_loan_payments')
+                    .select('id')
+                    .eq('loan_id', item.id)
+                    .limit(1);
+
+                if (lpError) throw lpError;
+
+                if (loanPayments && loanPayments.length > 0) {
+                    alert('No se puede eliminar: este préstamo ya tiene pagos registrados.');
+                    setConfirmDeleteId(null);
+                    setProcessingDelete(false);
+                    return;
+                }
+
+                const { error } = await (supabase as any)
+                    .from('worker_loans')
+                    .delete()
+                    .eq('id', item.id);
+
+                if (error) throw error;
+                console.log('[CarteraHub] Worker loan deleted:', item.id);
+            }
+
+            setConfirmDeleteId(null);
+            fetchData();
+        } catch (err: any) {
+            console.error('[CarteraHub] Error deleting debt:', err);
+            alert('Error al eliminar: ' + (err.message || 'Error desconocido'));
+        } finally {
+            setProcessingDelete(false);
+        }
+    };
+
     const handlePayment = async () => {
         if (!selectedItem || !paymentAmount || isNaN(parseFloat(paymentAmount))) return;
         const amount = parseFloat(paymentAmount);
@@ -480,11 +547,32 @@ export const CarteraHub = () => {
         </div>
     );
 
-    const filteredPending = pendingItems.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    // Filtrado combinado: nombre + cliente específico
+    const filteredPending = pendingItems.filter(i => {
+        const matchesSearch = i.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCustomer = !customerFilterId || i.customer_id === customerFilterId;
+        return matchesSearch && matchesCustomer;
+    });
     const filteredHistory = paymentHistory.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
+    // Calcular total de deuda del cliente filtrado (solo si hay filtro activo)
+    const customerFilterTotal = customerFilterId
+        ? pendingItems
+            .filter(i => i.customer_id === customerFilterId)
+            .reduce((sum, i) => sum + i.remaining_amount, 0)
+        : 0;
+
+    // Cliente filtrado info
+    const customerFilterName = customerFilterId
+        ? pendingItems.find(i => i.customer_id === customerFilterId)?.name || ''
+        : '';
+
+    // Total de resultados visibles (por búsqueda de texto o filtro de cliente)
+    const searchResultsTotal = filteredPending.reduce((sum, i) => sum + i.remaining_amount, 0);
+    const hasActiveFilter = searchTerm.trim().length > 0 || !!customerFilterId;
+
     return (
-        <div className="space-y-6" onClick={() => setOpenTooltip(null)}>
+        <div className="space-y-6" onClick={() => { setOpenTooltip(null); setCustomerDropdownOpen(false); }}>
             {/* Header Info - Session State */}
 
 
@@ -540,16 +628,153 @@ export const CarteraHub = () => {
             <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="flex flex-col border-b border-slate-100 dark:border-slate-700">
                     <div className="p-4 border-b border-slate-50 dark:border-slate-900/50">
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
-                            <input
-                                type="text"
-                                placeholder="Buscar por nombre..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-bold outline-none focus:border-primary transition-all"
-                            />
+                        <div className="flex gap-3">
+                            <div className="relative flex-1">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por nombre..."
+                                    value={searchTerm}
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        setCustomerFilterId(null); // resetear filtro por cliente al escribir
+                                    }}
+                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-bold outline-none focus:border-primary transition-all"
+                                />
+                            </div>
+                            {/* Dropdown filtro por cliente */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => setCustomerDropdownOpen(!customerDropdownOpen)}
+                                    className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-all border-2 whitespace-nowrap ${
+                                        customerFilterId
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                                            : 'bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined !text-[18px]">
+                                        {customerFilterId ? 'filter_alt' : 'filter_list'}
+                                    </span>
+                                    {customerFilterId ? customerFilterName : 'Filtrar cliente'}
+                                    {customerFilterId && (
+                                        <span
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setCustomerFilterId(null);
+                                                setCustomerDropdownOpen(false);
+                                            }}
+                                            className="material-symbols-outlined !text-[14px] ml-1 hover:text-rose-500 cursor-pointer"
+                                        >
+                                            close
+                                        </span>
+                                    )}
+                                </button>
+                                {customerDropdownOpen && (
+                                    <div className="absolute right-0 top-14 w-72 max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl z-50 custom-scrollbar animate-in fade-in slide-in-from-top-2 duration-200">
+                                        {/* Obtener clientes únicos de pendingItems */}
+                                        {(() => {
+                                            const uniqueCustomers = new Map<string, { id: string; name: string; total: number }>();
+                                            pendingItems.forEach(item => {
+                                                if (item.type === 'customer' && item.customer_id) {
+                                                    const existing = uniqueCustomers.get(item.customer_id);
+                                                    if (existing) {
+                                                        existing.total += item.remaining_amount;
+                                                    } else {
+                                                        uniqueCustomers.set(item.customer_id, {
+                                                            id: item.customer_id,
+                                                            name: item.name,
+                                                            total: item.remaining_amount,
+                                                        });
+                                                    }
+                                                }
+                                            });
+                                            const sorted = Array.from(uniqueCustomers.values()).sort((a, b) => b.total - a.total);
+
+                                            if (sorted.length === 0) {
+                                                return (
+                                                    <div className="p-4 text-center text-xs text-slate-400 font-medium">
+                                                        No hay clientes con deudas pendientes
+                                                    </div>
+                                                );
+                                            }
+
+                                            return sorted.map(c => (
+                                                <button
+                                                    key={c.id}
+                                                    onClick={() => {
+                                                        setCustomerFilterId(c.id);
+                                                        setCustomerDropdownOpen(false);
+                                                    }}
+                                                    className={`w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between border-b border-slate-50 dark:border-slate-700/50 last:border-0 transition-colors ${
+                                                        customerFilterId === c.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="material-symbols-outlined text-slate-400 !text-[16px]">person</span>
+                                                        <span className="font-bold text-sm text-slate-700 dark:text-slate-300">{c.name}</span>
+                                                    </div>
+                                                    <span className="text-xs font-black text-rose-600 dark:text-rose-400">
+                                                        ${c.total.toLocaleString()}
+                                                    </span>
+                                                </button>
+                                            ));
+                                        })()}
+                                    </div>
+                                )}
+                            </div>
                         </div>
+                        {/* Total del cliente filtrado (dropdown) */}
+                        {customerFilterId && (
+                            <div className="mt-3 flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-200 dark:border-indigo-800 rounded-2xl">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-indigo-500 !text-[20px]">person</span>
+                                    <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                                        Deuda total de <span className="font-black">{customerFilterName}</span>:
+                                    </span>
+                                </div>
+                                <span className="text-lg font-black text-rose-600 dark:text-rose-400">
+                                    ${customerFilterTotal.toLocaleString()}
+                                </span>
+                                <span className="text-[10px] text-slate-400 ml-auto">
+                                    {pendingItems.filter(i => i.customer_id === customerFilterId).length} crédito(s)
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Total de resultados visibles — se muestra al buscar por texto o filtrar */}
+                        {hasActiveFilter && !loading && (
+                            <div className={`mt-3 flex items-center gap-3 px-4 py-3 rounded-2xl border ${
+                                customerFilterId
+                                    ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/50'
+                                    : 'bg-amber-50/80 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                            }`}>
+                                <div className="flex items-center gap-2">
+                                    <span className={`material-symbols-outlined !text-[20px] ${
+                                        customerFilterId ? 'text-indigo-400' : 'text-amber-500'
+                                    }`}>
+                                        {customerFilterId ? 'filter_alt' : 'search'}
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                                        {customerFilterId
+                                            ? `Mostrando resultados para "${customerFilterName}"`
+                                            : `Resultados para "${searchTerm.trim()}"`
+                                        }:
+                                    </span>
+                                </div>
+                                <span className="text-lg font-black text-rose-600 dark:text-rose-400">
+                                    ${searchResultsTotal.toLocaleString()}
+                                </span>
+                                <span className="text-[10px] text-slate-400 ml-auto">
+                                    {filteredPending.length} crédito(s) — {new Set(filteredPending.filter(i => i.customer_id).map(i => i.customer_id)).size} cliente(s)
+                                </span>
+                                <button
+                                    onClick={() => { setSearchTerm(''); setCustomerFilterId(null); }}
+                                    className="ml-2 px-2 py-1 text-[10px] font-bold text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
+                                >
+                                    Limpiar filtro
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <div className="flex p-2 bg-slate-50 dark:bg-slate-900/50">
                         <button
@@ -647,16 +872,25 @@ export const CarteraHub = () => {
                                                     <td className="px-4 py-4 text-right">
                                                          <div className="flex items-center justify-end gap-2">
                                                              {isAdmin && (
-                                                                 <button
-                                                                     onClick={() => {
-                                                                         setSelectedEditItem(item);
-                                                                         setShowEditModal(true);
-                                                                     }}
-                                                                     title="Editar registro"
-                                                                     className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex items-center justify-center"
-                                                                 >
-                                                                     <span className="material-symbols-outlined !text-[18px]">edit</span>
-                                                                 </button>
+                                                                 <>
+                                                                     <button
+                                                                         onClick={() => {
+                                                                             setSelectedEditItem(item);
+                                                                             setShowEditModal(true);
+                                                                         }}
+                                                                         title="Editar registro"
+                                                                         className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors flex items-center justify-center"
+                                                                     >
+                                                                         <span className="material-symbols-outlined !text-[18px]">edit</span>
+                                                                     </button>
+                                                                     <button
+                                                                         onClick={() => setConfirmDeleteId(item.id)}
+                                                                         title="Eliminar registro"
+                                                                         className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors flex items-center justify-center"
+                                                                     >
+                                                                         <span className="material-symbols-outlined !text-[18px]">delete</span>
+                                                                     </button>
+                                                                 </>
                                                              )}
                                                              <button
                                                                  onClick={() => {
@@ -1060,6 +1294,54 @@ export const CarteraHub = () => {
                                     )}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirm Delete Modal */}
+            {confirmDeleteId && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 border border-white/10 animate-in zoom-in-95 duration-200">
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-rose-500 !text-[32px]">warning</span>
+                            </div>
+                            <h3 className="text-xl font-black text-slate-800 dark:text-white">¿Eliminar registro?</h3>
+                            <p className="text-sm text-slate-500 mt-2 font-medium">
+                                Esta acción no se puede deshacer. Se eliminará permanentemente la deuda
+                                {(() => {
+                                    const item = pendingItems.find(i => i.id === confirmDeleteId);
+                                    return item ? ` de "${item.name}" por $${item.remaining_amount.toLocaleString()}` : '';
+                                })()}.
+                            </p>
+                            <p className="text-[11px] text-rose-500 mt-2 font-bold">
+                                Solo se pueden eliminar deudas sin abonos registrados.
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setConfirmDeleteId(null)}
+                                disabled={processingDelete}
+                                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const item = pendingItems.find(i => i.id === confirmDeleteId);
+                                    if (item) handleDeleteDebt(item);
+                                }}
+                                disabled={processingDelete}
+                                className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-rose-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {processingDelete ? (
+                                    <span className="material-symbols-outlined !text-[18px] animate-spin">progress_activity</span>
+                                ) : (
+                                    <span className="material-symbols-outlined !text-[18px]">delete_forever</span>
+                                )}
+                                {processingDelete ? 'Eliminando...' : 'Eliminar'}
+                            </button>
                         </div>
                     </div>
                 </div>
