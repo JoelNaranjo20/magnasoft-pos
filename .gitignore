@@ -52,6 +52,9 @@ apps/desktop/out/
 *.swp
 *.swo
 
+# Claude Code local settings (machine-specific, may contain credentials)
+.claude/settings*.json
+
 # OSX
 .DS_Store
 .postgres-tools/
