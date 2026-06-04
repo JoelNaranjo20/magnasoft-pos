@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
+import { useAuthStore, selectIsAdmin } from '@shared/store/useAuthStore';
 import { CustomerHistoryModal } from '../../modals/CustomerHistoryModal';
 import { CustomerEditModal } from './CustomerEditModal';
 import { CustomerVehicleManagerModal } from './CustomerVehicleManagerModal';
 import { CustomerCreateModal } from './CustomerCreateModal';
+import { CustomerUnify } from './CustomerUnify';
 import { Pagination } from '../../ui/Pagination';
 
 export const CustomerManager = () => {
@@ -18,6 +20,9 @@ export const CustomerManager = () => {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isUnifyModalOpen, setIsUnifyModalOpen] = useState(false);
+
+    const isAdmin = useAuthStore(selectIsAdmin);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -42,6 +47,7 @@ export const CustomerManager = () => {
                 .from('customers')
                 .select('*')
                 .eq('business_id', businessId)
+                .is('metadata->>merged_into_id', null)
                 .order('name');
 
             if (error) throw error;
@@ -116,6 +122,15 @@ export const CustomerManager = () => {
                         <span className="material-symbols-outlined !text-[18px]">person_add</span>
                         NUEVO CLIENTE
                     </button>
+                    {isAdmin && (
+                        <button
+                            onClick={() => setIsUnifyModalOpen(true)}
+                            className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-amber-500/20 transition-all active:scale-[0.98]"
+                        >
+                            <span className="material-symbols-outlined !text-[18px]">merge_type</span>
+                            UNIFICAR
+                        </button>
+                    )}
                     <div className="relative w-72">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400">search</span>
                         <input
@@ -263,6 +278,11 @@ export const CustomerManager = () => {
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 onSuccess={fetchCustomers}
+            />
+
+            <CustomerUnify
+                isOpen={isUnifyModalOpen}
+                onClose={() => setIsUnifyModalOpen(false)}
             />
         </div>
     );

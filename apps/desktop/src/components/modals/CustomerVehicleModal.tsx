@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
+import { normalizePhone } from '@shared/lib/normalizePhone';
+import { normalizeName } from '@shared/lib/normalizeName';
 
 interface Customer {
     id: string;
@@ -55,6 +57,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
 
     // New entity forms
     const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', loyaltyOptOut: false });
+    const [duplicateMatches, setDuplicateMatches] = useState<{ id: string; name: string; phone: string | null; last_visit: string | null }[] | null>(null);
     const [newVehicle, setNewVehicle] = useState({
         license_plate: '',
         type: 'car' as any,
@@ -116,6 +119,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                     .from('customers')
                     .select('*, vehicles(*)')
                     .eq('business_id', businessId)
+                    .is('metadata->>merged_into_id', null)
                     .or(`phone.ilike.%${query}%,name.ilike.%${query}%`)
                     .limit(5),
                 supabase
@@ -174,7 +178,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
         setStep('selection');
     };
 
-    const handleCreateCustomer = async () => {
+    const handleCreateCustomer = async (isOverride = false) => {
         if (!newCustomer.name) return;
         setLoading(true);
         try {
@@ -182,41 +186,34 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
             const customerName = newCustomer.name.trim();
             const customerPhone = newCustomer.phone.trim() || null;
 
-            // Check for duplicate customer
-            if (customerPhone) {
-                const { data: existingPhone } = await supabase
-                    .from('customers')
-                    .select('*')
-                    .eq('business_id', businessId)
-                    .eq('phone', customerPhone)
-                    .maybeSingle();
+            // Verificar duplicados usando normalización (solo si no es override)
+            if (!isOverride) {
+                const normalizedPhone = normalizePhone(customerPhone);
+                const normalizedName = normalizeName(customerName);
 
-                if (existingPhone) {
-                    alert(`El cliente con teléfono ${customerPhone} ya existe: ${existingPhone.name}`);
-                    setSelectedCustomer(existingPhone);
-                    loadVehicles(existingPhone.id);
-                    setStep('selection');
-                    setNewCustomer({ name: '', phone: '', email: '', loyaltyOptOut: false });
-                    setLoading(false);
-                    return;
-                }
-            } else {
-                const { data: existingName } = await supabase
+                const { data: existingCustomers } = await supabase
                     .from('customers')
-                    .select('*')
+                    .select('id, name, phone, last_visit')
                     .eq('business_id', businessId)
-                    .ilike('name', customerName)
-                    .maybeSingle();
+                    .is('metadata->>merged_into_id', null);
 
-                if (existingName) {
-                    alert(`Ya existe un cliente con el nombre exacto: ${existingName.name}`);
-                    setSelectedCustomer(existingName);
-                    loadVehicles(existingName.id);
-                    setStep('selection');
-                    setNewCustomer({ name: '', phone: '', email: '', loyaltyOptOut: false });
-                    setLoading(false);
-                    return;
+                if (existingCustomers) {
+                    const matches = normalizedPhone
+                        ? existingCustomers.filter(c => normalizePhone(c.phone) === normalizedPhone && c.name !== customerName)
+                        : existingCustomers.filter(c => normalizeName(c.name) === normalizedName && c.name !== customerName);
+
+                    if (matches.length > 0) {
+                        setDuplicateMatches(matches);
+                        setLoading(false);
+                        return;
+                    }
                 }
+            }
+
+            const metadata: Record<string, unknown> = { loyalty_opt_out: newCustomer.loyaltyOptOut };
+            if (isOverride) {
+                metadata.duplicate_override = true;
+                metadata.duplicate_override_at = new Date().toISOString();
             }
 
             const payload = {
@@ -224,14 +221,13 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                 phone: customerPhone,
                 email: newCustomer.email.trim() || null,
                 business_id: businessId,
-                metadata: {
-                    loyalty_opt_out: newCustomer.loyaltyOptOut
-                }
+                metadata
             };
             const { data, error } = await supabase.from('customers').insert(payload).select().single();
             if (error) throw error;
             setSelectedCustomer(data);
             setStep('vehicle_form');
+            setDuplicateMatches(null);
         } catch (err: any) {
             console.error('Error creating customer:', err);
             const msg = err.code === '42501'
@@ -241,6 +237,14 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleUseExistingDuplicate = (customer: Customer) => {
+        setSelectedCustomer(customer);
+        loadVehicles(customer.id);
+        setStep('selection');
+        setNewCustomer({ name: '', phone: '', email: '', loyaltyOptOut: false });
+        setDuplicateMatches(null);
     };
 
     const handleCreateVehicle = async () => {
@@ -436,7 +440,57 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                     )}
 
                     {/* STEP: CUSTOMER FORM */}
-                    {step === 'customer_form' && (
+                    {step === 'customer_form' && duplicateMatches && (
+                        /* --- DIÁLOGO DE PREVENCIÓN DE DUPLICADOS --- */
+                        <div className="space-y-5 animate-in slide-in-from-right-8 duration-300">
+                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl">
+                                <div className="flex items-start gap-3">
+                                    <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 mt-0.5">warning</span>
+                                    <div>
+                                        <p className="text-sm font-bold text-amber-800 dark:text-amber-200">
+                                            Ya existe{duplicateMatches.length > 1 ? 'n' : ''} {duplicateMatches.length} cliente{duplicateMatches.length > 1 ? 's' : ''} similar{duplicateMatches.length > 1 ? 'es' : ''}:
+                                        </p>
+                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                                            ¿Deseas usar el cliente existente o crear de todos modos?
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                {duplicateMatches.map((match) => (
+                                    <div key={match.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-900 dark:text-white">{match.name}</p>
+                                            <p className="text-xs text-slate-500">{match.phone || 'Sin teléfono'}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleUseExistingDuplicate(match)}
+                                            className="text-xs font-bold text-primary hover:underline px-3 py-1.5"
+                                        >
+                                            Usar este
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setDuplicateMatches(null)}
+                                    className="px-8 py-4 font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                                >
+                                    Volver
+                                </button>
+                                <button
+                                    onClick={() => handleCreateCustomer(true)}
+                                    disabled={loading}
+                                    className="flex-1 py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 transition-all"
+                                >
+                                    {loading ? 'Creando...' : 'Crear de todos modos'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    {step === 'customer_form' && !duplicateMatches && (
                         <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
                             <div className="space-y-4">
                                 <div className="space-y-1.5">
@@ -492,7 +546,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                     Volver
                                 </button>
                                 <button
-                                    onClick={handleCreateCustomer}
+                                    onClick={() => handleCreateCustomer(false)}
                                     disabled={loading || !newCustomer.name}
                                     className="flex-1 py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 transition-all"
                                 >

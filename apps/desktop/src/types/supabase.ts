@@ -1166,6 +1166,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      merge_customers: {
+        Args: {
+          p_target_id: string
+          p_source_ids: string[]
+          p_performed_by: string
+        }
+        Returns: {
+          success: boolean
+          message: string
+          transfers: {
+            sales: number
+            debts: number
+            vehicles: number
+          }
+        }
+      }
     }
     Enums: {
       [_ in never]: never

@@ -12,7 +12,7 @@ Cada negocio es un tenant aislado. La base de datos PostgreSQL garantiza esta se
 
 ### III. Spec-Driven Development (NON-NEGOTIABLE)
 
-Todo cambio no trivial sigue el protocolo de 5 fases definido en `docs/spec-kit/`:
+Todo cambio no trivial sigue el protocolo de 5 fases. Los artefactos de cada feature (spec.md, plan.md, tasks.md) se guardan en `specs/###-nombre-feature/`:
 
 1. **Especificar** — Definir objetivos, requerimientos, UI afectada y análisis de stores/módulos impactados.
 2. **Planificar** — Detallar archivos a crear/modificar/eliminar con análisis de impacto y no regresión.
