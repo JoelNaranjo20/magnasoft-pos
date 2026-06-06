@@ -119,7 +119,6 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                     .from('customers')
                     .select('*, vehicles(*)')
                     .eq('business_id', businessId)
-                    .is('metadata->>merged_into_id', null)
                     .or(`phone.ilike.%${query}%,name.ilike.%${query}%`)
                     .limit(5),
                 supabase
@@ -178,7 +177,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
         setStep('selection');
     };
 
-    const handleCreateCustomer = async (isOverride = false) => {
+    const handleCreateCustomer = async () => {
         if (!newCustomer.name) return;
         setLoading(true);
         try {
@@ -186,35 +185,30 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
             const customerName = newCustomer.name.trim();
             const customerPhone = newCustomer.phone.trim() || null;
 
-            // Verificar duplicados usando normalización (solo si no es override)
-            if (!isOverride) {
-                const normalizedPhone = normalizePhone(customerPhone);
-                const normalizedName = normalizeName(customerName);
+            // Verificar duplicados — bloquear sin excepción
+            const normalizedPhone = normalizePhone(customerPhone);
+            const normalizedName = normalizeName(customerName);
 
-                const { data: existingCustomers } = await supabase
-                    .from('customers')
-                    .select('id, name, phone, last_visit')
-                    .eq('business_id', businessId)
-                    .is('metadata->>merged_into_id', null);
+            const { data: existingCustomers } = await supabase
+                .from('customers')
+                .select('id, name, phone, last_visit')
+                .eq('business_id', businessId);
 
-                if (existingCustomers) {
-                    const matches = normalizedPhone
-                        ? existingCustomers.filter(c => normalizePhone(c.phone) === normalizedPhone && c.name !== customerName)
-                        : existingCustomers.filter(c => normalizeName(c.name) === normalizedName && c.name !== customerName);
+            if (existingCustomers) {
+                const matches = existingCustomers.filter(c => {
+                    if (normalizedPhone && normalizePhone(c.phone) === normalizedPhone) return true;
+                    if (normalizedName && normalizeName(c.name) === normalizedName) return true;
+                    return false;
+                });
 
-                    if (matches.length > 0) {
-                        setDuplicateMatches(matches);
-                        setLoading(false);
-                        return;
-                    }
+                if (matches.length > 0) {
+                    setDuplicateMatches(matches);
+                    setLoading(false);
+                    return;
                 }
             }
 
             const metadata: Record<string, unknown> = { loyalty_opt_out: newCustomer.loyaltyOptOut };
-            if (isOverride) {
-                metadata.duplicate_override = true;
-                metadata.duplicate_override_at = new Date().toISOString();
-            }
 
             const payload = {
                 name: customerName,
@@ -441,17 +435,17 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
 
                     {/* STEP: CUSTOMER FORM */}
                     {step === 'customer_form' && duplicateMatches && (
-                        /* --- DIÁLOGO DE PREVENCIÓN DE DUPLICADOS --- */
+                        /* --- DIÁLOGO DE PREVENCIÓN DE DUPLICADOS (BLOQUEO TOTAL) --- */
                         <div className="space-y-5 animate-in slide-in-from-right-8 duration-300">
-                            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl">
+                            <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl">
                                 <div className="flex items-start gap-3">
-                                    <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 mt-0.5">warning</span>
+                                    <span className="material-symbols-outlined text-rose-600 dark:text-rose-400 mt-0.5">block</span>
                                     <div>
-                                        <p className="text-sm font-bold text-amber-800 dark:text-amber-200">
-                                            Ya existe{duplicateMatches.length > 1 ? 'n' : ''} {duplicateMatches.length} cliente{duplicateMatches.length > 1 ? 's' : ''} similar{duplicateMatches.length > 1 ? 'es' : ''}:
+                                        <p className="text-sm font-bold text-rose-800 dark:text-rose-200">
+                                            No se puede crear: ya existe{duplicateMatches.length > 1 ? 'n' : ''} {duplicateMatches.length} cliente{duplicateMatches.length > 1 ? 's' : ''} con el mismo teléfono o nombre.
                                         </p>
-                                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                                            ¿Deseas usar el cliente existente o crear de todos modos?
+                                        <p className="text-xs text-rose-600 dark:text-rose-400 mt-2">
+                                            Selecciona el cliente existente de la lista.
                                         </p>
                                     </div>
                                 </div>
@@ -473,21 +467,12 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => setDuplicateMatches(null)}
-                                    className="px-8 py-4 font-bold text-slate-500 hover:text-slate-700 transition-colors"
-                                >
-                                    Volver
-                                </button>
-                                <button
-                                    onClick={() => handleCreateCustomer(true)}
-                                    disabled={loading}
-                                    className="flex-1 py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 transition-all"
-                                >
-                                    {loading ? 'Creando...' : 'Crear de todos modos'}
-                                </button>
-                            </div>
+                            <button
+                                onClick={() => setDuplicateMatches(null)}
+                                className="w-full py-4 font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                            >
+                                Volver
+                            </button>
                         </div>
                     )}
                     {step === 'customer_form' && !duplicateMatches && (
@@ -546,7 +531,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                     Volver
                                 </button>
                                 <button
-                                    onClick={() => handleCreateCustomer(false)}
+                                    onClick={() => handleCreateCustomer()}
                                     disabled={loading || !newCustomer.name}
                                     className="flex-1 py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50 transition-all"
                                 >

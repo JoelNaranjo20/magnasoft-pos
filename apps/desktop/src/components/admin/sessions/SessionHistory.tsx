@@ -595,10 +595,12 @@ export const SessionHistory = () => {
                                                         <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">{comm.worker?.name}</td>
                                                         <td className="px-4 py-3">
                                                             <div className="flex flex-col">
-                                                                {comm.service_type === 'tip' ? (
+                                                                {(comm.service_type === 'tip' || comm.service_type === 'tip_split') ? (
                                                                     <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold">
-                                                                        <span className="material-symbols-outlined !text-[16px]">volunteer_activism</span>
-                                                                        Propina
+                                                                        <span className="material-symbols-outlined !text-[16px]">
+                                                                            {comm.service_type === 'tip_split' ? 'group' : 'volunteer_activism'}
+                                                                        </span>
+                                                                        {comm.service_type === 'tip_split' ? 'Propina (Repartida)' : 'Propina'}
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-slate-700 dark:text-slate-300">{comm.sale_item?.name || 'Servicio'}</span>

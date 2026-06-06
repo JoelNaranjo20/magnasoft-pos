@@ -39,17 +39,10 @@ export const CarteraHub = () => {
     const [selectedItem, setSelectedItem] = useState<CombinedDebt | null>(null);
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
-    const [cashTarget, setCashTarget] = useState<'daily' | 'central'>('daily');
-
     // Edit Debt CRUD State
     const [showEditModal, setShowEditModal] = useState(false);
     const [selectedEditItem, setSelectedEditItem] = useState<CombinedDebt | null>(null);
     const isAdmin = useAuthStore(selectIsAdmin);
-
-    // Derived: whether the selected item's credit was created today
-    const isCreditFromToday = selectedItem
-        ? new Date(selectedItem.date).toDateString() === new Date().toDateString()
-        : false;
 
     const [searchTerm, setSearchTerm] = useState('');
     const [customerFilterId, setCustomerFilterId] = useState<string | null>(null);
@@ -446,12 +439,8 @@ export const CarteraHub = () => {
         if (!selectedItem || !paymentAmount || isNaN(parseFloat(paymentAmount))) return;
         const amount = parseFloat(paymentAmount);
 
-        // Determine destination: daily cash or central cash
-        // - Credits from today: user chooses (cashTarget)
-        // - Credits from previous days: always central cash
-        const goToCentral = selectedItem.type === 'customer' && (!isCreditFromToday || cashTarget === 'central');
-
-        console.log(`📅 CarteraHub | isToday: ${isCreditFromToday} | target: ${cashTarget} | goToCentral: ${goToCentral}`);
+        // All customer debt payments always go to Central Cash
+        const goToCentral = selectedItem.type === 'customer';
 
         try {
             if (selectedItem.type === 'customer') {
@@ -1046,64 +1035,11 @@ export const CarteraHub = () => {
                                 </div>
                             ) : null}
 
-                            {/* Cash Destination — only for customer credits */}
-                            {selectedItem.type === 'customer' && (
-                                isCreditFromToday ? (
-                                    <div>
-                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Destino del Abono</label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <button
-                                                onClick={() => setCashTarget('daily')}
-                                                className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                                                    cashTarget === 'daily'
-                                                        ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500 text-blue-600 dark:text-blue-400'
-                                                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
-                                                }`}
-                                            >
-                                                <span className="material-symbols-outlined !text-[20px]">point_of_sale</span>
-                                                <div className="text-left">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Diaria</p>
-                                                    <p className="text-[9px] font-bold opacity-60 mt-0.5">Sesión actual</p>
-                                                </div>
-                                            </button>
-                                            <button
-                                                onClick={() => setCashTarget('central')}
-                                                className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                                                    cashTarget === 'central'
-                                                        ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                                                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
-                                                }`}
-                                            >
-                                                <span className="material-symbols-outlined !text-[20px]">account_balance_wallet</span>
-                                                <div className="text-left">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Central</p>
-                                                    <p className="text-[9px] font-bold opacity-60 mt-0.5">Acumulado general</p>
-                                                </div>
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-3 p-4 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl">
-                                        <span className="material-symbols-outlined text-indigo-500 !text-xl">account_balance_wallet</span>
-                                        <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-tight">
-                                            Crédito anterior → Irá automáticamente a <span className="underline">Caja Central</span>
-                                        </p>
-                                    </div>
-                                )
-                            )}
-
-                            {!cashSession && (
-                                <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100">
-                                    <span className="material-symbols-outlined text-rose-500 !text-sm">warning</span>
-                                    <p className="text-[9px] text-rose-600 font-black uppercase tracking-widest">
-                                        Error: No hay una sesión de caja abierta para registrar este ingreso.
-                                    </p>
-                                </div>
-                            )}
+                            {/* All customer payments always go to Central Cash */}
 
                             <button
                                 onClick={handlePayment}
-                                disabled={!paymentAmount || !cashSession}
+                                disabled={!paymentAmount}
                                 className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed mt-4 uppercase tracking-widest text-sm"
                             >
                                 Confirmar Pago

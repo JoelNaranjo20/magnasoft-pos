@@ -47,7 +47,6 @@ export const CustomerManager = () => {
                 .from('customers')
                 .select('*')
                 .eq('business_id', businessId)
-                .is('metadata->>merged_into_id', null)
                 .order('name');
 
             if (error) throw error;

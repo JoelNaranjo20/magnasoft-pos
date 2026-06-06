@@ -32,6 +32,7 @@ export const CloseSessionModal = () => {
     const [digitalCount, setDigitalCount] = useState(0);
     const [commissionsPaid, setCommissionsPaid] = useState(0);
     const [commissionsPending, setCommissionsPending] = useState(0);
+    const [cashAbonosTotal, setCashAbonosTotal] = useState(0); // Para evitar doble conteo en Caja Central
 
     // Fetch expected total and commissions
     useEffect(() => {
@@ -102,21 +103,24 @@ export const CloseSessionModal = () => {
                 .eq('cash_session_id', cashSession.id)
                 .eq('business_id', businessId);
 
-            let cashAbonosTotal = 0;
+            let cashAbonosTotalLocal = 0;
             let digitalAbonosTotal = 0;
             let digitalAbonosCount = 0;
             debtPayments?.forEach((dp: any) => {
                 const amt = Number(dp.amount);
                 if (dp.payment_method === 'cash') {
-                    cashAbonosTotal += amt;
+                    cashAbonosTotalLocal += amt;
                 } else {
                     digitalAbonosTotal += amt;
                     digitalAbonosCount++;
                 }
             });
 
+            // Guardar para usar en handleConfirmClose (evitar doble conteo en Caja Central)
+            setCashAbonosTotal(cashAbonosTotalLocal);
+
             // Expected Cash: Base + Cash Sales + Cash Movements + Cash Abonos
-            setExpectedTotal((cashSession.opening_balance || 0) + cashSalesTotal + cashMovementBalance + cashAbonosTotal);
+            setExpectedTotal((cashSession.opening_balance || 0) + cashSalesTotal + cashMovementBalance + cashAbonosTotalLocal);
 
             // DIGITAL SISTEMA = Digital Sales + Digital Abonos + Digital Movements (Favors)
             const totalDigitalSistema = digitalSalesTotal + digitalAbonosTotal + digitalMovementBalance;
@@ -216,8 +220,11 @@ export const CloseSessionModal = () => {
                 throw new Error(`Error en sesión: ${sessionError.message} (${sessionError.code})`);
             }
 
-            // 3. Automatically record the transfer in Central Cash
-            const netToTransfer = totalCounted;
+            // 3. Registrar transferencia en Caja Central
+            //    Los abonos en efectivo ya fueron registrados individualmente
+            //    en central_cash_movements al momento del pago (CreditManagement,
+            //    CarteraHub, RegisterAbonoModal). Los restamos para evitar doble conteo.
+            const netToTransfer = Math.max(0, totalCounted - cashAbonosTotal);
             if (netToTransfer > 0) {
                 const { error: centralError } = await (supabase as any)
                     .from('central_cash_movements')
@@ -225,7 +232,7 @@ export const CloseSessionModal = () => {
                         type: 'income',
                         amount: netToTransfer,
                         business_id: businessId,
-                        description: `Cierre de Sesión #${cashSession.id.slice(0, 8)} - Transferencia de efectivo`,
+                        description: `Cierre de Sesión #${cashSession.id.slice(0, 8)} - Transferencia de efectivo${cashAbonosTotal > 0 ? ` (${formatCurrency(cashAbonosTotal)} ya registrados como abonos)` : ''}`,
                         user_id: user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id) ? user.id : null
                     });
                 if (centralError) console.error('Error recording central cash entry:', centralError);

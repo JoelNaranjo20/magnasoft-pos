@@ -1,6 +1,6 @@
 {
   "name": "magnasoft-web",
-  "version": "1.0.40",
+  "version": "1.0.46",
   "private": true,
   "scripts": {
     "dev": "next dev",

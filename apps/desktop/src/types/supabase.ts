@@ -1170,7 +1170,6 @@ export type Database = {
         Args: {
           p_target_id: string
           p_source_ids: string[]
-          p_performed_by: string
         }
         Returns: {
           success: boolean

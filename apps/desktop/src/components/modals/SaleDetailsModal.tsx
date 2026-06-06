@@ -168,6 +168,39 @@ export const SaleDetailsModal = ({ isOpen, onClose, sale }: SaleDetailsModalProp
                     </div>
                 </div>
 
+                {/* Cross-change & Tips badges */}
+                {(sale.metadata?.cross_change || sale.metadata?.tip_amount > 0) && (
+                    <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 space-y-1.5">
+                        {sale.metadata?.cross_change && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                                <span className="material-symbols-outlined text-sky-500 text-sm">swap_horiz</span>
+                                <span className="text-sky-600 dark:text-sky-400">
+                                    Cambio: ${sale.metadata.cross_change.amount.toLocaleString()} devuelto en {
+                                        sale.metadata.cross_change.to_method === 'cash' ? 'efectivo' : 'transferencia'
+                                    }
+                                </span>
+                            </div>
+                        )}
+                        {sale.metadata?.tip_amount > 0 && (
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                                <span className="material-symbols-outlined text-amber-500 text-sm">volunteer_activism</span>
+                                <span className="text-amber-600 dark:text-amber-400">
+                                    Propina: ${sale.metadata.tip_amount.toLocaleString()}
+                                    {sale.metadata.tip_percentage ? ` (${sale.metadata.tip_percentage}%)` : ''}
+                                    {sale.metadata.tip_distribution
+                                        ? ` → ${sale.metadata.tip_distribution.length} trabajadores`
+                                        : sale.metadata.tip_worker_id ? ' → trabajador asignado' : ''}
+                                </span>
+                            </div>
+                        )}
+                        {sale.metadata?.tip_payment_method && sale.metadata.tip_payment_method !== sale.payment_method && (
+                            <div className="text-[10px] text-slate-400 font-medium ml-6">
+                                Propina pagada en {sale.metadata.tip_payment_method === 'cash' ? 'efectivo' : sale.metadata.tip_payment_method}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Footer Info */}
                 <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
                     <div>Método: {

@@ -1,64 +1,70 @@
 # Configuración de Persistencia de Sesión (Solución Híbrida Electron)
 
-Este documento explica cómo se implementó la persistencia de datos para que la aplicación mantenga la sesión del usuario (Auth) y el estado de la caja (POS) incluso después de reiniciar la aplicación o la computadora.
+**Actualizado**: 2026-06-05 — Revisado contra el código actual.
 
-## 🚀 El Problema de Origen
-En entornos de Electron (especialmente en desarrollo con `localhost`), el `localStorage` del navegador es **efímero**. Esto causaba que:
-1. Al cerrar la app, Supabase perdía el token (pedía login/PIN otra vez).
-2. Al reiniciar, Zustand perdía el estado de la sesión de caja (se mostraba como "Cerrada").
+---
 
-## 🛠️ La Solución: Puente IPC a Disco Físico
-Hemos creado un sistema que puentea el almacenamiento del navegador hacia un archivo JSON real en el sistema de archivos de Windows.
+## El Problema
 
-### 1. El Archivo de Almacenamiento
-Los datos se guardan permanentemente en:
+En entornos Electron, el `localStorage` del navegador es efímero. Al cerrar la app:
+1. Supabase pierde el token de autenticación (pide login/PIN otra vez)
+2. Zustand pierde el estado de la sesión de caja (se muestra como "Cerrada")
+
+---
+
+## La Solución: Puente IPC a Disco Físico
+
+Los datos se guardan permanentemente en un archivo JSON:
 `%APPDATA%\desktop\app-storage.json`
 
-### 2. Arquitectura del Flujo
-La persistencia funciona mediante **IPC (Inter-Process Communication)**:
+### Arquitectura del Flujo
 
-*   **Renderer Process (React)**: Solicita guardar o leer una clave.
-*   **Preload Script**: Expone las funciones `storageGet`, `storageSet` y `storageRemove`.
-*   **Main Process (Electron)**: Recibe la petición y usa el módulo `fs` de Node.js para escribir/leer el archivo JSON en el disco.
+```
+Renderer Process (React)
+    ↕ window.electronAPI.storageGet / storageSet / storageRemove
+Preload Script (electron/preload.ts)
+    ↕ ipcRenderer.invoke('storage-get') / ('storage-set') / ('storage-remove')
+Main Process (electron/main.ts)
+    ↕ fs.readFileSync / fs.writeFileSync
+Disco: app-storage.json
+```
 
----
+### Componentes
 
-## 🏗️ Componentes de la Implementación
+| Componente | Archivo | Propósito |
+|---|---|---|
+| Motor IPC | `electron/main.ts` (líneas 154-212) | Handlers `storage-get`, `storage-set`, `storage-remove`. Cache en memoria con `inMemoryStorageCache` |
+| Puente | `electron/preload.ts` (líneas 9-11) | Expone `window.electronAPI.storageGet/Set/Remove` |
+| Adaptador Supabase | `apps/desktop/src/lib/electronStorage.ts` | Implementa `getItem/setItem/removeItem` para Supabase Auth. Fallback a localStorage si no hay `window.electronAPI` |
+| Adaptador Zustand | `apps/shared/lib/zustandElectronStorage.ts` | `createElectronZustandStorage()` → `StateStorage` para middleware `persist` de Zustand |
+| Session Keeper | `apps/desktop/src/lib/supabase.ts` (líneas 62-129) | `ensureSession()` — refresca JWT si expira en <120s. Heartbeat cada 50 min. Listeners: visibilitychange, online, focus |
 
-### A. El Motor de Almacenamiento (Main & Preload)
-*   **`electron/main.ts`**: Contiene los manejadores (`ipcMain.handle`) que gestionan el archivo `app-storage.json`.
-*   **`electron/preload.ts`**: Expone `window.electronAPI` para que React pueda comunicarse con el disco.
+### Qué se Persiste
 
-### B. Adaptadores para Librerías
-*   **`src/lib/electronStorage.ts`**: Un adaptador que engaña a **Supabase Auth** para que use el disco en lugar de `localStorage`.
-*   **`src/lib/zustandElectronStorage.ts`**: Un adaptador que permite a **Zustand** (la tienda de la sesión) persistir la caja abierta en el disco de manera asíncrona.
+| Store | Clave | Datos |
+|---|---|---|
+| Zustand `useSessionStore` | `session-storage` | `user`, `isAuthenticated`, `cashSession`, `workerRole`, `isWorkerAdmin` |
+| Supabase Auth (vía `electronStorage`) | `sb-*-auth-token` | Token JWT, refresh token |
 
-### C. Aplicación en el Código
-*   **`src/lib/supabase.ts`**: Configurado con el nuevo `electronStorage`.
-*   **`src/store/useSessionStore.ts`**: Configurado para persistir únicamente `cashSession` usando el bridge de Electron.
-*   **`src/App.tsx`**: Mejorado para que la sincronización con la Base de Datos sea "no destructiva" (no borra la sesión local si la DB tarda en responder).
-
----
-
-## 📋 Cómo verificar la persistencia
-
-1.  **Terminal de Electron**: Al iniciar, deberías ver:
-    *   `📁 Electron userData path: ...`
-    *   `📖 [IPC] Reading key: sb-...-auth-token exists: true`
-2.  **Consola del Navegador (F12)**:
-    *   `✅ Supabase configurado ... usingElectronStorage: true`
-3.  **Prueba de Fuego**:
-    *   Inicia sesión y abre la caja.
-    *   Cierra la aplicación con la **X**.
-    *   Vuelve a abrirla.
-    *   **Resultado**: Deberías entrar directamente al POS con la caja abierta sin que te pida el PIN.
+**NO se persiste** `isConfigAuthenticated` — el PIN se requiere en cada reinicio de la app.
 
 ---
 
-## ⚠️ Notas de Mantenimiento
-Si alguna vez necesitas resetear la aplicación por completo (limpiar todo el almacenamiento):
-1. Cierra la aplicación.
-2. Ve a `%APPDATA%\desktop\`.
-3. Borra el archivo `app-storage.json`.
-4. Borra la carpeta `Local Storage`.
-5. Reinicia la aplicación.
+## Verificación
+
+1. **Terminal de Electron**: Al iniciar debe mostrar:
+   - `📁 Electron userData path: ...`
+   - `📖 [IPC] Reading key: sb-...-auth-token exists: true`
+2. **Consola del navegador (F12)**: `✅ Supabase configurado ... usingElectronStorage: true`
+3. **Prueba**: Inicia sesión, abre caja, cierra la app con X, reabre → entra directo al POS con caja abierta sin pedir PIN.
+
+---
+
+## Limpieza de Almacenamiento
+
+Para reset completo:
+1. Cerrar la app
+2. Ir a `%APPDATA%\desktop\`
+3. Borrar `app-storage.json`
+4. Borrar carpeta `Local Storage`
+5. Reiniciar la app

@@ -25,7 +25,6 @@ export const CustomerCreateModal = ({ isOpen, onClose, onSuccess }: CustomerCrea
         loyalty_opt_out: false
     });
     const [duplicateMatches, setDuplicateMatches] = useState<DuplicateCheckResult[] | null>(null);
-    const [creatingOverride, setCreatingOverride] = useState(false);
 
     if (!isOpen) return null;
 
@@ -33,31 +32,20 @@ export const CustomerCreateModal = ({ isOpen, onClose, onSuccess }: CustomerCrea
         const normalizedPhone = normalizePhone(customerPhone);
         const normalizedName = normalizeName(customerName);
 
-        // Construir query base: clientes activos (no unificados) del negocio
-        let query = supabase
+        const { data } = await supabase
             .from('customers')
             .select('id, name, phone, last_visit')
-            .eq('business_id', businessId)
-            .is('metadata->>merged_into_id', null);
+            .eq('business_id', businessId);
 
-        // Si hay teléfono, buscar por teléfono normalizado
-        if (normalizedPhone) {
-            // Obtenemos varios candidatos y filtramos en cliente por teléfono normalizado
-            const { data } = await query;
-            if (data) {
-                return data.filter(c => normalizePhone(c.phone) === normalizedPhone && c.name !== customerName);
-            }
-            return [];
-        }
+        if (!data) return [];
 
-        // Sin teléfono: buscar por similitud de nombre normalizado
-        const { data } = await query;
-        if (data) {
-            return data.filter(c =>
-                normalizeName(c.name) === normalizedName && c.name !== customerName
-            );
-        }
-        return [];
+        return data.filter(c => {
+            // Coincidencia por teléfono (si ambos tienen teléfono)
+            if (normalizedPhone && normalizePhone(c.phone) === normalizedPhone) return true;
+            // Coincidencia por nombre normalizado (siempre se verifica)
+            if (normalizedName && normalizeName(c.name) === normalizedName) return true;
+            return false;
+        });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -75,35 +63,13 @@ export const CustomerCreateModal = ({ isOpen, onClose, onSuccess }: CustomerCrea
             const customerName = formData.name.trim();
             const customerPhone = formData.phone.trim() || null;
 
-            // Verificar duplicados usando normalización
+            // Verificar duplicados — bloquear sin excepción
             const matches = await checkDuplicates(businessId, customerName, customerPhone);
 
-            if (matches.length > 0 && !creatingOverride) {
+            if (matches.length > 0) {
                 setDuplicateMatches(matches);
                 setLoading(false);
                 return;
-            }
-
-            await createCustomer(businessId, customerName, customerPhone);
-        } catch (error: any) {
-            console.error('Error creating customer:', error);
-            alert('Error al crear cliente: ' + error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const createCustomer = async (businessId: string, customerName: string, customerPhone: string | null) => {
-        setCreatingOverride(true);
-        try {
-            const metadata: Record<string, unknown> = {
-                loyalty_opt_out: formData.loyalty_opt_out
-            };
-            // Si hubo coincidencias que el usuario decidió ignorar, registrarlo
-            if (duplicateMatches && duplicateMatches.length > 0) {
-                metadata.duplicate_override = true;
-                metadata.duplicate_override_at = new Date().toISOString();
-                metadata.duplicate_override_matches = duplicateMatches.map(m => m.id);
             }
 
             const { error } = await supabase
@@ -115,7 +81,7 @@ export const CustomerCreateModal = ({ isOpen, onClose, onSuccess }: CustomerCrea
                     email: null,
                     loyalty_points: 0,
                     total_visits: 0,
-                    metadata
+                    metadata: { loyalty_opt_out: formData.loyalty_opt_out }
                 });
 
             if (error) throw error;
@@ -126,30 +92,16 @@ export const CustomerCreateModal = ({ isOpen, onClose, onSuccess }: CustomerCrea
             setFormData({ name: '', phone: '', loyalty_opt_out: false });
             setDuplicateMatches(null);
         } catch (error: any) {
-            throw error;
-        } finally {
-            setCreatingOverride(false);
-        }
-    };
-
-    const handleUseExisting = () => {
-        // Simplemente cerrar — el admin luego buscará al cliente existente manualmente
-        setDuplicateMatches(null);
-        onClose();
-    };
-
-    const handleCreateAnyway = async () => {
-        setDuplicateMatches(null);
-        setLoading(true);
-        try {
-            const businessId = useBusinessStore.getState().id;
-            if (!businessId) return;
-            await createCustomer(businessId, formData.name.trim(), formData.phone.trim() || null);
-        } catch (error: any) {
+            console.error('Error creating customer:', error);
             alert('Error al crear cliente: ' + error.message);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleUseExisting = () => {
+        setDuplicateMatches(null);
+        onClose();
     };
 
     return (
@@ -165,23 +117,22 @@ export const CustomerCreateModal = ({ isOpen, onClose, onSuccess }: CustomerCrea
                 </div>
 
                 {duplicateMatches ? (
-                    /* --- DIÁLOGO DE PREVENCIÓN DE DUPLICADOS --- */
+                    /* --- DIÁLOGO DE PREVENCIÓN DE DUPLICADOS (BLOQUEO TOTAL) --- */
                     <div className="p-8 space-y-5">
-                        <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl">
+                        <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl">
                             <div className="flex items-start gap-3">
-                                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 mt-0.5">warning</span>
+                                <span className="material-symbols-outlined text-rose-600 dark:text-rose-400 mt-0.5">block</span>
                                 <div>
-                                    <p className="text-sm font-bold text-amber-800 dark:text-amber-200">
-                                        Ya existe{duplicateMatches.length > 1 ? 'n' : ''} {duplicateMatches.length} cliente{duplicateMatches.length > 1 ? 's' : ''} similar{duplicateMatches.length > 1 ? 'es' : ''}:
+                                    <p className="text-sm font-bold text-rose-800 dark:text-rose-200">
+                                        No se puede crear: ya existe{duplicateMatches.length > 1 ? 'n' : ''} {duplicateMatches.length} cliente{duplicateMatches.length > 1 ? 's' : ''} con el mismo teléfono o nombre:
                                     </p>
-                                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                                        ¿Deseas usar el cliente existente o crear de todos modos?
+                                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-2">
+                                        Usa el cliente existente en lugar de crear un duplicado.
                                     </p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Lista de coincidencias */}
                         <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                             {duplicateMatches.map((match) => (
                                 <div key={match.id} className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
@@ -192,30 +143,15 @@ export const CustomerCreateModal = ({ isOpen, onClose, onSuccess }: CustomerCrea
                                     </p>
                                 </div>
                             ))}
-                            {duplicateMatches.length > 5 && (
-                                <p className="text-xs text-slate-400 text-center py-1">
-                                    y {duplicateMatches.length - 5} más...
-                                </p>
-                            )}
                         </div>
 
-                        <div className="flex gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={handleUseExisting}
-                                className="flex-1 py-4 bg-primary text-white rounded-2xl font-bold shadow-lg shadow-blue-500/25 hover:bg-blue-600 transition-all"
-                            >
-                                Usar existente
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleCreateAnyway}
-                                disabled={loading}
-                                className="flex-1 py-4 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-white rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-all disabled:opacity-50"
-                            >
-                                {loading ? 'Creando...' : 'Crear de todos modos'}
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={handleUseExisting}
+                            className="w-full py-4 bg-primary text-white rounded-2xl font-bold shadow-lg shadow-blue-500/25 hover:bg-blue-600 transition-all"
+                        >
+                            Entendido, cerrar
+                        </button>
                     </div>
                 ) : (
                     /* --- FORMULARIO DE CREACIÓN NORMAL --- */
