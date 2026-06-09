@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useSessionStore } from '@shared/store/useSessionStore';
 import { CustomerHistoryModal } from '../modals/CustomerHistoryModal';
 
 interface DebtRecord {
@@ -34,17 +33,9 @@ export const CreditManagement = () => {
     const [selectedDebt, setSelectedDebt] = useState<DebtRecord | null>(null);
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
-    const [cashTarget, setCashTarget] = useState<'daily' | 'central'>('daily');
-
-    // Derived: whether the selected debt was created today
-    const isCreditFromToday = selectedDebt
-        ? new Date(selectedDebt.created_at).toDateString() === new Date().toDateString()
-        : false;
 
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [selectedCustomerForHistory, setSelectedCustomerForHistory] = useState<any>(null);
-
-    const cashSession = useSessionStore((state) => state.cashSession);
 
     const [debugInfo, setDebugInfo] = useState<{ totalCount: number, pendingCount: number, auth: boolean, error?: string } | null>(null);
 
@@ -117,9 +108,9 @@ export const CreditManagement = () => {
     }, []);
 
     const handlePayment = async () => {
-        console.log('💰 Attempting handlePayment:', { selectedDebt: !!selectedDebt, paymentAmount, cashSession: !!cashSession });
+        console.log('💰 Attempting handlePayment:', { selectedDebt: !!selectedDebt, paymentAmount });
 
-        if (!selectedDebt || !paymentAmount || !cashSession) {
+        if (!selectedDebt || !paymentAmount) {
             console.warn('⚠️ handlePayment returned early: Missing required data');
             alert('Faltan datos requeridos para procesar el pago');
             return;
@@ -137,12 +128,8 @@ export const CreditManagement = () => {
             return;
         }
 
-        // Determine destination: daily cash or central cash
-        // - Credits from today: user chooses (cashTarget)
-        // - Credits from previous days: always central cash
-        const goToCentral = !isCreditFromToday || cashTarget === 'central';
-
-        console.log(`📅 CreditMgmt | isToday: ${isCreditFromToday} | target: ${cashTarget} | goToCentral: ${goToCentral}`);
+        // All customer debt payments always go to Central Cash
+        const goToCentral = true;
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -155,7 +142,7 @@ export const CreditManagement = () => {
                     p_debt_id: selectedDebt.id,
                     p_amount: amount,
                     p_payment_method: paymentMethod,
-                    p_cash_session_id: goToCentral ? null : cashSession.id,
+                    p_cash_session_id: null,
                     p_notes: `Abono a deuda de ${selectedDebt.customer?.name || 'Cliente'}`
                 });
 
@@ -281,7 +268,7 @@ export const CreditManagement = () => {
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                        <thead className="bg-slate-50 dark:bg-slate-900/50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <thead className="bg-slate-50 dark:bg-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-400">
                             <tr>
                                 <th className="px-6 py-4">Cliente / Detalle</th>
                                 <th className="px-6 py-4">Fecha / Caja</th>
@@ -418,59 +405,11 @@ export const CreditManagement = () => {
                                 </div>
                             </div>
 
-                            {/* Cash Destination — shown when credit is from today */}
-                            {isCreditFromToday ? (
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 px-1">Destino del Abono</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => setCashTarget('daily')}
-                                            className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                                                cashTarget === 'daily'
-                                                    ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500 text-blue-600'
-                                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined !text-[18px]">point_of_sale</span>
-                                            <div className="text-left">
-                                                <p className="text-[9px] font-black uppercase tracking-widest leading-none">Caja Diaria</p>
-                                                <p className="text-[8px] font-bold opacity-60 mt-0.5">Sesión actual</p>
-                                            </div>
-                                        </button>
-                                        <button
-                                            onClick={() => setCashTarget('central')}
-                                            className={`flex items-center gap-2 p-3 rounded-xl border-2 transition-all ${
-                                                cashTarget === 'central'
-                                                    ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500 text-indigo-600'
-                                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined !text-[18px]">account_balance_wallet</span>
-                                            <div className="text-left">
-                                                <p className="text-[9px] font-black uppercase tracking-widest leading-none">Caja Central</p>
-                                                <p className="text-[8px] font-bold opacity-60 mt-0.5">Acumulado general</p>
-                                            </div>
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 rounded-xl">
-                                    <span className="material-symbols-outlined text-indigo-500 !text-base">account_balance_wallet</span>
-                                    <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest">
-                                        Crédito anterior → Caja Central automáticamente
-                                    </p>
-                                </div>
-                            )}
-
-                            {!cashSession && (
-                                <p className="text-[10px] text-rose-500 font-bold text-center italic">
-                                    * Necesitas una caja abierta para registrar abonos.
-                                </p>
-                            )}
+                            {/* All payments always go to Central Cash */}
 
                             <button
                                 onClick={handlePayment}
-                                disabled={!paymentAmount || !cashSession}
+                                disabled={!paymentAmount}
                                 className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale mt-4"
                             >
                                 CONFIRMAR ABONO

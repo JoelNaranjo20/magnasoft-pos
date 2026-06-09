@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState } from 'react';
 import { ProductStockManager } from '../../components/admin/products/ProductStockManager';
 import { CategoryManager } from '../../components/inventory/CategoryManager';
@@ -23,12 +23,12 @@ export const InventoryPage = () => {
             </header>
 
             {/* Navigation Tabs */}
-            <div className="flex p-1.5 bg-slate-100 dark:bg-[#0b1227]/85 rounded-2xl w-fit border border-slate-200/50 dark:border-white/5 shadow-inner backdrop-blur-sm">
+            <div className="flex p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl w-fit border border-slate-200/50 dark:border-white/5 shadow-inner backdrop-blur-sm">
                 <button
                     onClick={() => setActiveTab('products')}
                     className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'products'
                             ? 'bg-gradient-to-r from-primary to-blue-600 text-white shadow-md shadow-primary/20 scale-105'
-                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white'
+                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
                         }`}
                 >
                     <span className="material-symbols-outlined !text-[18px]">inventory_2</span>
@@ -38,7 +38,7 @@ export const InventoryPage = () => {
                     onClick={() => setActiveTab('categories')}
                     className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'categories'
                             ? 'bg-gradient-to-r from-primary to-blue-600 text-white shadow-md shadow-primary/20 scale-105'
-                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white'
+                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
                         }`}
                 >
                     <span className="material-symbols-outlined !text-[18px]">folder</span>
@@ -48,7 +48,7 @@ export const InventoryPage = () => {
                     onClick={() => setActiveTab('subcategories')}
                     className={`px-5 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'subcategories'
                             ? 'bg-gradient-to-r from-primary to-blue-600 text-white shadow-md shadow-primary/20 scale-105'
-                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white'
+                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
                         }`}
                 >
                     <span className="material-symbols-outlined !text-[18px]">account_tree</span>

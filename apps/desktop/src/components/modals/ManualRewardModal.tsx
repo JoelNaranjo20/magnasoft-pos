@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useCartStore } from '../../store/useCartStore';
@@ -145,7 +145,7 @@ export const ManualRewardModal = ({ isOpen, onClose, customer, onSuccess }: Manu
                 </div>
 
                 <div className="p-6 space-y-6">
-                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
                         <div>
                             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Puntos en Sistema</p>
                             <p className="text-2xl font-black text-slate-900 dark:text-white">{systemPoints}</p>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -39,17 +39,10 @@ export const CarteraHub = () => {
     const [selectedItem, setSelectedItem] = useState<CombinedDebt | null>(null);
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
-    const [cashTarget, setCashTarget] = useState<'daily' | 'central'>('daily');
-
     // Edit Debt CRUD State
     const [showEditModal, setShowEditModal] = useState(false);
     const [selectedEditItem, setSelectedEditItem] = useState<CombinedDebt | null>(null);
     const isAdmin = useAuthStore(selectIsAdmin);
-
-    // Derived: whether the selected item's credit was created today
-    const isCreditFromToday = selectedItem
-        ? new Date(selectedItem.date).toDateString() === new Date().toDateString()
-        : false;
 
     const [searchTerm, setSearchTerm] = useState('');
     const [customerFilterId, setCustomerFilterId] = useState<string | null>(null);
@@ -446,12 +439,8 @@ export const CarteraHub = () => {
         if (!selectedItem || !paymentAmount || isNaN(parseFloat(paymentAmount))) return;
         const amount = parseFloat(paymentAmount);
 
-        // Determine destination: daily cash or central cash
-        // - Credits from today: user chooses (cashTarget)
-        // - Credits from previous days: always central cash
-        const goToCentral = selectedItem.type === 'customer' && (!isCreditFromToday || cashTarget === 'central');
-
-        console.log(`📅 CarteraHub | isToday: ${isCreditFromToday} | target: ${cashTarget} | goToCentral: ${goToCentral}`);
+        // All customer debt payments always go to Central Cash
+        const goToCentral = selectedItem.type === 'customer';
 
         try {
             if (selectedItem.type === 'customer') {
@@ -639,7 +628,7 @@ export const CarteraHub = () => {
                                         setSearchTerm(e.target.value);
                                         setCustomerFilterId(null); // resetear filtro por cliente al escribir
                                     }}
-                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-bold outline-none focus:border-primary transition-all"
+                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-bold outline-none focus:border-primary transition-all"
                                 />
                             </div>
                             {/* Dropdown filtro por cliente */}
@@ -649,7 +638,7 @@ export const CarteraHub = () => {
                                     className={`flex items-center gap-2 px-4 py-3 rounded-2xl text-sm font-bold transition-all border-2 whitespace-nowrap ${
                                         customerFilterId
                                             ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
-                                            : 'bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                                            : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                                     }`}
                                 >
                                     <span className="material-symbols-outlined !text-[18px]">
@@ -776,7 +765,7 @@ export const CarteraHub = () => {
                             </div>
                         )}
                     </div>
-                    <div className="flex p-2 bg-slate-50 dark:bg-slate-900/50">
+                    <div className="flex p-2 bg-slate-50 dark:bg-slate-900">
                         <button
                             onClick={() => setActiveView('pendientes')}
                             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all ${activeView === 'pendientes'
@@ -998,7 +987,7 @@ export const CarteraHub = () => {
                         </div>
 
                         <div className="space-y-6">
-                            <div className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-3xl border border-slate-100 dark:border-slate-800">
+                            <div className="p-6 bg-slate-50 dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Concepto: {selectedItem.name}</p>
                                 <div className="flex justify-between items-end">
                                     <div>
@@ -1046,65 +1035,12 @@ export const CarteraHub = () => {
                                 </div>
                             ) : null}
 
-                            {/* Cash Destination — only for customer credits */}
-                            {selectedItem.type === 'customer' && (
-                                isCreditFromToday ? (
-                                    <div>
-                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 px-1">Destino del Abono</label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <button
-                                                onClick={() => setCashTarget('daily')}
-                                                className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                                                    cashTarget === 'daily'
-                                                        ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500 text-blue-600 dark:text-blue-400'
-                                                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
-                                                }`}
-                                            >
-                                                <span className="material-symbols-outlined !text-[20px]">point_of_sale</span>
-                                                <div className="text-left">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Diaria</p>
-                                                    <p className="text-[9px] font-bold opacity-60 mt-0.5">Sesión actual</p>
-                                                </div>
-                                            </button>
-                                            <button
-                                                onClick={() => setCashTarget('central')}
-                                                className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                                                    cashTarget === 'central'
-                                                        ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                                                        : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
-                                                }`}
-                                            >
-                                                <span className="material-symbols-outlined !text-[20px]">account_balance_wallet</span>
-                                                <div className="text-left">
-                                                    <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Central</p>
-                                                    <p className="text-[9px] font-bold opacity-60 mt-0.5">Acumulado general</p>
-                                                </div>
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-3 p-4 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl">
-                                        <span className="material-symbols-outlined text-indigo-500 !text-xl">account_balance_wallet</span>
-                                        <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-tight">
-                                            Crédito anterior → Irá automáticamente a <span className="underline">Caja Central</span>
-                                        </p>
-                                    </div>
-                                )
-                            )}
-
-                            {!cashSession && (
-                                <div className="flex items-center gap-2 p-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100">
-                                    <span className="material-symbols-outlined text-rose-500 !text-sm">warning</span>
-                                    <p className="text-[9px] text-rose-600 font-black uppercase tracking-widest">
-                                        Error: No hay una sesión de caja abierta para registrar este ingreso.
-                                    </p>
-                                </div>
-                            )}
+                            {/* All customer payments always go to Central Cash */}
 
                             <button
                                 onClick={handlePayment}
-                                disabled={!paymentAmount || !cashSession}
-                                className="w-full py-5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed mt-4 uppercase tracking-widest text-sm"
+                                disabled={!paymentAmount}
+                                className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white rounded-xl font-semibold text-sm shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:ring-offset-1 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed mt-4"
                             >
                                 Confirmar Pago
                             </button>
@@ -1133,7 +1069,7 @@ export const CarteraHub = () => {
                         </div>
 
                         {/* Mode Switcher */}
-                        <div className="flex p-1 mb-4 bg-slate-100 dark:bg-slate-900/50 rounded-xl shrink-0">
+                        <div className="flex p-1 mb-4 bg-slate-100 dark:bg-slate-900 rounded-xl shrink-0">
                             <button
                                 onClick={() => setDebtMode('single')}
                                 className={`flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
@@ -1174,7 +1110,7 @@ export const CarteraHub = () => {
                                         onFocus={() => setIsSearchFocused(true)}
                                         onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                                         placeholder="Buscar o escribir nuevo cliente..."
-                                        className={`w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-2 rounded-2xl text-sm font-bold outline-none transition-all ${
+                                        className={`w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border-2 rounded-2xl text-sm font-bold outline-none transition-all ${
                                             selectedCustomerId 
                                                 ? 'border-emerald-500/50 text-emerald-700 dark:text-emerald-400 focus:border-emerald-500' 
                                                 : 'border-slate-100 dark:border-slate-800 focus:border-indigo-500'
@@ -1222,7 +1158,7 @@ export const CarteraHub = () => {
                                         value={newDebtAmount}
                                         onChange={(e) => setNewDebtAmount(e.target.value)}
                                         placeholder="0.00"
-                                        className="w-full pl-10 pr-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl font-black text-xl outline-none focus:border-indigo-500 transition-all"
+                                        className="w-full pl-10 pr-6 py-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl font-black text-xl outline-none focus:border-indigo-500 transition-all"
                                     />
                                 </div>
                             </div>
@@ -1234,7 +1170,7 @@ export const CarteraHub = () => {
                                     onChange={(e) => setNewDebtNotes(e.target.value)}
                                     placeholder="Ej: Saldo anterior, Deuda no registrada..."
                                     rows={2}
-                                    className="w-full p-4 bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-medium outline-none focus:border-indigo-500 transition-all resize-none"
+                                    className="w-full p-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl text-sm font-medium outline-none focus:border-indigo-500 transition-all resize-none"
                                 />
                             </div>
                         </div>
@@ -1260,7 +1196,7 @@ export const CarteraHub = () => {
                                     </button>
 
                                     {bulkDebts.length > 0 && (
-                                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-300">
                                             <div className="flex justify-between items-center mb-3 text-xs font-black uppercase tracking-widest text-slate-500">
                                                 <span>{bulkDebts.length} créditos en lista</span>
                                                 <span className="text-indigo-600 dark:text-indigo-400">
@@ -1333,7 +1269,7 @@ export const CarteraHub = () => {
                                     if (item) handleDeleteDebt(item);
                                 }}
                                 disabled={processingDelete}
-                                className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-rose-500/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 dark:bg-rose-500 dark:hover:bg-rose-600 text-white rounded-xl font-semibold text-sm shadow-md shadow-rose-500/20 active:scale-[0.98] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-400/50 disabled:opacity-50 flex items-center justify-center gap-2"
                             >
                                 {processingDelete ? (
                                     <span className="material-symbols-outlined !text-[18px] animate-spin">progress_activity</span>

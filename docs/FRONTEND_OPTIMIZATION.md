@@ -1,64 +1,67 @@
-# Frontend Optimization Guide: Polymorphic Lists
+# Guía de Optimización Frontend — Magnasoft POS
 
-## Challenge
-Rendering lists of 500+ items where each item has different structures (JSONB metadata) can cause:
-1.  **Layout Shifts (CLS)**: As images or custom fields load.
-2.  **JS Thread Blocking**: Parsing complex JSON for every row.
-3.  **DOM Bloat**: Too many elements in the DOM.
+**Actualizado**: 2026-06-05
 
-## Recommendations
+---
 
-### 1. Virtualization (Mandatory for >100 rows)
-Use **TanStack Virtual** (react-virtual). It only renders the items currently in the viewport.
+## Contexto Real
+
+El proyecto tiene componentes grandes que merecen atención de performance:
+
+| Componente | Tamaño | Riesgo |
+|---|---|---|
+| `PaymentModal.tsx` | ~1825 líneas | Componente más crítico. Cualquier cambio requiere verificación de no regresión. |
+| `POSCart.tsx` | ~927 líneas | Multi-carrito (mesas), múltiples modales anidados |
+| `Sales.tsx` (shared) | ~1100+ líneas | Reconciliación de ventas, filtros, gráficos |
+| `CustomerUnify.tsx` | ~830 líneas | Detección de duplicados, unificación en tiempo real |
+
+---
+
+## Recomendaciones Aplicables
+
+### 1. Memoización de Parsing JSONB
+
+Supabase devuelve `metadata` como objeto JavaScript (no como string JSON), así que no se requiere `JSON.parse()`. El problema real es re-renderizados por cambio de referencia:
 
 ```tsx
-import { useVirtualizer } from '@tanstack/react-virtual';
+// ❌ WRONG: metadata se recrea en cada render
+const tip = sale.metadata?.tip_amount || 0;
 
-// ... setup virtualizer on your container ref
-const rowVirtualizer = useVirtualizer({
-  count: products.length,
-  getScrollElement: () => parentRef.current,
-  estimateSize: () => 50, // Estimate row height
+// ✅ RIGHT: memoizar el objeto sale completo si se usa en listas
+const MemoizedSaleRow = React.memo(({ sale }: { sale: Sale }) => {
+    const tip = sale.metadata?.tip_amount || 0;
+    // ...
 });
-
-return (
-  <div ref={parentRef} className="h-[500px] overflow-auto">
-    <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-          <div key={virtualRow.key} style={{ transform: `translateY(${virtualRow.start}px)` }}>
-             <ProductRow product={products[virtualRow.index]} />
-          </div>
-        ))}
-    </div>
-  </div>
-);
 ```
 
-### 2. Memoized Metadata Parsing
-Do NOT parse JSONB in the render function. Parse it once when data data arrives or use `useMemo`.
+### 2. Virtualización para Listas >100 ítems
 
-```tsx
-// ❌ WRONG: Parsed every render
-const color = JSON.parse(product.metadata).color;
+Componentes candidatos:
+- `Sales.tsx`: historial de ventas (puede tener cientos de filas)
+- `SessionHistory.tsx`: lista de sesiones
+- `CustomerManager.tsx`: tabla de clientes
 
-// ✅ RIGHT: Memoized
-const metadata = useMemo(() => {
-    return typeof product.metadata === 'string' 
-        ? JSON.parse(product.metadata) 
-        : product.metadata;
-}, [product.metadata]);
-```
+Usar `react-virtual` (ya instalado en algunos proyectos) o paginación server-side.
 
-### 3. Skeleton Loading for Variable Heights
-If your "Automotive" cards are taller than "Retail" cards:
-- Define a base height for the skeleton matching the *average* height.
-- Use `contain-intrinsic-size` css property to prevent scrollbar jumping if using browser-native virtualization.
+### 3. Evitar Re-renderizados en PaymentModal
 
-### 4. Database-Side Full Text Search
-Don't filter 10,000 rows in JS. Use Supabase Text Search.
-- Create an RPC or use `.textSearch()` on a generated column that combines `name` + `metadata->>'brand'`.
+`PaymentModal` tiene 30+ estados. Para prevenir ciclos de renderizado:
+- Agrupar estados relacionados en objetos (ya se hace parcialmente con `splitAmounts`)
+- Usar `useReducer` para lógica de pago compleja (método + montos + propinas + cross-change)
+- Extraer secciones independientes (numpad, propinas, resumen) a componentes internos
 
-## Implementation Checklist
-- [ ] Install `@tanstack/react-virtual`
-- [ ] Refactor `ProductList.tsx` to use virtualization
-- [ ] Add `useMemo` for metadata accessors
+### 4. Realtime Subscriptions
+
+`useBusinessStore.subscribeToChanges()` y `useTableStore.subscribeToTables()` usan Supabase Realtime. Asegurarse de:
+- Cancelar suscripciones en cleanup del hook
+- No duplicar canales al re-renderizar
+
+---
+
+## No Aplicable Actualmente
+
+Estas recomendaciones del doc original ya no aplican:
+
+- ~~`JSON.parse(product.metadata)`~~ — Supabase devuelve JSONB como objeto nativo
+- ~~`ProductList.tsx`~~ — No existe como componente único. Los productos se renderizan en `POSProductGrid` con el sistema de categorías + tabs
+- ~~`@tanstack/react-virtual`~~ — No está instalado actualmente. Evaluar si se necesita vs paginación simple

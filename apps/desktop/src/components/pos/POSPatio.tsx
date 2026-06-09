@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useTableStore } from '../../store/useTableStore';
 import { useCartStore } from '../../store/useCartStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -129,10 +129,10 @@ export const POSPatio = () => {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'available': return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700/50 hover:bg-emerald-200 dark:hover:bg-emerald-800/40';
-            case 'occupied': return 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-rose-300 dark:border-rose-700/50 hover:bg-rose-200 dark:hover:bg-rose-800/40';
-            case 'reserved': return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700/50 hover:bg-amber-200 dark:hover:bg-amber-800/40';
-            default: return 'bg-slate-100 text-slate-700 border-slate-300';
+            case 'available': return 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30';
+            case 'occupied': return 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/30';
+            case 'reserved': return 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/30';
+            default: return 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700';
         }
     };
 
@@ -346,7 +346,7 @@ export const POSPatio = () => {
                                         `}
                                     >
                                         <div className="flex justify-between items-start">
-                                            <div className="bg-white/60 dark:bg-black/20 backdrop-blur-md px-2 py-1 rounded-lg flex items-center gap-1.5">
+                                            <div className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-lg flex items-center gap-1.5">
                                                 <span className="material-symbols-outlined !text-[14px]">groups</span>
                                                 <span className="text-[10px] font-black uppercase tracking-wider">
                                                     {table.capacity}
@@ -355,7 +355,7 @@ export const POSPatio = () => {
 
                                             {!isLayoutMode && (
                                                 <button
-                                                    className="size-8 rounded-full bg-white/40 dark:bg-black/20 flex items-center justify-center hover:bg-white dark:hover:bg-black/40 transition-colors opacity-0 group-hover:opacity-100"
+                                                    className="size-8 rounded-full bg-slate-200 dark:bg-slate-700 dark:bg-black/20 flex items-center justify-center hover:bg-white dark:hover:bg-black/40 transition-colors opacity-0 group-hover:opacity-100"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         const currentStatus = table.status || 'available';

@@ -1,4 +1,4 @@
-
+﻿
 // @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
@@ -287,7 +287,7 @@ export const ServiceQueueModal = ({ isOpen, onClose, onItemSelect }: ServiceQueu
             <div className="bg-white dark:bg-slate-900 w-full max-w-6xl h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-300">
 
                 {/* Header */}
-                <div className="px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
+                <div className="px-8 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800 shrink-0">
                     <div className="flex items-center gap-4">
                         <div className="h-11 w-11 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
                             <span className="material-symbols-outlined !text-[26px]">car_repair</span>
@@ -303,7 +303,7 @@ export const ServiceQueueModal = ({ isOpen, onClose, onItemSelect }: ServiceQueu
                 </div>
 
                 {/* Add New Form */}
-                <div className="px-8 py-5 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100 dark:border-slate-800 space-y-4 shrink-0">
+                <div className="px-8 py-5 bg-slate-50/50 dark:bg-slate-800 border-b border-slate-100 dark:border-slate-800 space-y-4 shrink-0">
                     <div className="grid grid-cols-[1fr_1fr_auto] gap-4 items-end">
                         {/* Plate */}
                         <div className="space-y-1.5">

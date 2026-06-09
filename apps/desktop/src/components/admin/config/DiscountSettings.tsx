@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -141,7 +141,7 @@ export const DiscountSettings = () => {
                         <p className="text-slate-400 font-medium">No hay rebajas configuradas aún.</p>
                     </div>
                 ) : (
-                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
                         <table className="w-full text-left">
                             <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 font-black text-[10px] uppercase tracking-widest">
                                 <tr>

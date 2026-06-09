@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useAuthStore } from '@shared/store/useAuthStore';
@@ -121,7 +121,7 @@ export const RoleManager = () => {
                 {/* Roles List */}
                 <div className="w-full md:w-2/3">
                     <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-                        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900">
                             <h3 className="font-bold text-slate-700 dark:text-slate-300">Roles Existentes ({roles.length})</h3>
                         </div>
 

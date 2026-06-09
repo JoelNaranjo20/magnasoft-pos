@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase, ensureSession } from '../../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
@@ -556,7 +556,7 @@ export const ProductStockManager = () => {
                                 </div>
                                 
                                 {/* Cost History Expandable Section */}
-                                <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mt-4">
+                                <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 mt-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <label className="block text-xs font-bold text-slate-500 uppercase">Historial de Compras</label>
                                         <span className="text-[10px] text-slate-400">Agrega para promediar costo y añadir stock</span>
@@ -775,7 +775,7 @@ export const ProductStockManager = () => {
                             </form>
                         </div>
 
-                        <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex gap-3 rounded-b-2xl">
+                        <div className="p-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-3 rounded-b-2xl">
                             <button
                                 type="button"
                                 onClick={() => setIsEditing(false)}

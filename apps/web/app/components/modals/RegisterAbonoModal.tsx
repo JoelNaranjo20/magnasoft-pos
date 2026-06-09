@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
-import { useActiveSession } from '../../hooks/useActiveSession';
 import { useAuth } from '../../context/AuthContext';
 
 interface RegisterAbonoModalProps {
@@ -25,16 +24,10 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
     const [selectedDebtId, setSelectedDebtId] = useState('');
     const [amount, setAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer' | 'card'>('transfer');
-    const [cashTarget, setCashTarget] = useState<'daily' | 'central'>('daily');
     const [notes, setNotes] = useState('');
-    const { activeSession, loading: loadingSession } = useActiveSession();
     const { user, profile } = useAuth();
 
-    // Derived: selected debt and whether it's from today
     const selectedDebt = debts.find(d => d.id === selectedDebtId) ?? null;
-    const isCreditFromToday = selectedDebt
-        ? new Date(selectedDebt.created_at).toDateString() === new Date().toDateString()
-        : false;
 
     useEffect(() => {
         if (isOpen) {
@@ -64,7 +57,7 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
     };
 
     const handleSubmit = async () => {
-        if (!selectedDebtId || !amount || !activeSession) return;
+        if (!selectedDebtId || !amount) return;
 
         setLoading(true);
         try {
@@ -76,18 +69,14 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
                 return;
             }
 
-            // Determine destination: daily cash or central cash
-            // - Credits from today: user chooses (cashTarget)
-            // - Credits from previous days: always central cash
-            const goToCentral = !isCreditFromToday || cashTarget === 'central';
-
-            console.log(`📅 Web Abono | isToday: ${isCreditFromToday} | target: ${cashTarget} | goToCentral: ${goToCentral}`);
+            // All customer debt payments always go to Central Cash
+            const goToCentral = true;
 
             const { data, error } = await supabase.rpc('process_debt_payment', {
                 p_debt_id: selectedDebtId,
                 p_amount: numAmount,
                 p_payment_method: paymentMethod,
-                p_cash_session_id: goToCentral ? null : activeSession.id,
+                p_cash_session_id: null,
                 p_notes: notes || `Abono de ${selectedDebt.customer.name} (Web)`
             });
 
@@ -149,16 +138,6 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
                 </div>
 
                 <div className="p-8 space-y-6">
-                    {/* Active Session Warning */}
-                    {!activeSession && !loadingSession && (
-                        <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-2xl flex items-center gap-3 text-rose-600 dark:text-rose-400">
-                            <span className="material-symbols-outlined">warning</span>
-                            <p className="text-xs font-bold leading-tight uppercase tracking-tight">
-                                No hay una caja abierta. No puedes registrar pagos sin una sesión activa.
-                            </p>
-                        </div>
-                    )}
-
                     {/* Customer Selection */}
                     <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Seleccionar Cliente</label>
@@ -215,52 +194,7 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
                         </div>
                     </div>
 
-                    {/* Cash Destination — shown when credit is from today */}
-                    {selectedDebt && isCreditFromToday && (
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Destino del Abono</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    onClick={() => setCashTarget('daily')}
-                                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                                        cashTarget === 'daily'
-                                            ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-500 text-blue-600 dark:text-blue-400'
-                                            : 'bg-slate-50 dark:bg-slate-900/50 border-transparent text-slate-500 hover:border-slate-200'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined !text-[22px]">point_of_sale</span>
-                                    <div className="text-left">
-                                        <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Diaria</p>
-                                        <p className="text-[9px] font-bold opacity-60 mt-0.5">Sesión actual</p>
-                                    </div>
-                                </button>
-                                <button
-                                    onClick={() => setCashTarget('central')}
-                                    className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                                        cashTarget === 'central'
-                                            ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                                            : 'bg-slate-50 dark:bg-slate-900/50 border-transparent text-slate-500 hover:border-slate-200'
-                                    }`}
-                                >
-                                    <span className="material-symbols-outlined !text-[22px]">account_balance_wallet</span>
-                                    <div className="text-left">
-                                        <p className="text-[10px] font-black uppercase tracking-widest leading-none">Caja Central</p>
-                                        <p className="text-[9px] font-bold opacity-60 mt-0.5">Acumulado general</p>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Auto-destination badge for previous day credits */}
-                    {selectedDebt && !isCreditFromToday && (
-                        <div className="flex items-center gap-2 p-3 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl">
-                            <span className="material-symbols-outlined text-indigo-500 !text-lg">account_balance_wallet</span>
-                            <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest leading-tight">
-                                Crédito anterior → Irá automáticamente a <span className="underline">Caja Central</span>
-                            </p>
-                        </div>
-                    )}
+                    {/* All payments always go to Central Cash */}
 
                     {/* Notes */}
                     <div className="space-y-2">
@@ -277,7 +211,7 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
                 <div className="p-8 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-100 dark:border-slate-700/50">
                     <button
                         onClick={handleSubmit}
-                        disabled={loading || !selectedDebtId || !amount || !activeSession}
+                        disabled={loading || !selectedDebtId || !amount}
                         className="w-full py-5 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/25 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale uppercase tracking-widest text-sm"
                     >
                         {loading ? 'Procesando...' : 'Confirmar Registro'}

@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSessionStore } from '@shared/store/useSessionStore';
@@ -72,7 +72,7 @@ export const POSTopBar = () => {
 
     return (
         <>
-            <header className="sticky top-0 z-40 flex-none flex items-center justify-between border-b border-slate-200/40 dark:border-white/5 bg-white/70 dark:bg-[#0b1227]/70 backdrop-blur-md px-6 py-3 h-20 shadow-sm transition-all duration-300">
+            <header className="sticky top-0 z-40 flex-none flex items-center justify-between border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-3 h-20 shadow-sm transition-all duration-300">
                 <div className="flex items-center gap-6">
                     {/* Brand */}
                     <div className="flex items-center gap-3 group cursor-default">
@@ -96,7 +96,7 @@ export const POSTopBar = () => {
                     <label className="relative flex items-center w-96 group">
                         <span className="absolute left-3 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined pointer-events-none">search</span>
                         <input
-                            className="w-full bg-slate-100/40 dark:bg-white/[0.02] border border-slate-250/50 dark:border-white/5 hover:bg-slate-100/60 dark:hover:bg-white/[0.04] rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-[#090d1f] transition-all placeholder:text-slate-400 outline-none shadow-sm"
+                            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-slate-800 transition-all placeholder:text-slate-400 outline-none shadow-sm"
                             placeholder="Buscar servicio o producto (F3)..."
                             type="text"
                             value={globalSearchTerm}
@@ -112,7 +112,7 @@ export const POSTopBar = () => {
                 </div>
                 <div className="flex items-center gap-6">
                     {/* Status Chips */}
-                    <div className="hidden xl:flex items-center gap-1 bg-slate-50/50 dark:bg-slate-800/30 p-1 rounded-xl border border-slate-200/40 dark:border-white/5 backdrop-blur-sm">
+                    <div className="hidden xl:flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 dark:bg-emerald-500/5 rounded-lg border border-emerald-500/20 shadow-[0_0_12px_rgba(16,185,129,0.1)]">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
                             <span className="text-emerald-700 dark:text-emerald-400 text-xs font-semibold uppercase tracking-wider">Caja Abierta</span>
@@ -143,7 +143,7 @@ export const POSTopBar = () => {
 
                         <button
                             onClick={() => setClosing(true)}
-                            className="flex h-10 px-4 items-center gap-2 bg-rose-500/10 dark:bg-rose-500/5 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 dark:hover:bg-rose-500/10 rounded-xl transition-all text-xs font-semibold uppercase tracking-wide border border-rose-500/20 shadow-sm hover:shadow-rose-500/10 active:scale-95"
+                            className="flex h-10 px-4 items-center gap-2 bg-rose-500/10 dark:bg-rose-500/5 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 dark:hover:bg-rose-500/10 rounded-xl transition-all duration-200 text-xs font-semibold uppercase tracking-wide border border-rose-500/20 shadow-sm hover:shadow-rose-500/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-rose-400/30"
                         >
                             <span className="material-symbols-outlined !text-[18px]">lock</span>
                             <span className="hidden sm:inline">Cerrar</span>
@@ -153,7 +153,7 @@ export const POSTopBar = () => {
                         {isAdmin && (
                         <button
                             onClick={() => navigate('/admin')}
-                            className="hidden lg:flex h-10 px-4 items-center gap-2 bg-blue-500/10 dark:bg-blue-500/5 text-primary dark:text-blue-400 hover:bg-blue-500/20 dark:hover:bg-blue-500/10 rounded-xl transition-all text-xs font-semibold uppercase tracking-wide border border-blue-500/20 shadow-sm hover:shadow-blue-500/10 active:scale-95"
+                            className="hidden lg:flex h-10 px-4 items-center gap-2 bg-blue-500/10 dark:bg-blue-500/5 text-primary dark:text-blue-400 hover:bg-blue-500/20 dark:hover:bg-blue-500/10 rounded-xl transition-all duration-200 text-xs font-semibold uppercase tracking-wide border border-blue-500/20 shadow-sm hover:shadow-blue-500/10 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/30"
                         >
                             <span className="material-symbols-outlined !text-[20px]">dashboard</span>
                             Panel
@@ -192,7 +192,7 @@ export const POSTopBar = () => {
                         {hasServiceQueue && (
                             <button
                                 onClick={() => setIsQueueOpen(true)}
-                                className="relative flex h-10 w-12 items-center justify-center bg-slate-100/60 dark:bg-white/5 text-slate-650 text-slate-500 dark:text-slate-300 hover:bg-primary hover:text-white rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/5 group active:scale-95"
+                                className="relative flex h-10 w-12 items-center justify-center bg-slate-100/60 dark:bg-slate-800 text-slate-650 text-slate-500 dark:text-slate-300 hover:bg-primary hover:text-white rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/5 group active:scale-95"
                                 title="Cola de Espera"
                             >
                                 <span className="material-symbols-outlined !text-[24px]">car_repair</span>

@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { Pagination } from '../../ui/Pagination';
@@ -147,7 +147,7 @@ export const SessionHistory = () => {
             <div className="flex flex-col md:flex-row gap-6 h-full overflow-hidden">
                 {/* List of Sessions */}
                 <div className={`transition-all duration-300 ease-in-out bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col uppercase lg:normal-case ${isSidebarCollapsed ? 'h-[60px] md:h-full w-full md:w-[70px]' : 'h-full w-full md:w-[400px]'}`}>
-                    <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex justify-between items-center whitespace-nowrap">
+                    <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center whitespace-nowrap">
                         <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                             <span className="material-symbols-outlined text-primary">history</span>
                             {!isSidebarCollapsed && <span>Historial de Turnos</span>}
@@ -533,7 +533,7 @@ export const SessionHistory = () => {
                                     </h5>
                                     <div className="space-y-3">
                                         {sessionDetails?.movements.map((mov) => (
-                                            <div key={mov.id} className="flex flex-col p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-lg">
+                                            <div key={mov.id} className="flex flex-col p-4 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-3">
                                                         <div className={`p-2 rounded-lg ${mov.type === 'income' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/30'}`}>
@@ -557,7 +557,7 @@ export const SessionHistory = () => {
                                                 {mov.description && (
                                                     <div className="mt-2 pl-[52px] pr-2">
                                                         <div className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Observaciones:</div>
-                                                        <div className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900/50 p-2 rounded border border-slate-100 dark:border-slate-700/50">
+                                                        <div className="text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-700/50">
                                                             {mov.description}
                                                         </div>
                                                     </div>
@@ -595,10 +595,12 @@ export const SessionHistory = () => {
                                                         <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">{comm.worker?.name}</td>
                                                         <td className="px-4 py-3">
                                                             <div className="flex flex-col">
-                                                                {comm.service_type === 'tip' ? (
+                                                                {(comm.service_type === 'tip' || comm.service_type === 'tip_split') ? (
                                                                     <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold">
-                                                                        <span className="material-symbols-outlined !text-[16px]">volunteer_activism</span>
-                                                                        Propina
+                                                                        <span className="material-symbols-outlined !text-[16px]">
+                                                                            {comm.service_type === 'tip_split' ? 'group' : 'volunteer_activism'}
+                                                                        </span>
+                                                                        {comm.service_type === 'tip_split' ? 'Propina (Repartida)' : 'Propina'}
                                                                     </span>
                                                                 ) : (
                                                                     <span className="text-slate-700 dark:text-slate-300">{comm.sale_item?.name || 'Servicio'}</span>

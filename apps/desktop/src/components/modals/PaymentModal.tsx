@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useCartStore } from '../../store/useCartStore';
@@ -103,6 +103,16 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
     // Card: editable received amount
     const [cardAmount, setCardAmount] = useState<string>('');
 
+    // Cross-change (cambio cruzado)
+    const [crossChangeEnabled, setCrossChangeEnabled] = useState(false);
+    const [crossChangeToMethod, setCrossChangeToMethod] = useState<'cash' | 'transfer'>('cash');
+
+    // Split tips (repartir propina)
+    const [tipSplitEnabled, setTipSplitEnabled] = useState(false);
+    const [tipSplits, setTipSplits] = useState<Array<{ workerId: string; amount: number }>>([]);
+    // Método de pago de propina independiente
+    const [tipPaymentMethod, setTipPaymentMethod] = useState<string>(''); // '' = mismo que venta
+
     // Reactive businessId — re-fetches commissions if store loads after mount
     const businessId = useBusinessStore(state => state.id);
     // Product Commission Hook (uses Inventory hierarchy: product → subcategory → category)
@@ -121,6 +131,11 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
             setTipAmount('');
             setTipWorkerId('');
             setShowTip(false);
+            setCrossChangeEnabled(false);
+            setCrossChangeToMethod('cash');
+            setTipSplitEnabled(false);
+            setTipSplits([]);
+            setTipPaymentMethod('');
             setSplitAmounts({ cash: '', transfer: '', card: '', credit: '' });
             setTransferAmount(String(total));
             setCardAmount(String(total));
@@ -430,32 +445,63 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
             let mixedTransfer = parseFloat(splitAmounts.transfer) || 0;
             let mixedCard = parseFloat(splitAmounts.card) || 0;
             
-            if (method === 'mixed' && numericTip > 0) {
-                if (mixedCash > 0) mixedCash += numericTip;
-                else if (mixedTransfer > 0) mixedTransfer += numericTip;
-                else if (mixedCard > 0) mixedCard += numericTip;
-                else mixedCash += numericTip;
+            // Si la propina se paga por un método distinto al de la venta, NO se suma al payment amount
+            const tipSameMethod = !tipPaymentMethod || tipPaymentMethod === method;
+            const effectiveTipForPayment = tipSameMethod ? numericTip : 0;
+
+            if (method === 'mixed' && effectiveTipForPayment > 0) {
+                if (mixedCash > 0) mixedCash += effectiveTipForPayment;
+                else if (mixedTransfer > 0) mixedTransfer += effectiveTipForPayment;
+                else if (mixedCard > 0) mixedCard += effectiveTipForPayment;
+                else mixedCash += effectiveTipForPayment;
             }
+
+            // Determinar porcentaje de propina aplicado (para metadata)
+            const tipPct = parseFloat(tipAmount) > 0 && total > 0
+                ? Math.round((parseFloat(tipAmount) / total) * 100)
+                : undefined;
+            const effectiveTipPct = [10, 15, 20].includes(tipPct || 0) ? tipPct : undefined;
 
             const salePayload = {
                 session_id: cashSession.id,
                 business_id: businessId,
-                user_id: currentUser.id, // Usuario autenticado (cajero que procesa la venta)
+                user_id: currentUser.id,
                 customer_id: customer?.id === 'anonymous' ? null : (customer?.id || null),
                 vehicle_id: hasVehicles ? (vehicle?.id || null) : null,
                 total_amount: total,
                 total_discount: items.reduce((sum, i) => sum + (i.originalPrice ? (i.originalPrice - i.price) * i.quantity : 0), 0),
                 payment_method: method,
-                cash_amount: method === 'cash' ? (total + numericTip) : method === 'mixed' ? mixedCash : 0,
-                transfer_amount: method === 'transfer' ? Math.max(parseFloat(transferAmount) || 0, total + numericTip) : method === 'mixed' ? mixedTransfer : 0,
-                card_amount: method === 'card' ? Math.max(parseFloat(cardAmount) || 0, total + numericTip) : method === 'mixed' ? mixedCard : 0,
+                cash_amount: method === 'cash' ? (total + effectiveTipForPayment) : method === 'mixed' ? mixedCash : 0,
+                transfer_amount: method === 'transfer' ? Math.max(parseFloat(transferAmount) || 0, total + effectiveTipForPayment) : method === 'mixed' ? mixedTransfer : 0,
+                card_amount: method === 'card' ? Math.max(parseFloat(cardAmount) || 0, total + effectiveTipForPayment) : method === 'mixed' ? mixedCard : 0,
                 credit_amount: method === 'credit' ? total : method === 'mixed' ? (parseFloat(splitAmounts.credit) || 0) : 0,
                 status: 'completed',
                 metadata: {
                     business_type: businessType,
                     created_from: 'desktop_pos',
                     tip_amount: parseFloat(tipAmount) || 0,
-                    tip_worker_id: tipWorkerId || null,
+                    tip_worker_id: tipSplitEnabled ? null : (tipWorkerId || null),
+                    tip_percentage: effectiveTipPct,
+                    ...(tipPaymentMethod ? { tip_payment_method: tipPaymentMethod as 'cash' | 'transfer' | 'card' } : {}),
+                    ...(tipSplitEnabled && tipSplits.filter(s => s.workerId).length > 0 ? {
+                        tip_distribution: tipSplits.filter(s => s.workerId).map(s => ({ worker_id: s.workerId, amount: s.amount }))
+                    } : {}),
+
+                    // Cross-change (cambio cruzado)
+                    ...(crossChangeEnabled && (method === 'transfer' || method === 'card') ? {
+                        cross_change: {
+                            from_method: method,
+                            to_method: 'cash' as const,
+                            amount: ((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) - total
+                        }
+                    } : {}),
+                    ...(crossChangeEnabled && method === 'cash' && change > 0 ? {
+                        cross_change: {
+                            from_method: 'cash' as const,
+                            to_method: 'transfer' as const,
+                            amount: change
+                        }
+                    } : {}),
 
                     ...(hasVehicles ? {
                         mileage: null,
@@ -559,26 +605,81 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                 if (commissionsError) console.error('Error creating commissions:', commissionsError);
             }
 
-            // 3.5 Save Tip as worker commission (if any)
-            // Fallback: if no explicit tip worker was selected, use the general worker
-            const resolvedTipWorkerId = tipWorkerId || generalWorkerId;
-            if (numericTip > 0 && resolvedTipWorkerId) {
-                const { error: tipError } = await (supabase as any)
-                    .from('worker_commissions')
-                    .insert({
-                        sale_id: sale.id,
-                        worker_id: resolvedTipWorkerId,
-                        service_type: 'tip',
-                        base_amount: numericTip,
-                        commission_percentage: 100,
-                        commission_amount: numericTip,
-                        business_id: useBusinessStore.getState().id,
-                        status: 'pending'
-                    });
-                if (tipError) console.error('Error saving tip:', tipError);
-                else console.log(`✅ Tip saved: $${numericTip} → worker ${resolvedTipWorkerId}`);
-            } else if (numericTip > 0) {
-                console.warn('⚠️ Tip NOT saved: no worker assigned for the tip.');
+            // 3.5 Save Tip as worker commission(s)
+            if (numericTip > 0) {
+                if (tipSplitEnabled && tipSplits.filter(s => s.workerId).length > 0) {
+                    // Split tip: una comisión por trabajador
+                    const validSplits = tipSplits.filter(s => s.workerId && s.amount > 0);
+                    if (validSplits.length > 0) {
+                        const splitCommissions = validSplits.map(s => ({
+                            sale_id: sale.id,
+                            worker_id: s.workerId,
+                            service_type: 'tip_split',
+                            base_amount: s.amount,
+                            commission_percentage: 100,
+                            commission_amount: s.amount,
+                            business_id: useBusinessStore.getState().id,
+                            status: 'pending'
+                        }));
+                        const { error: splitError } = await (supabase as any)
+                            .from('worker_commissions')
+                            .insert(splitCommissions);
+                        if (splitError) console.error('Error saving split tips:', splitError);
+                        else console.log(`✅ Split tips saved: ${validSplits.length} workers`);
+                    }
+                } else {
+                    // Single tip worker
+                    const resolvedTipWorkerId = tipWorkerId || generalWorkerId;
+                    if (resolvedTipWorkerId) {
+                        const { error: tipError } = await (supabase as any)
+                            .from('worker_commissions')
+                            .insert({
+                                sale_id: sale.id,
+                                worker_id: resolvedTipWorkerId,
+                                service_type: 'tip',
+                                base_amount: numericTip,
+                                commission_percentage: 100,
+                                commission_amount: numericTip,
+                                business_id: useBusinessStore.getState().id,
+                                status: 'pending'
+                            });
+                        if (tipError) console.error('Error saving tip:', tipError);
+                        else console.log(`✅ Tip saved: $${numericTip} → worker ${resolvedTipWorkerId}`);
+                    } else {
+                        console.warn('⚠️ Tip NOT saved: no worker assigned for the tip.');
+                    }
+                }
+            }
+
+            // 3.6 Save Cross-Change as cash_movement expense (cambio cruzado)
+            if (crossChangeEnabled) {
+                let ccAmount = 0;
+                let ccFromMethod = method;
+                let ccToMethod: 'cash' | 'transfer' = 'cash';
+
+                if (method === 'transfer' || method === 'card') {
+                    ccAmount = ((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) - total;
+                    ccToMethod = 'cash';
+                } else if (method === 'cash' && change > 0) {
+                    ccAmount = change;
+                    ccToMethod = 'transfer';
+                }
+
+                if (ccAmount > 0) {
+                    const { error: ccError } = await (supabase as any)
+                        .from('cash_movements')
+                        .insert({
+                            type: 'expense',
+                            amount: ccAmount,
+                            payment_method: ccToMethod,
+                            session_id: cashSession.id,
+                            business_id: businessId,
+                            user_id: currentUser.id,
+                            description: `Cambio cruzado - Venta #${sale.id.slice(0, 8)} - ${ccFromMethod.toUpperCase()} a ${ccToMethod.toUpperCase()}`
+                        });
+                    if (ccError) console.error('Error saving cross-change movement:', ccError);
+                    else console.log(`✅ Cross-change saved: $${ccAmount} ${ccFromMethod}→${ccToMethod}`);
+                }
             }
 
             // 4. Update Stock (for products) - Using atomic RPC
@@ -756,7 +857,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-surface-dark w-full max-w-6xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[80vh] relative">
+            <div className="bg-white dark:bg-slate-800 w-full max-w-6xl rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden flex flex-col md:flex-row h-[80vh] relative">
 
                 {/* Confirm Overlay for Electronic Payments */}
                 {showPaymentConfirmation && (
@@ -805,7 +906,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                         <p className="text-slate-500 mb-6 font-medium">Asigna responsables y procesa el pago</p>
 
                         {/* Assignment Mode Tabs */}
-                        <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800/50 rounded-xl mb-3 relative">
+                        <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl mb-3 relative">
                             <button
                                 onClick={() => setAssignmentMode('general')}
                                 className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all relative z-10 ${assignmentMode === 'general' ? 'text-primary' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
@@ -848,7 +949,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                             <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">¡Recompensa Disponible!</span>
                                             <span className="ml-auto text-[10px] font-black text-purple-500 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded-full">{customer.loyalty_points} Pts</span>
                                         </div>
-                                        <div className="divide-y divide-purple-100 dark:divide-purple-900/30 bg-white dark:bg-slate-800/50">
+                                        <div className="divide-y divide-purple-100 dark:divide-purple-900/30 bg-white dark:bg-slate-800">
                                             {rewardServices.map(service => {
                                                 const redeemed = redeemedServiceIds.has(service.id);
                                                 return (
@@ -924,7 +1025,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                     onClick={() => setMethod(m.id as PaymentMethod)}
                                     className={`flex flex-col items-center justify-center gap-1 p-1.5 rounded-xl border-2 transition-all ${method === m.id
                                         ? 'border-primary bg-primary/5 text-primary'
-                                        : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-slate-400 hover:border-primary/50'
+                                        : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:border-primary/50'
                                         }`}
                                 >
                                     <span className="material-symbols-outlined !text-xl">{m.icon}</span>
@@ -1032,7 +1133,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         const hasActiveCommissionConfig = isFixed ? (commission > 0 || (originalItem?.commission_amount || 0) > 0) : percentage > 0;
 
                                         return (
-                                            <div key={item.cartId} className="p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center group hover:border-blue-200 transition-colors">
+                                            <div key={item.cartId} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center group hover:border-blue-200 transition-colors">
                                                 <div>
                                                     <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm">{item.name}</h4>
                                                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">{item.quantity} x ${item.price.toLocaleString()}</p>
@@ -1049,7 +1150,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                                         </div>
                                                     )}
                                                     {item.type === 'service' && !item.commissionEnabled && (
-                                                        <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded flex items-center gap-1 justify-end">
+                                                        <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded flex items-center gap-1 justify-end">
                                                             <span className="material-symbols-outlined !text-[12px]">money_off</span>
                                                             SIN COMISIÓN
                                                         </span>
@@ -1074,7 +1175,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${
                                             parseFloat(tipAmount) > 0
                                                 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
-                                                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 hover:border-slate-300'
                                         }`}
                                     >
                                         <span className="material-symbols-outlined !text-[16px]">volunteer_activism</span>
@@ -1086,30 +1187,125 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                     </button>
 
                                     {showTip && (
-                                        <div className="mt-2 p-3 bg-amber-50/60 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/40 animate-in slide-in-from-top-2 duration-200">
+                                        <div className="mt-2 p-3 bg-amber-50/60 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/40 animate-in slide-in-from-top-2 duration-200 space-y-2">
+                                            {/* Porcentajes rápidos */}
+                                            <div className="flex gap-1">
+                                                {[10, 15, 20].map(pct => (
+                                                    <button
+                                                        key={pct}
+                                                        type="button"
+                                                        onClick={() => setTipAmount(String(Math.round(total * pct / 100)))}
+                                                        className="flex-1 py-1 rounded-lg bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-[10px] font-black text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                                                    >
+                                                        {pct}%
+                                                    </button>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTipAmount('')}
+                                                    className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[10px] text-slate-400 hover:text-slate-600"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                            {/* Monto y trabajador */}
                                             <div className="flex gap-2">
                                                 <div className="relative flex-1">
                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 font-black text-sm pointer-events-none">$</span>
                                                     <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="100"
-                                                        placeholder="0"
-                                                        autoFocus
+                                                        type="number" min="0" step="100" placeholder="0" autoFocus
                                                         value={tipAmount}
                                                         onChange={(e) => setTipAmount(e.target.value)}
                                                         className="w-full pl-7 pr-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-slate-800 dark:text-white text-sm transition-all"
                                                     />
                                                 </div>
-                                                <select
-                                                    value={tipWorkerId}
-                                                    onChange={(e) => setTipWorkerId(e.target.value)}
-                                                    className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-sm text-slate-700 dark:text-slate-200 transition-all"
-                                                >
-                                                    <option value="">¿Para quién?</option>
-                                                    {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                                                </select>
+                                                {!tipSplitEnabled && (
+                                                    <select
+                                                        value={tipWorkerId}
+                                                        onChange={(e) => setTipWorkerId(e.target.value)}
+                                                        className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-sm text-slate-700 dark:text-slate-200 transition-all"
+                                                    >
+                                                        <option value="">¿Para quién?</option>
+                                                        {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                                    </select>
+                                                )}
                                             </div>
+                                            {/* Repartir propina toggle */}
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setTipSplitEnabled(!tipSplitEnabled);
+                                                        if (!tipSplitEnabled) {
+                                                            setTipSplits([{ workerId: '', amount: parseFloat(tipAmount) || 0 }]);
+                                                        } else {
+                                                            setTipSplits([]);
+                                                        }
+                                                    }}
+                                                    className={`text-[10px] font-bold underline ${tipSplitEnabled ? 'text-amber-600' : 'text-slate-400 hover:text-amber-600'}`}
+                                                >
+                                                    {tipSplitEnabled ? '← Un solo trabajador' : 'Repartir propina'}
+                                                </button>
+                                                {/* Método de pago de propina */}
+                                                {parseFloat(tipAmount) > 0 && (
+                                                    <select
+                                                        value={tipPaymentMethod}
+                                                        onChange={(e) => setTipPaymentMethod(e.target.value)}
+                                                        className="ml-auto px-2 py-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300"
+                                                    >
+                                                        <option value="">Misma forma de pago</option>
+                                                        <option value="cash">Propina en efectivo</option>
+                                                        <option value="transfer">Propina por transferencia</option>
+                                                        <option value="card">Propina con tarjeta</option>
+                                                    </select>
+                                                )}
+                                            </div>
+                                            {/* Filas dinámicas de split */}
+                                            {tipSplitEnabled && tipSplits.map((split, idx) => (
+                                                <div key={idx} className="flex gap-2 items-center">
+                                                    <select
+                                                        value={split.workerId}
+                                                        onChange={(e) => {
+                                                            const updated = [...tipSplits];
+                                                            updated[idx] = { ...updated[idx], workerId: e.target.value };
+                                                            setTipSplits(updated);
+                                                        }}
+                                                        className="flex-1 px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-lg font-bold"
+                                                    >
+                                                        <option value="">Trabajador {idx + 1}</option>
+                                                        {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                                    </select>
+                                                    <div className="relative w-24">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-amber-500 font-bold text-xs">$</span>
+                                                        <input
+                                                            type="number" min="0" step="100"
+                                                            value={split.amount || ''}
+                                                            onChange={(e) => {
+                                                                const updated = [...tipSplits];
+                                                                updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 };
+                                                                setTipSplits(updated);
+                                                            }}
+                                                            className="w-full pl-5 pr-1 py-1.5 text-xs bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-lg font-bold text-right"
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTipSplits(prev => prev.filter((_, i) => i !== idx))}
+                                                        className="text-rose-400 hover:text-rose-600"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">remove</span>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {tipSplitEnabled && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTipSplits(prev => [...prev, { workerId: '', amount: 0 }])}
+                                                    className="text-[10px] font-bold text-amber-600 hover:underline"
+                                                >
+                                                    + Agregar trabajador
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -1270,7 +1466,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         type="text"
                                         readOnly
                                         value={numericAmount > 0 ? numericAmount.toLocaleString() : ''}
-                                        className="w-full bg-white dark:bg-slate-900/50 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-5xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
+                                        className="w-full bg-white dark:bg-slate-900 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-5xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
                                         placeholder="0"
                                     />
                                 </div>
@@ -1280,17 +1476,45 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         ${change.toLocaleString()}
                                     </div>
                                     {change > 0 && (
-                                        <button
-                                            onClick={() => {
-                                                setTipAmount(change.toString());
-                                                setShowTip(true);
-                                                if (!tipWorkerId && generalWorkerId) setTipWorkerId(generalWorkerId);
-                                            }}
-                                            className="mt-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:border-amber-700/50 dark:text-amber-400 dark:hover:bg-amber-900/50 transition-colors text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm"
-                                        >
-                                            <span className="material-symbols-outlined !text-[14px]">volunteer_activism</span>
-                                            Dejar como Propina
-                                        </button>
+                                        <div className="flex flex-col gap-1.5">
+                                            <button
+                                                onClick={() => {
+                                                    setTipAmount(change.toString());
+                                                    setShowTip(true);
+                                                    setCrossChangeEnabled(false);
+                                                    if (!tipWorkerId && generalWorkerId) setTipWorkerId(generalWorkerId);
+                                                }}
+                                                className="mt-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:border-amber-700/50 dark:text-amber-400 dark:hover:bg-amber-900/50 transition-colors text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm"
+                                            >
+                                                <span className="material-symbols-outlined !text-[14px]">volunteer_activism</span>
+                                                Dejar como Propina
+                                            </button>
+                                            {/* Dar cambio por transferencia */}
+                                            {!crossChangeEnabled ? (
+                                                <button
+                                                    onClick={() => {
+                                                        setCrossChangeEnabled(true);
+                                                        setCrossChangeToMethod('transfer');
+                                                        setTipAmount('');
+                                                    }}
+                                                    className="mt-1 px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/30 dark:border-sky-700/50 dark:text-sky-400 transition-colors text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm"
+                                                >
+                                                    <span className="material-symbols-outlined !text-[14px]">swap_horiz</span>
+                                                    Dar cambio por transferencia: ${change.toLocaleString()}
+                                                </button>
+                                            ) : (
+                                                <div className="mt-1 px-3 py-2 rounded-xl bg-sky-50 border border-sky-200 dark:bg-sky-900/30 dark:border-sky-700/50">
+                                                    <p className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase mb-1">Cambio a devolver por transferencia</p>
+                                                    <p className="text-sm font-black text-sky-700 dark:text-sky-300">${change.toLocaleString()}</p>
+                                                    <button
+                                                        onClick={() => setCrossChangeEnabled(false)}
+                                                        className="text-[10px] text-sky-500 hover:text-sky-700 mt-1 underline"
+                                                    >
+                                                        Cancelar cambio
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -1301,7 +1525,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                     <button
                                         key={key}
                                         onClick={() => handleNumpad(key)}
-                                        className={`group relative overflow-hidden rounded-2xl transition-all active:scale-95 ${key === 'backspace' ? 'bg-rose-50 dark:bg-rose-900/10 text-rose-500' : 'bg-white dark:bg-slate-800/50 text-slate-700 dark:text-slate-200 border-b-4 border-slate-200 dark:border-slate-900 shadow-md hover:shadow-lg'}`}
+                                        className={`group relative overflow-hidden rounded-2xl transition-all active:scale-95 ${key === 'backspace' ? 'bg-rose-50 dark:bg-rose-900/10 text-rose-500' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-b-4 border-slate-200 dark:border-slate-900 shadow-md hover:shadow-lg'}`}
                                     >
                                         <span className="relative z-10 text-2xl font-black uppercase">
                                             {key === 'backspace' ? <span className="material-symbols-outlined !text-3xl">backspace</span> : key}
@@ -1326,26 +1550,58 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         step="1"
                                         value={method === 'transfer' ? transferAmount : cardAmount}
                                         onChange={(e) => method === 'transfer' ? setTransferAmount(e.target.value) : setCardAmount(e.target.value)}
-                                        className="w-full bg-white dark:bg-slate-900/50 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-4xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
+                                        className="w-full bg-white dark:bg-slate-900 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-4xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
                                         placeholder={String(total)}
                                     />
                                 </div>
                                 <div className="mt-3 flex items-center justify-between">
                                     <span className="text-xs font-bold text-slate-400">Total de la venta: <span className="font-black text-slate-700 dark:text-slate-200">${total.toLocaleString()}</span></span>
-                                    {((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) > total && (
-                                        <button
-                                            onClick={() => {
-                                                const diff = ((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) - total;
-                                                setTipAmount(String(diff));
-                                                setShowTip(true);
-                                                if (!tipWorkerId && generalWorkerId) setTipWorkerId(generalWorkerId);
-                                            }}
-                                            className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:border-amber-700/50 dark:text-amber-400 transition-colors text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm"
-                                        >
-                                            <span className="material-symbols-outlined !text-[14px]">volunteer_activism</span>
-                                            Diferencia ${(((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) - total).toLocaleString()} como Propina
-                                        </button>
-                                    )}
+                                    {(() => {
+                                        const transferExcess = ((method === 'transfer' ? parseFloat(transferAmount) : parseFloat(cardAmount)) || 0) - total;
+                                        if (transferExcess <= 0) return null;
+                                        return (
+                                        <div className="flex flex-col gap-1.5">
+                                            <button
+                                                onClick={() => {
+                                                    setTipAmount(String(transferExcess));
+                                                    setShowTip(true);
+                                                    if (!tipWorkerId && generalWorkerId) setTipWorkerId(generalWorkerId);
+                                                }}
+                                                className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 dark:bg-amber-900/30 dark:border-amber-700/50 dark:text-amber-400 transition-colors text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm"
+                                            >
+                                                <span className="material-symbols-outlined !text-[14px]">volunteer_activism</span>
+                                                Diferencia ${transferExcess.toLocaleString()} como Propina
+                                            </button>
+                                            {/* Cross-change: Dar cambio en efectivo */}
+                                            {!crossChangeEnabled ? (
+                                                <button
+                                                    onClick={() => {
+                                                        setCrossChangeEnabled(true);
+                                                        setCrossChangeToMethod('cash');
+                                                        setTipAmount('');
+                                                    }}
+                                                    className="px-3 py-1.5 rounded-xl bg-sky-50 border border-sky-200 text-sky-600 hover:bg-sky-100 dark:bg-sky-900/30 dark:border-sky-700/50 dark:text-sky-400 transition-colors text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm"
+                                                >
+                                                    <span className="material-symbols-outlined !text-[14px]">swap_horiz</span>
+                                                    Dar cambio en efectivo: ${transferExcess.toLocaleString()}
+                                                </button>
+                                            ) : (
+                                                <div className="px-3 py-2 rounded-xl bg-sky-50 border border-sky-200 dark:bg-sky-900/30 dark:border-sky-700/50">
+                                                    <p className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase mb-1">Cambio a entregar en efectivo</p>
+                                                    <p className="text-sm font-black text-sky-700 dark:text-sky-300">
+                                                        ${transferExcess.toLocaleString()}
+                                                    </p>
+                                                    <button
+                                                        onClick={() => setCrossChangeEnabled(false)}
+                                                        className="text-[10px] text-sky-500 hover:text-sky-700 mt-1 underline"
+                                                    >
+                                                        Cancelar cambio
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
 
@@ -1368,7 +1624,28 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                     <span className="material-symbols-outlined !text-[14px] ml-auto">{showTip ? 'expand_less' : 'expand_more'}</span>
                                 </button>
                                 {showTip && (
-                                    <div className="mt-2 p-3 bg-amber-50/60 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/40 animate-in slide-in-from-top-2 duration-200">
+                                    <div className="mt-2 p-3 bg-amber-50/60 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800/40 animate-in slide-in-from-top-2 duration-200 space-y-2">
+                                        {/* Porcentajes rápidos */}
+                                        <div className="flex gap-1">
+                                            {[10, 15, 20].map(pct => (
+                                                <button
+                                                    key={pct}
+                                                    type="button"
+                                                    onClick={() => setTipAmount(String(Math.round(total * pct / 100)))}
+                                                    className="flex-1 py-1 rounded-lg bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 text-[10px] font-black text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                                                >
+                                                    {pct}%
+                                                </button>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => setTipAmount('')}
+                                                className="px-2 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[10px] text-slate-400 hover:text-slate-600"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                        {/* Monto y trabajador */}
                                         <div className="flex gap-2">
                                             <div className="relative flex-1">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 font-black text-sm pointer-events-none">$</span>
@@ -1379,15 +1656,92 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                                     className="w-full pl-7 pr-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-slate-800 dark:text-white text-sm transition-all"
                                                 />
                                             </div>
-                                            <select
-                                                value={tipWorkerId}
-                                                onChange={(e) => setTipWorkerId(e.target.value)}
-                                                className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-sm text-slate-700 dark:text-slate-200 transition-all"
-                                            >
-                                                <option value="">¿Para quién?</option>
-                                                {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                                            </select>
+                                            {!tipSplitEnabled && (
+                                                <select
+                                                    value={tipWorkerId}
+                                                    onChange={(e) => setTipWorkerId(e.target.value)}
+                                                    className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border-2 border-amber-200 dark:border-amber-800/50 rounded-xl outline-none focus:border-amber-400 font-bold text-sm text-slate-700 dark:text-slate-200 transition-all"
+                                                >
+                                                    <option value="">¿Para quién?</option>
+                                                    {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                                </select>
+                                            )}
                                         </div>
+                                        {/* Repartir + Método */}
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTipSplitEnabled(!tipSplitEnabled);
+                                                    if (!tipSplitEnabled) {
+                                                        setTipSplits([{ workerId: '', amount: parseFloat(tipAmount) || 0 }]);
+                                                    } else {
+                                                        setTipSplits([]);
+                                                    }
+                                                }}
+                                                className={`text-[10px] font-bold underline ${tipSplitEnabled ? 'text-amber-600' : 'text-slate-400 hover:text-amber-600'}`}
+                                            >
+                                                {tipSplitEnabled ? '← Un solo trabajador' : 'Repartir propina'}
+                                            </button>
+                                            {parseFloat(tipAmount) > 0 && (
+                                                <select
+                                                    value={tipPaymentMethod}
+                                                    onChange={(e) => setTipPaymentMethod(e.target.value)}
+                                                    className="ml-auto px-2 py-1 text-[10px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300"
+                                                >
+                                                    <option value="">Misma forma de pago</option>
+                                                    <option value="cash">Propina en efectivo</option>
+                                                    <option value="transfer">Propina por transferencia</option>
+                                                    <option value="card">Propina con tarjeta</option>
+                                                </select>
+                                            )}
+                                        </div>
+                                        {/* Split rows */}
+                                        {tipSplitEnabled && tipSplits.map((split, idx) => (
+                                            <div key={idx} className="flex gap-2 items-center">
+                                                <select
+                                                    value={split.workerId}
+                                                    onChange={(e) => {
+                                                        const updated = [...tipSplits];
+                                                        updated[idx] = { ...updated[idx], workerId: e.target.value };
+                                                        setTipSplits(updated);
+                                                    }}
+                                                    className="flex-1 px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-lg font-bold"
+                                                >
+                                                    <option value="">Trabajador {idx + 1}</option>
+                                                    {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                                                </select>
+                                                <div className="relative w-24">
+                                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-amber-500 font-bold text-xs">$</span>
+                                                    <input
+                                                        type="number" min="0" step="100"
+                                                        value={split.amount || ''}
+                                                        onChange={(e) => {
+                                                            const updated = [...tipSplits];
+                                                            updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 };
+                                                            setTipSplits(updated);
+                                                        }}
+                                                        className="w-full pl-5 pr-1 py-1.5 text-xs bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-lg font-bold text-right"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTipSplits(prev => prev.filter((_, i) => i !== idx))}
+                                                    className="text-rose-400 hover:text-rose-600"
+                                                >
+                                                    <span className="material-symbols-outlined text-sm">remove</span>
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {tipSplitEnabled && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setTipSplits(prev => [...prev, { workerId: '', amount: 0 }])}
+                                                className="text-[10px] font-bold text-amber-600 hover:underline"
+                                            >
+                                                + Agregar trabajador
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1422,7 +1776,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                     )}
 
                     {activeError && (
-                        <div className="mt-4 p-4 bg-rose-50 text-rose-600 border border-rose-100 rounded-2xl text-xs font-bold text-center flex items-center justify-center gap-2 animate-in slide-in-from-top-4">
+                        <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 animate-in slide-in-from-top-4">
                             <span className="material-symbols-outlined !text-[18px]">error</span>
                             {activeError}
                         </div>
@@ -1431,14 +1785,14 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                     <div className="flex gap-4 mt-8 flex-none">
                         <button
                             onClick={onClose}
-                            className="h-16 px-8 rounded-2xl font-black text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all uppercase tracking-widest text-xs"
+                            className="h-14 px-6 inline-flex items-center justify-center text-sm font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-[0.98] uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Cancelar
                         </button>
                         <button
                             onClick={() => handleConfirm()}
                             disabled={!canConfirm || processing}
-                            className="flex-1 h-16 bg-primary text-white rounded-3xl font-black text-xl shadow-2xl shadow-primary/30 hover:scale-[1.03] active:scale-[0.97] transition-all disabled:opacity-30 disabled:grayscale disabled:scale-100 flex items-center justify-center gap-3 group px-6"
+                            className="flex-1 h-14 inline-flex items-center justify-center gap-3 bg-primary hover:bg-[#0b6ddb] dark:hover:bg-[#3b9eff] text-white rounded-lg font-semibold text-base shadow-md hover:shadow-lg transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
                         >
                             {processing ? (
                                 <span className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></span>

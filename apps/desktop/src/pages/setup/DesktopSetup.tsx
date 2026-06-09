@@ -1,22 +1,32 @@
-// @ts-nocheck
-import { useState, useEffect } from 'react';
+﻿// @ts-nocheck
+import { useState } from 'react';
 import { supabase, ensureSession } from "../../lib/supabase";
 import { useAuthStore } from '@shared/store/useAuthStore';
-import { useBusinessStore } from '@shared/store/useBusinessStore';
-import { getPresetModules } from '../../shared/modules';
+import { getPresetModules, MODULE_REGISTRY } from '../../shared/modules';
 
-type BusinessType = 'automotive' | 'retail' | 'restaurant' | 'barbershop';
+type BusinessType = 'automotive' | 'barbershop' | 'beauty_salon' | 'restaurant';
 
 export const DesktopSetup = () => {
     const [businessName, setBusinessName] = useState('');
-    const [businessType, setBusinessType] = useState<BusinessType>('retail');
+    const [businessType, setBusinessType] = useState<BusinessType>('automotive');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
-    const { user, checkSession } = useAuthStore((state) => state);
+    const { checkSession } = useAuthStore((state) => state);
 
     // Derives initial module config from INDUSTRY_PRESETS (single source of truth)
     const getInitialConfig = (type: BusinessType) => getPresetModules(type);
+
+    // Build module preview for the selected business type
+    const presetModules = getPresetModules(businessType);
+    const includedModules = Object.entries(MODULE_REGISTRY)
+        .filter(([key]) => key !== 'pos' && key !== 'customers' && key !== 'inventory')
+        .filter(([key]) => presetModules[MODULE_REGISTRY[key as keyof typeof MODULE_REGISTRY].id] === true)
+        .map(([key]) => MODULE_REGISTRY[key as keyof typeof MODULE_REGISTRY]);
+    const excludedModules = Object.entries(MODULE_REGISTRY)
+        .filter(([key]) => key !== 'pos' && key !== 'customers' && key !== 'inventory')
+        .filter(([key]) => presetModules[MODULE_REGISTRY[key as keyof typeof MODULE_REGISTRY].id] !== true)
+        .map(([key]) => MODULE_REGISTRY[key as keyof typeof MODULE_REGISTRY]);
 
     const handleActivate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -33,9 +43,11 @@ export const DesktopSetup = () => {
             // Ensure session is fresh before doing write operations
             await ensureSession();
 
-            // RPC: Create Business & Link Profile (Atomic Transaction) without Serial
-            const { data: business, error: rpcError } = await supabase.rpc('create_business_without_serial', {
-                p_name: businessName
+            // RPC atómico: crea negocio + asigna tipo + configura módulos en una sola transacción
+            const { error: rpcError } = await supabase.rpc('create_business_without_serial', {
+                p_name: businessName,
+                p_business_type: businessType,
+                p_config: getInitialConfig(businessType)
             });
 
             if (rpcError) {
@@ -43,27 +55,13 @@ export const DesktopSetup = () => {
                 throw new Error(rpcError.message);
             }
 
-            // Post-Creation Update: Set Type & Config
-            const { error: updateError } = await supabase
-                .from('business')
-                .update({
-                    business_type: businessType,
-                    config: getInitialConfig(businessType),
-                    status: 'active'
-                })
-                .eq('id', business.id);
-
-            if (updateError) {
-                console.error('Config Update Error:', updateError);
-            }
-
             console.log('✅ Business created successfully. Reloading session...');
 
-            // Force Full Session Reload: This refreshes user, profile, and business in one call
+            // Force Full Session Reload
             await checkSession();
 
         } catch (err: any) {
-            setError(err.message || 'Error al configurar el negocio. Intenta nuevamente.');
+            setError(err.message || 'Error al crear el negocio. Verifica tu conexión e intenta de nuevo.');
         } finally {
             setLoading(false);
         }
@@ -78,7 +76,7 @@ export const DesktopSetup = () => {
                 {/* Branding / Header */}
                 <div className="text-center space-y-3">
                     <div className="inline-flex size-20 rounded-[2rem] bg-gradient-to-br from-primary via-blue-600 to-indigo-600 p-0.5 shadow-2xl shadow-primary/30 items-center justify-center relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                        <div className="absolute inset-0 bg-slate-200 dark:bg-slate-700 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
                         <div className="w-full h-full bg-[#0d1527] flex items-center justify-center rounded-[1.95rem]">
                             <span className="material-symbols-outlined text-4xl text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-400">
                                 rocket_launch
@@ -119,10 +117,10 @@ export const DesktopSetup = () => {
                         </label>
                         <div className="grid grid-cols-2 gap-4">
                             {[
-                                { value: 'automotive', label: 'Taller Automotriz', icon: 'directions_car' },
-                                { value: 'retail', label: 'Retail / Tienda', icon: 'shopping_cart' },
-                                { value: 'restaurant', label: 'Restaurante', icon: 'restaurant' },
-                                { value: 'barbershop', label: 'Barbería / Salón', icon: 'content_cut' }
+                                { value: 'automotive', label: 'Lavado de Carro', icon: 'local_car_wash' },
+                                { value: 'barbershop', label: 'Barber Shop', icon: 'content_cut' },
+                                { value: 'beauty_salon', label: 'Salón de Belleza', icon: 'spa' },
+                                { value: 'restaurant', label: 'Restaurante', icon: 'restaurant' }
                             ].map((type) => {
                                 const isSelected = businessType === type.value;
                                 return (
@@ -138,7 +136,7 @@ export const DesktopSetup = () => {
                                         }`}
                                     >
                                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-all ${
-                                            isSelected ? 'bg-primary' : 'bg-white/5 group-hover:bg-white/10'
+                                            isSelected ? 'bg-primary' : 'bg-white/5 group-hover:bg-slate-100 dark:bg-slate-800'
                                         }`}>
                                             <span className={`material-symbols-outlined text-2xl transition-colors ${
                                                 isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-350'
@@ -154,6 +152,43 @@ export const DesktopSetup = () => {
                                     </button>
                                 );
                             })}
+                        </div>
+                    </div>
+
+                    {/* Module Preview — shows what's included/excluded for selected business type */}
+                    <div className="glass-panel-inner p-4 rounded-2xl border border-white/5 space-y-3">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest ml-2">
+                            Funcionalidades para {businessType === 'automotive' ? 'Lavado de Carro' : businessType === 'barbershop' ? 'Barber Shop' : businessType === 'beauty_salon' ? 'Salón de Belleza' : 'Restaurante'}
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-1.5 ml-1">✓ Incluye</p>
+                                <div className="space-y-1">
+                                    {includedModules.map(m => (
+                                        <div key={m.id} className="flex items-center gap-1.5 text-[11px] text-emerald-300/80">
+                                            <span className="text-emerald-500 text-[10px]">✓</span>
+                                            <span>{m.label}</span>
+                                        </div>
+                                    ))}
+                                    {includedModules.length === 0 && (
+                                        <p className="text-[11px] text-slate-500 italic ml-3">—</p>
+                                    )}
+                                </div>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">✗ No incluye</p>
+                                <div className="space-y-1">
+                                    {excludedModules.map(m => (
+                                        <div key={m.id} className="flex items-center gap-1.5 text-[11px] text-slate-500/70">
+                                            <span className="text-slate-600 text-[10px]">✗</span>
+                                            <span>{m.label}</span>
+                                        </div>
+                                    ))}
+                                    {excludedModules.length === 0 && (
+                                        <p className="text-[11px] text-slate-500 italic ml-3">—</p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
 

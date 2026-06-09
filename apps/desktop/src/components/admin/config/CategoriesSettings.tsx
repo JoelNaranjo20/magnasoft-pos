@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -135,7 +135,7 @@ export const CategoriesSettings = () => {
             {/* List Table */}
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <table className="w-full">
-                    <thead className="bg-slate-50 dark:bg-slate-900/50">
+                    <thead className="bg-slate-50 dark:bg-slate-900">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nombre</th>
                             <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>

@@ -1,0 +1,1 @@
+- [Speckit Review Gate](speckit-review-gate.md) — Pausar para revisión del usuario después de cada fase/tarea de Speckit

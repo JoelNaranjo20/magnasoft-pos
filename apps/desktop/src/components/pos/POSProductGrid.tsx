@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useCartStore } from '../../store/useCartStore';
@@ -247,7 +247,7 @@ export const POSProductGrid = () => {
         return (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="h-40 bg-gradient-to-br from-slate-100 to-slate-200/80 dark:from-white/[0.04] dark:to-white/[0.02] rounded-2xl animate-pulse border border-slate-200/40 dark:border-white/5" />
+                    <div key={i} className="h-40 skeleton rounded-2xl border border-slate-200/40 dark:border-slate-700/30" />
                 ))}
             </div>
         );
@@ -258,7 +258,7 @@ export const POSProductGrid = () => {
     if (hideAllByDefault && !hasFilter) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 gap-4 select-none">
-                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200/50 dark:from-white/5 dark:to-white/[0.02] border border-slate-200/40 dark:border-white/5 shadow-sm">
+                <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200/50 dark:from-slate-800 dark:to-slate-800 border border-slate-200/40 dark:border-white/5 shadow-sm">
                     <Car size={48} className="opacity-30" />
                 </div>
                 <div className="text-center">
@@ -274,9 +274,10 @@ export const POSProductGrid = () => {
             {/* Grid de Tarjetas Premium */}
             <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
                 {filteredItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                        <Package size={48} className="mb-2 opacity-20" />
-                        <p>No se encontraron resultados</p>
+                    <div className="empty-state h-64">
+                        <Package size={48} className="empty-state-icon" />
+                        <p className="empty-state-title">No se encontraron resultados</p>
+                        <p className="empty-state-desc">Intenta con otra categoría o término de búsqueda</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 pb-24">

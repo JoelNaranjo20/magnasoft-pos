@@ -39,18 +39,18 @@ export const POSLayout = () => {
 
             {/* Tab bar: only for non-restaurant businesses with tables */}
             {hasTables && !isRestaurant && (
-                <div className="flex justify-center py-2 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-b border-slate-200/50 dark:border-slate-800/50 z-10 relative flex-none">
-                    <div className="flex bg-slate-200/50 dark:bg-slate-800 p-1 rounded-xl shadow-inner">
+                <div className="flex justify-center py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 z-10 relative flex-none">
+                    <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-xl shadow-inner">
                         <button
                             onClick={() => setViewMode('patio')}
-                            className={`flex items-center gap-2 px-8 py-2 rounded-lg text-sm font-black transition-all ${viewMode === 'patio' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                            className={`flex items-center gap-2 px-8 py-2 rounded-lg text-sm font-black transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-[0.98] ${viewMode === 'patio' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                         >
                             <span className="material-symbols-outlined !text-[18px]">table_restaurant</span>
                             Patio de Mesas
                         </button>
                         <button
                             onClick={() => setViewMode('menu')}
-                            className={`flex items-center gap-2 px-8 py-2 rounded-lg text-sm font-black transition-all ${viewMode === 'menu' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                            className={`flex items-center gap-2 px-8 py-2 rounded-lg text-sm font-black transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-[0.98] ${viewMode === 'menu' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                         >
                             <span className="material-symbols-outlined !text-[18px]">restaurant_menu</span>
                             Menú / Orden

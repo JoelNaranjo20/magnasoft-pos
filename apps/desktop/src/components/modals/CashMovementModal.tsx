@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -145,7 +145,7 @@ export const CashMovementModal = ({ isOpen, onClose, type }: CashMovementModalPr
 
                 {mode === 'favor' && (
                     <div className="mx-6 mt-4 space-y-3">
-                        <div className="flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-xl">
+                        <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-xl">
                             <button
                                 type="button"
                                 onClick={() => setFavorDirection('transfer_to_cash')}

@@ -1,4 +1,4 @@
-import { useAutoUpdater } from '../hooks/useAutoUpdater';
+﻿import { useAutoUpdater } from '../hooks/useAutoUpdater';
 import { useState, useEffect } from 'react';
 
 export function UpdateNotification() {
@@ -75,7 +75,7 @@ export function UpdateNotification() {
                 )}
                 <button
                     onClick={() => setDismissed(true)}
-                    className="ml-1 p-1 rounded-lg hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors"
+                    className="ml-1 p-1 rounded-lg hover:bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-300 transition-colors"
                 >
                     <span className="material-symbols-outlined !text-[16px]">close</span>
                 </button>
@@ -94,7 +94,7 @@ export function UpdateNotification() {
                 <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-500" />
 
                 {/* Floating Modal */}
-                <div className="relative w-full max-w-md bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_0_80px_-15px_rgba(99,102,241,0.4)] border border-white/20 dark:border-white/10 overflow-hidden animate-in slide-in-from-bottom-12 sm:zoom-in-90 duration-700 ease-out-expo ring-1 ring-white/50 dark:ring-white/10">
+                <div className="relative w-full max-w-md bg-white dark:bg-slate-800 dark:bg-slate-900/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_0_80px_-15px_rgba(99,102,241,0.4)] border border-white/20 dark:border-white/10 overflow-hidden animate-in slide-in-from-bottom-12 sm:zoom-in-90 duration-700 ease-out-expo ring-1 ring-white/50 dark:ring-white/10">
 
                     {/* Animated Header */}
                     <div className="relative h-44 overflow-hidden flex flex-col items-center justify-center bg-slate-900">
@@ -110,7 +110,7 @@ export function UpdateNotification() {
                             <div className="relative">
                                 {/* Ripple glow effect */}
                                 <div className="absolute inset-0 bg-white rounded-[1.5rem] blur-xl opacity-30 animate-ping" />
-                                <div className="relative w-16 h-16 bg-white/20 backdrop-blur-xl border border-white/30 rounded-[1.5rem] flex items-center justify-center shadow-2xl">
+                                <div className="relative w-16 h-16 bg-slate-200 dark:bg-slate-700 backdrop-blur-xl border border-white/30 rounded-[1.5rem] flex items-center justify-center shadow-2xl">
                                     <span className="material-symbols-outlined text-white !text-[34px] drop-shadow-lg">rocket_launch</span>
                                 </div>
                             </div>
@@ -153,7 +153,7 @@ export function UpdateNotification() {
 
                                     {/* Minimal Inline Countdown */}
                                     {restartCountdown !== null && (
-                                        <div className="flex items-center gap-2 bg-white/10 dark:bg-black/10 px-3 py-1.5 rounded-xl border border-white/10 dark:border-black/10">
+                                        <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 dark:bg-black/10 px-3 py-1.5 rounded-xl border border-white/10 dark:border-black/10">
                                             <div className="relative w-5 h-5 flex items-center justify-center">
                                                 <svg className="absolute w-5 h-5 -rotate-90" viewBox="0 0 56 56">
                                                     <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="8" />
@@ -178,7 +178,7 @@ export function UpdateNotification() {
                                     setShowModal(false);
                                     setRestartCountdown(null);
                                 }}
-                                className="w-full py-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-all hover:text-slate-700 dark:hover:text-slate-300"
+                                className="w-full py-4 rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-all hover:text-slate-700 dark:hover:text-slate-300"
                             >
                                 Recordarme más tarde
                             </button>
@@ -197,7 +197,7 @@ export function UpdateNotification() {
                 <p className="text-xs font-medium text-rose-200">Error de actualización</p>
                 <button
                     onClick={() => setDismissed(true)}
-                    className="ml-1 p-1 rounded-lg hover:bg-white/10 text-rose-400 transition-colors"
+                    className="ml-1 p-1 rounded-lg hover:bg-slate-100 dark:bg-slate-800 text-rose-400 transition-colors"
                 >
                     <span className="material-symbols-outlined !text-[14px]">close</span>
                 </button>

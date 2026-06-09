@@ -1,7 +1,16 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
+import { normalizePhone } from '@shared/lib/normalizePhone';
+import { normalizeName } from '@shared/lib/normalizeName';
+
+interface DuplicateMatch {
+    id: string;
+    name: string;
+    phone: string | null;
+    last_visit: string | null;
+}
 
 interface SimpleCustomerModalProps {
     isOpen: boolean;
@@ -17,6 +26,7 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loyaltyOptOut, setLoyaltyOptOut] = useState(false);
+    const [duplicateMatches, setDuplicateMatches] = useState<DuplicateMatch[] | null>(null);
 
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +58,24 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
         }
     };
 
+    const findDuplicates = async (businessId: string, customerName: string, customerPhone: string | null): Promise<DuplicateMatch[]> => {
+        const normalizedPhone = normalizePhone(customerPhone);
+        const normalizedName = normalizeName(customerName);
+
+        const { data } = await supabase
+            .from('customers')
+            .select('id, name, phone, last_visit')
+            .eq('business_id', businessId);
+
+        if (!data) return [];
+
+        return data.filter(c => {
+            if (normalizedPhone && normalizePhone(c.phone) === normalizedPhone) return true;
+            if (normalizedName && normalizeName(c.name) === normalizedName) return true;
+            return false;
+        });
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim()) {
@@ -59,46 +87,21 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
         setError(null);
         try {
             const businessId = useBusinessStore.getState().id;
+            if (!businessId) {
+                setError('No se pudo identificar el negocio actual.');
+                setSaving(false);
+                return;
+            }
             const customerName = name.trim();
             const customerPhone = phone.trim() || null;
 
-            // Check for duplicate customer
-            if (customerPhone) {
-                const { data: existingPhone } = await supabase
-                    .from('customers')
-                    .select('*')
-                    .eq('business_id', businessId)
-                    .eq('phone', customerPhone)
-                    .maybeSingle();
+            // Verificar duplicados — bloquear sin excepción
+            const matches = await findDuplicates(businessId, customerName, customerPhone);
 
-                if (existingPhone) {
-                    alert(`El cliente con teléfono ${customerPhone} ya existe: ${existingPhone.name}`);
-                    onSelect(existingPhone);
-                    onClose();
-                    setName('');
-                    setPhone('');
-                    setLoyaltyOptOut(false);
-                    setSaving(false);
-                    return;
-                }
-            } else {
-                const { data: existingName } = await supabase
-                    .from('customers')
-                    .select('*')
-                    .eq('business_id', businessId)
-                    .ilike('name', customerName)
-                    .maybeSingle();
-
-                if (existingName) {
-                    alert(`Ya existe un cliente con el nombre exacto: ${existingName.name}`);
-                    onSelect(existingName);
-                    onClose();
-                    setName('');
-                    setPhone('');
-                    setLoyaltyOptOut(false);
-                    setSaving(false);
-                    return;
-                }
+            if (matches.length > 0) {
+                setDuplicateMatches(matches);
+                setSaving(false);
+                return;
             }
 
             const { data, error: insertError } = await supabase
@@ -110,9 +113,7 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
                     email: null,
                     loyalty_points: 0,
                     total_visits: 0,
-                    metadata: {
-                        loyalty_opt_out: loyaltyOptOut
-                    }
+                    metadata: { loyalty_opt_out: loyaltyOptOut }
                 })
                 .select()
                 .single();
@@ -121,15 +122,27 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
 
             onSelect(data);
             onClose();
-            setName('');
-            setPhone('');
-            setLoyaltyOptOut(false);
+            resetForm();
         } catch (err: any) {
             console.error('Error creating customer:', err);
             setError(err.message || 'Error al crear cliente');
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleUseExisting = (customer: DuplicateMatch) => {
+        onSelect(customer);
+        onClose();
+        resetForm();
+        setDuplicateMatches(null);
+    };
+
+    const resetForm = () => {
+        setName('');
+        setPhone('');
+        setLoyaltyOptOut(false);
+        setDuplicateMatches(null);
     };
 
     const handleQuickSale = () => {
@@ -177,7 +190,51 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
                     </button>
                 </div>
 
-                <div className="p-6 pt-2">
+                {duplicateMatches ? (
+                    /* --- DIÁLOGO DE PREVENCIÓN DE DUPLICADOS (BLOQUEO TOTAL) --- */
+                    <div className="p-6 space-y-4 animate-in slide-in-from-bottom-4 duration-300">
+                        <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl">
+                            <div className="flex items-start gap-3">
+                                <span className="material-symbols-outlined text-rose-600 dark:text-rose-400 mt-0.5">block</span>
+                                <div>
+                                    <p className="text-sm font-bold text-rose-800 dark:text-rose-200">
+                                        No se puede crear: ya existe{duplicateMatches.length > 1 ? 'n' : ''} {duplicateMatches.length} cliente{duplicateMatches.length > 1 ? 's' : ''} con el mismo teléfono o nombre.
+                                    </p>
+                                    <p className="text-xs text-rose-600 dark:text-rose-400 mt-2">
+                                        Selecciona el cliente existente de la lista.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                            {duplicateMatches.map((match) => (
+                                <div key={match.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{match.name}</p>
+                                        <p className="text-xs text-slate-500">{match.phone || 'Sin teléfono'}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleUseExisting(match)}
+                                        className="text-xs font-bold text-primary hover:underline px-3 py-1.5"
+                                    >
+                                        Usar este
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setDuplicateMatches(null)}
+                            className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-xl font-bold text-sm"
+                        >
+                            Volver
+                        </button>
+                    </div>
+                ) : (
+                    <div className="p-6 pt-2">
                     {/* STEP: SEARCH */}
                     {step === 'search' && (
                         <div className="space-y-4 animate-in slide-in-from-left-4 duration-300">
@@ -277,7 +334,7 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
                                 />
                             </div>
 
-                            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                                 <div className="flex-1">
                                     <h4 className="text-xs font-bold text-slate-900 dark:text-white">Sin Puntos de Fidelización</h4>
                                     <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Marcar si es Cliente Mayorista o "Público General".</p>
@@ -310,6 +367,7 @@ export const SimpleCustomerModal = ({ isOpen, onClose, onSelect, onQuickSale }: 
                         </form>
                     )}
                 </div>
+                )}
             </div>
         </div>
     );

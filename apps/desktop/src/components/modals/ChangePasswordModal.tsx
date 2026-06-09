@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 interface ChangePasswordModalProps {
@@ -79,7 +79,7 @@ export const ChangePasswordModal = ({ isOpen, onClose }: ChangePasswordModalProp
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full h-11 px-4 text-sm border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:border-primary focus:ring-primary outline-none"
+                                className="w-full h-11 px-4 text-sm border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:border-primary focus:ring-primary outline-none"
                                 required
                             />
                         </div>
@@ -92,7 +92,7 @@ export const ChangePasswordModal = ({ isOpen, onClose }: ChangePasswordModalProp
                                 type="password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full h-11 px-4 text-sm border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:border-primary focus:ring-primary outline-none"
+                                className="w-full h-11 px-4 text-sm border-slate-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white focus:border-primary focus:ring-primary outline-none"
                                 required
                             />
                         </div>

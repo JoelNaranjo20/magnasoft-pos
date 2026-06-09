@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Sparkles, X, Tag, Calculator, BookOpen, TrendingUp } from 'lucide-react';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 
@@ -113,7 +113,7 @@ export const WhatsNewModal = () => {
                         {features.map((feat, idx) => (
                             <div
                                 key={idx}
-                                className="flex gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/50 hover:border-slate-200 dark:hover:border-slate-600 transition-all"
+                                className="flex gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 hover:border-slate-200 dark:hover:border-slate-600 transition-all"
                             >
                                 <div className={`shrink-0 w-11 h-11 flex items-center justify-center rounded-xl ${feat.bg} ${feat.color}`}>
                                     <feat.icon size={20} />

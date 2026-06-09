@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
@@ -80,7 +80,7 @@ export const ServiceList = ({ onEdit, refreshKey }: ServiceListProps) => {
 
     if (services.length === 0) {
         return (
-            <div className="p-8 text-center text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+            <div className="p-8 text-center text-slate-500 bg-slate-50 dark:bg-slate-800 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
                 <span className="material-symbols-outlined text-4xl mb-2">cleaning_services</span>
                 <p>No hay servicios registrados.</p>
             </div>

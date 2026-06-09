@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -32,6 +32,17 @@ export const CloseSessionModal = () => {
     const [digitalCount, setDigitalCount] = useState(0);
     const [commissionsPaid, setCommissionsPaid] = useState(0);
     const [commissionsPending, setCommissionsPending] = useState(0);
+    const [cashAbonosTotal, setCashAbonosTotal] = useState(0);
+    // Metadata breakdown for unified central_cash movement
+    const [sessionCashSales, setSessionCashSales] = useState(0);
+    const [sessionTransferSales, setSessionTransferSales] = useState(0);
+    const [sessionCardSales, setSessionCardSales] = useState(0);
+    const [sessionTransferAbonos, setSessionTransferAbonos] = useState(0);
+    const [sessionCardAbonos, setSessionCardAbonos] = useState(0);
+    const [sessionCashLoanPayments, setSessionCashLoanPayments] = useState(0);
+    const [sessionTransferLoanPayments, setSessionTransferLoanPayments] = useState(0);
+    const [sessionCashOther, setSessionCashOther] = useState(0);
+    const [sessionTransferOther, setSessionTransferOther] = useState(0);
 
     // Fetch expected total and commissions
     useEffect(() => {
@@ -102,21 +113,24 @@ export const CloseSessionModal = () => {
                 .eq('cash_session_id', cashSession.id)
                 .eq('business_id', businessId);
 
-            let cashAbonosTotal = 0;
+            let cashAbonosTotalLocal = 0;
             let digitalAbonosTotal = 0;
             let digitalAbonosCount = 0;
             debtPayments?.forEach((dp: any) => {
                 const amt = Number(dp.amount);
                 if (dp.payment_method === 'cash') {
-                    cashAbonosTotal += amt;
+                    cashAbonosTotalLocal += amt;
                 } else {
                     digitalAbonosTotal += amt;
                     digitalAbonosCount++;
                 }
             });
 
+            // Guardar para usar en handleConfirmClose (evitar doble conteo en Caja Central)
+            setCashAbonosTotal(cashAbonosTotalLocal);
+
             // Expected Cash: Base + Cash Sales + Cash Movements + Cash Abonos
-            setExpectedTotal((cashSession.opening_balance || 0) + cashSalesTotal + cashMovementBalance + cashAbonosTotal);
+            setExpectedTotal((cashSession.opening_balance || 0) + cashSalesTotal + cashMovementBalance + cashAbonosTotalLocal);
 
             // DIGITAL SISTEMA = Digital Sales + Digital Abonos + Digital Movements (Favors)
             const totalDigitalSistema = digitalSalesTotal + digitalAbonosTotal + digitalMovementBalance;
@@ -136,6 +150,69 @@ export const CloseSessionModal = () => {
 
             setCommissionsPaid(paid);
             setCommissionsPending(pending);
+
+            // ─── 6. Metadata breakdown para Caja Central ───
+            // Separar ventas por método (incluyendo mixed)
+            let _cashSales = 0, _transferSales = 0, _cardSales = 0;
+            cashSales?.forEach((s: any) => {
+                if (s.payment_method === 'mixed') {
+                    _cashSales += Number(s.cash_amount || 0);
+                    _transferSales += Number(s.transfer_amount || 0);
+                    _cardSales += Number(s.card_amount || 0);
+                } else {
+                    const tip = Number(s.metadata?.tip_amount || 0);
+                    _cashSales += Number(s.total_amount || 0) + tip;
+                }
+            });
+            digitalSales?.forEach((s: any) => {
+                if (s.payment_method === 'mixed') {
+                    // ya procesado arriba en cashSales (mixed aparece en ambos queries)
+                } else if (s.payment_method === 'transfer') {
+                    const tip = Number(s.metadata?.tip_amount || 0);
+                    _transferSales += Number(s.total_amount || 0) + tip;
+                } else if (s.payment_method === 'card') {
+                    const tip = Number(s.metadata?.tip_amount || 0);
+                    _cardSales += Number(s.total_amount || 0) + tip;
+                }
+            });
+            // Las mixed sales ya se contaron en cashSales, restar para evitar doble conteo
+            // (el query de cashSales agarra mixed, el de digitalSales también — usamos solo cashSales para mixed)
+
+            setSessionCashSales(_cashSales);
+            setSessionTransferSales(_transferSales);
+            setSessionCardSales(_cardSales);
+
+            // Abonos digitales por método
+            let _transferAbonos = 0, _cardAbonos = 0;
+            debtPayments?.forEach((dp: any) => {
+                if (dp.payment_method === 'transfer') _transferAbonos += Number(dp.amount);
+                else if (dp.payment_method === 'card') _cardAbonos += Number(dp.amount);
+            });
+            setSessionTransferAbonos(_transferAbonos);
+            setSessionCardAbonos(_cardAbonos);
+
+            // Movimientos manuales de ingreso (todos son efectivo — cash_movements no tiene payment_method)
+            let _cashOther = 0;
+            movements?.forEach((mov: any) => {
+                if (mov.type === 'income') _cashOther += Number(mov.amount);
+            });
+            setSessionCashOther(_cashOther);
+            setSessionTransferOther(0);
+
+            // 7. Préstamos de trabajadores pagados en esta sesión
+            //    worker_loan_payments no tiene payment_method — todos son en efectivo
+            const { data: loanPayments } = await (supabase as any)
+                .from('worker_loan_payments')
+                .select('amount')
+                .eq('cash_session_id', cashSession.id)
+                .eq('business_id', businessId);
+
+            let _cashLoans = 0;
+            loanPayments?.forEach((lp: any) => {
+                _cashLoans += Number(lp.amount);
+            });
+            setSessionCashLoanPayments(_cashLoans);
+            setSessionTransferLoanPayments(0);
         };
 
         fetchTotals();
@@ -216,16 +293,38 @@ export const CloseSessionModal = () => {
                 throw new Error(`Error en sesión: ${sessionError.message} (${sessionError.code})`);
             }
 
-            // 3. Automatically record the transfer in Central Cash
-            const netToTransfer = totalCounted;
-            if (netToTransfer > 0) {
+            // 3. Registrar movimiento UNIFICADO en Caja Central
+            //    metadata = desglose completo de orígenes (efectivo + transferencia + tarjeta)
+            const metadataObj = {
+                cash_sales: sessionCashSales,
+                transfer_sales: sessionTransferSales,
+                card_sales: sessionCardSales,
+                cash_abonos: cashAbonosTotal,
+                transfer_abonos: sessionTransferAbonos,
+                card_abonos: sessionCardAbonos,
+                cash_loan_payments: sessionCashLoanPayments,
+                transfer_loan_payments: sessionTransferLoanPayments,
+                cash_other: sessionCashOther,
+                transfer_other: sessionTransferOther,
+                commissions_paid: commissionsPaid,
+            };
+            const totalGeneral =
+                sessionCashSales + sessionTransferSales + sessionCardSales +
+                cashAbonosTotal + sessionTransferAbonos + sessionCardAbonos +
+                sessionCashLoanPayments + sessionTransferLoanPayments +
+                sessionCashOther + sessionTransferOther;
+
+            if (totalGeneral > 0) {
                 const { error: centralError } = await (supabase as any)
                     .from('central_cash_movements')
                     .insert({
                         type: 'income',
-                        amount: netToTransfer,
+                        amount: totalGeneral,
+                        payment_method: 'mixed',
+                        session_id: cashSession.id,
+                        metadata: metadataObj,
                         business_id: businessId,
-                        description: `Cierre de Sesión #${cashSession.id.slice(0, 8)} - Transferencia de efectivo`,
+                        description: `Cierre de Sesión #${cashSession.id.slice(0, 8)} — Efectivo: ${formatCurrency(sessionCashSales + cashAbonosTotal + sessionCashLoanPayments + sessionCashOther)} | Transfer: ${formatCurrency(sessionTransferSales + sessionTransferAbonos + sessionTransferLoanPayments + sessionTransferOther)}`,
                         user_id: user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id) ? user.id : null
                     });
                 if (centralError) console.error('Error recording central cash entry:', centralError);
@@ -281,7 +380,7 @@ export const CloseSessionModal = () => {
                                 <button
                                     onClick={handleConfirmClose}
                                     disabled={loading}
-                                    className="h-14 bg-emerald-500 text-white rounded-2xl font-black shadow-lg shadow-emerald-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2"
+                                    className="h-14 bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600 text-white rounded-xl font-semibold text-sm shadow-md shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 flex items-center justify-center gap-2"
                                 >
                                     {loading ? (
                                         <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
@@ -327,7 +426,7 @@ export const CloseSessionModal = () => {
                         <div className="p-6">
                             <div className="w-full overflow-hidden border rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-[#15202b]">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                                    <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                                         <tr>
                                             <th className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">Detalle</th>
                                             <th className="w-24 px-4 py-3 font-semibold text-center text-slate-700 dark:text-slate-300">Cant.</th>
@@ -538,7 +637,7 @@ export const CloseSessionModal = () => {
                                 <button
                                     onClick={handleConfirmClose}
                                     disabled={loading}
-                                    className="w-full flex items-center justify-center gap-3 h-14 px-6 font-black text-white transition-all rounded-xl shadow-xl bg-primary hover:bg-primary/90 shadow-primary/25 disabled:opacity-50 active:scale-[0.98]"
+                                    className="w-full flex items-center justify-center gap-3 h-14 px-6 font-semibold text-white transition-all duration-200 rounded-xl shadow-md bg-primary hover:bg-[#0b6ddb] dark:hover:bg-[#3b9eff] shadow-primary/25 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
                                 >
                                     <span className="material-symbols-outlined">check_circle</span>
                                     {loading ? 'Cerrando...' : 'Confirmar Cierre'}

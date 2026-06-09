@@ -77,7 +77,7 @@ export const POSCustomerSection = ({
     };
 
     return (
-        <div className="flex-none p-5 border-b border-slate-100/60 dark:border-white/5 bg-white/60 dark:bg-white/[0.02] space-y-4 backdrop-blur-sm">
+        <div className="flex-none p-5 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -125,7 +125,7 @@ export const POSCustomerSection = ({
             <div className="relative group">
                 <span className="absolute left-3 top-2.5 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">person_search</span>
                 <input
-                    className="w-full bg-slate-50/70 dark:bg-white/[0.03] border border-slate-200/60 dark:border-white/8 rounded-xl pl-10 pr-12 py-2.5 text-sm font-medium focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-white/[0.06] transition-all placeholder:text-slate-400 outline-none shadow-sm hover:border-slate-300 dark:hover:border-white/10"
+                    className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-12 py-2.5 text-sm font-medium focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-white dark:focus:bg-slate-800 transition-all placeholder:text-slate-400 outline-none shadow-sm hover:border-slate-300 dark:hover:border-slate-600"
                     placeholder={getPlaceholder()}
                     type="text"
                     value={searchQuery}

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 import { Scissors, Hash } from 'lucide-react';
 
 interface SummaryProps {
@@ -61,7 +61,7 @@ export const OperationalSummary: React.FC<SummaryProps> = ({ stats, loading }) =
                         <span className="font-black text-slate-900 dark:text-white text-xs md:text-base leading-none">Realizados Hoy</span>
                     </div>
                 </div>
-                <span className="text-xl md:text-2xl font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900/50 px-3 py-1.5 md:px-4 md:py-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span className="text-xl md:text-2xl font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 px-3 py-1.5 md:px-4 md:py-2 rounded-xl border border-slate-100 dark:border-slate-800">
                     {totalServices}
                 </span>
             </div>

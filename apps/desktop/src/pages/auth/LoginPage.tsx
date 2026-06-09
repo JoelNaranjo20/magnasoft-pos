@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '@shared/store/useAuthStore';
@@ -150,7 +150,7 @@ export const LoginPage = () => {
                 {/* Branding / Header */}
                 <div className="text-center space-y-3">
                     <div className="inline-flex size-20 rounded-[2rem] bg-gradient-to-br from-primary via-blue-600 to-indigo-600 p-0.5 shadow-2xl shadow-primary/30 items-center justify-center relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                        <div className="absolute inset-0 bg-slate-200 dark:bg-slate-700 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
                         <div className="w-full h-full bg-[#0d1527] flex items-center justify-center rounded-[1.95rem]">
                             <span className="material-symbols-outlined text-4xl text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-400">
                                 {isRegister ? 'rocket_launch' : 'shield_person'}

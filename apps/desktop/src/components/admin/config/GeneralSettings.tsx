@@ -1,4 +1,4 @@
-
+﻿
 // @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../lib/supabase';
@@ -441,9 +441,9 @@ export const GeneralSettings = () => {
                     </div>
                 </div>
 
-                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
+                <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-700 overflow-hidden">
                     <table className="w-full text-left">
-                        <thead className="bg-slate-100/50 dark:bg-slate-800/50 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <thead className="bg-slate-100/50 dark:bg-slate-800 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                             <tr>
                                 <th className="px-6 py-4">Módulo</th>
                                 <th className="px-6 py-4">Descripción</th>

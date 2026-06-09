@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -226,7 +226,7 @@ export const CommissionPaymentModal = () => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
                 <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-gradient-to-r from-primary/5 to-blue-500/5">
                     <div className="flex items-center gap-3">
@@ -266,7 +266,7 @@ export const CommissionPaymentModal = () => {
                             {commissionsByWorker.map((worker) => (
                                 <div key={worker.worker_id} className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
                                     {/* Worker Header */}
-                                    <div className={`p-6 flex justify-between items-center ${worker.pending > 0 ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20' : 'bg-slate-50 dark:bg-slate-900/50'}`}>
+                                    <div className={`p-6 flex justify-between items-center ${worker.pending > 0 ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20' : 'bg-slate-50 dark:bg-slate-900'}`}>
                                         <div>
                                             <h3 className="text-xl font-bold text-slate-900 dark:text-white">{worker.worker_name}</h3>
                                             <p className="text-sm text-slate-500 dark:text-slate-400">{worker.commissions.length} servicios realizados</p>
@@ -351,7 +351,7 @@ export const CommissionPaymentModal = () => {
                 </div>
 
                 {/* Footer Summary */}
-                <div className="px-8 py-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                <div className="px-8 py-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
                     <div className="flex justify-between items-center">
                         <div>
                             <p className="text-sm text-slate-500 dark:text-slate-400">Total de comisiones generadas en este turno</p>

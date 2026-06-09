@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { AnnualDeletionModal } from './AnnualDeletionModal';
@@ -146,7 +146,7 @@ export const MonthlyReportView = () => {
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {months.map((summary) => (
-                                    <div key={`${summary.year}-${summary.month}`} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
+                                    <div key={`${summary.year}-${summary.month}`} className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all">
                                         <div className="flex justify-between items-start mb-3">
                                             <h5 className="font-bold text-slate-900 dark:text-white capitalize text-lg">{summary.monthName}</h5>
                                             <span className="text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded-full">

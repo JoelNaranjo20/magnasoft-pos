@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@shared/lib/supabase';
 import { SaleDetailsModal } from '@shared/components/modals/SaleDetailsModal';
 import { Pagination } from '@shared/components/ui/Pagination';
@@ -360,34 +360,35 @@ export const SalesPage = () => {
             if (totals.rebajas < 0) totals.rebajas = 0;
 
             const tip = sale.metadata?.tip_amount || 0;
+            // Respetar tip_payment_method si existe, sino inferir del payment_method
+            const tipMethod = sale.metadata?.tip_payment_method || sale.payment_method;
 
             if (sale.payment_method === 'mixed') {
-                // Use precise sub-amounts for mixed payments
                 let cashPart = sale.cash_amount || 0;
                 let digitalPart = (sale.card_amount || 0) + (sale.transfer_amount || 0);
                 let creditPart = sale.credit_amount || 0;
-                
+
                 if (tip > 0) {
-                    if (cashPart >= tip) {
-                        cashPart -= tip;
+                    if (tipMethod === 'cash') {
+                        cashPart -= Math.min(cashPart, tip);
                         totals.tips_cash += tip;
-                    } else if (digitalPart >= tip) {
-                        digitalPart -= tip;
-                        totals.tips_digital += tip;
                     } else {
-                        totals.tips_cash += tip;
+                        digitalPart -= Math.min(digitalPart, tip);
+                        totals.tips_digital += tip;
                     }
                 }
-                
+
                 totals.sales_cash += cashPart;
                 totals.sales_digital += digitalPart;
                 totals.sales_credit += creditPart;
             } else if (sale.payment_method === 'cash') {
                 totals.sales_cash += tot;
-                totals.tips_cash += tip;
+                if (tipMethod === 'cash') totals.tips_cash += tip;
+                else totals.tips_digital += tip;
             } else if (sale.payment_method === 'card' || sale.payment_method === 'transfer') {
                 totals.sales_digital += tot;
-                totals.tips_digital += tip;
+                if (tipMethod === 'cash') totals.tips_cash += tip;
+                else totals.tips_digital += tip;
             } else if (sale.payment_method === 'credit') {
                 totals.sales_credit += tot;
             }
@@ -468,6 +469,7 @@ export const SalesPage = () => {
             const t = sale.created_at ? new Date(sale.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
             const tot = sale.total_amount || 0;
             const tip = (sale as any).metadata?.tip_amount || 0;
+            const tipMethod = (sale as any).metadata?.tip_payment_method || sale.payment_method;
 
             // Discount breakdown
             let totalDisc = (sale as any).total_discount || 0;
@@ -486,19 +488,29 @@ export const SalesPage = () => {
                 let digital = ((sale as any).card_amount || 0) + ((sale as any).transfer_amount || 0);
                 const credit = (sale as any).credit_amount || 0;
                 if (tip > 0) {
-                    if (cash >= tip) { cash -= tip; d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t }); }
-                    else if (digital >= tip) { digital -= tip; d.tips_digital.push({ label: `#${rid}`, sub: cname, amount: tip, time: t }); }
-                    else { d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t }); }
+                    if (tipMethod === 'cash') {
+                        if (cash >= tip) cash -= tip;
+                        d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+                    } else {
+                        if (digital >= tip) digital -= tip;
+                        d.tips_digital.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+                    }
                 }
                 if (cash > 0) d.sales_cash.push({ label: `#${rid}`, sub: cname, amount: cash, time: t });
                 if (digital > 0) d.sales_digital.push({ label: `#${rid}`, sub: cname, amount: digital, time: t });
                 if (credit > 0) d.sales_credit.push({ label: `#${rid}`, sub: cname, amount: credit, time: t });
             } else if (sale.payment_method === 'cash') {
                 d.sales_cash.push({ label: `#${rid}`, sub: cname, amount: tot, time: t });
-                if (tip > 0) d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+                if (tip > 0) {
+                    if (tipMethod === 'cash') d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+                    else d.tips_digital.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+                }
             } else if (sale.payment_method === 'card' || sale.payment_method === 'transfer') {
                 d.sales_digital.push({ label: `#${rid}`, sub: cname, amount: tot, time: t });
-                if (tip > 0) d.tips_digital.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+                if (tip > 0) {
+                    if (tipMethod === 'cash') d.tips_cash.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+                    else d.tips_digital.push({ label: `#${rid}`, sub: cname, amount: tip, time: t });
+                }
             } else if (sale.payment_method === 'credit') {
                 d.sales_credit.push({ label: `#${rid}`, sub: cname, amount: tot, time: t });
             }
@@ -757,7 +769,7 @@ export const SalesPage = () => {
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
 
                         {/* Header */}
-                        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
                                     <span className="material-symbols-outlined text-primary !text-2xl">receipt_long</span>
@@ -848,65 +860,85 @@ export const SalesPage = () => {
                                 )}
                             </div>
 
-                            {/* ══ DERECHA: Conciliación ══ */}
-                            <div className="p-5 flex flex-col">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <span className="material-symbols-outlined text-slate-500 !text-[16px]">calculate</span>
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Conciliación</span>
+                            {/* ══ DERECHA: Conciliación REDISEÑADA ══ */}
+                            <div className="p-4 flex flex-col space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-amber-500 !text-[18px]">calculate</span>
+                                    <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Conciliación</span>
                                 </div>
 
-                                <div className="space-y-0.5 flex-1">
-                                    {/* ── ENTRADAS (+) ── */}
-                                    <div className="px-2 py-1">
-                                        <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">+ Entradas</span>
-                                    </div>
-                                    {renderReconRow('sales_cash', 'Ventas Efectivo', reconciliation.sales_cash, 'bg-emerald-500', 'text-emerald-600 dark:text-emerald-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.sales_cash)}
-                                    {renderReconRow('sales_digital', 'Transferencias / Tarjeta', reconciliation.sales_digital, 'bg-indigo-500', 'text-indigo-600 dark:text-indigo-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.sales_digital)}
-                                    {renderReconRow('abonos_cash', 'Abonos en Efectivo', reconciliation.abonos_cash, 'bg-sky-500', 'text-sky-600 dark:text-sky-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.abonos_cash)}
-                                    {renderReconRow('abonos_digital', 'Abonos en Transferencia', reconciliation.abonos_digital, 'bg-blue-500', 'text-blue-600 dark:text-blue-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.abonos_digital)}
-                                    {reconciliation.tips_cash > 0 && renderReconRow('tips_cash', 'Propinas (Efectivo)', reconciliation.tips_cash, 'bg-amber-500', 'text-emerald-600 dark:text-emerald-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.tips_cash)}
-                                    {reconciliation.tips_digital > 0 && renderReconRow('tips_digital', 'Propinas (Digital)', reconciliation.tips_digital, 'bg-orange-500', 'text-indigo-600 dark:text-indigo-400', '+', 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10', reconciliationDetails.tips_digital)}
-
-                                    {/* Subtotal Entradas (Efectivo) */}
-                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-emerald-50/30 dark:bg-emerald-950/10 mt-2 border-t border-emerald-100 dark:border-emerald-900/30 font-bold">
-                                        <span className="text-xs text-emerald-700 dark:text-emerald-400">Total Entradas (Efectivo)</span>
-                                        <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 tabular-nums">
+                                {/* ── TARJETA: Ingresos ── */}
+                                <div className="bg-emerald-50/40 dark:bg-emerald-950/10 rounded-2xl border border-emerald-200/60 dark:border-emerald-800/30 overflow-hidden">
+                                    <div className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-100/40 dark:bg-emerald-900/15 border-b border-emerald-200/60 dark:border-emerald-800/30">
+                                        <span className="material-symbols-outlined text-emerald-600 !text-[16px]">trending_up</span>
+                                        <span className="text-[11px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Ingresos</span>
+                                        <span className="ml-auto text-[10px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums">
                                             +${(reconciliation.sales_cash + reconciliation.tips_cash + reconciliation.abonos_cash + reconciliation.canjes_net_cash).toLocaleString()}
                                         </span>
                                     </div>
-
-                                    {/* ── SALIDAS (−) ── */}
-                                    <div className="px-2 py-1 mt-2">
-                                        <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest">− Salidas</span>
-                                    </div>
-                                    {reconciliation.sales_credit > 0 && renderReconRow('sales_credit', 'Venta a Crédito', reconciliation.sales_credit, 'bg-orange-500', 'text-orange-600 dark:text-orange-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.sales_credit)}
-                                    {reconciliation.liquidaciones > 0 && renderReconRow('liquidaciones', 'Pago Comisiones / Propinas', reconciliation.liquidaciones, 'bg-amber-500', 'text-rose-600 dark:text-rose-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.liquidaciones)}
-                                    {reconciliation.expenses > 0 && renderReconRow('expenses', 'Salidas de Caja', reconciliation.expenses, 'bg-rose-500', 'text-rose-600 dark:text-rose-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.expenses)}
-                                    {reconciliation.uso_interno > 0 && renderReconRow('uso_interno', 'Uso Interno', reconciliation.uso_interno, 'bg-orange-500', 'text-orange-600 dark:text-orange-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.uso_interno)}
-                                    {reconciliation.rebajas > 0 && renderReconRow('rebajas', 'Descuentos', reconciliation.rebajas, 'bg-amber-500', 'text-amber-600 dark:text-amber-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.rebajas)}
-                                    {reconciliation.promociones > 0 && renderReconRow('promociones', 'Promociones (Fidelidad)', reconciliation.promociones, 'bg-purple-500', 'text-purple-600 dark:text-purple-400', '−', 'hover:bg-rose-50/50 dark:hover:bg-rose-900/10', reconciliationDetails.promociones)}
-
-                                    {/* Subtotal Salidas (Efectivo) */}
-                                    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-rose-50/30 dark:bg-rose-950/10 mt-2 border-t border-rose-100 dark:border-rose-900/30 font-bold">
-                                        <span className="text-xs text-rose-700 dark:text-rose-400">Total Salidas (Efectivo)</span>
-                                        <span className="text-xs font-black text-rose-700 dark:text-rose-400 tabular-nums">
-                                            −${(reconciliation.expenses + reconciliation.liquidaciones).toLocaleString()}
-                                        </span>
+                                    <div className="p-2 space-y-0">
+                                        {reconciliation.sales_cash > 0 && renderReconRow('sales_cash', 'Ventas en Efectivo', reconciliation.sales_cash, 'bg-emerald-400', 'text-emerald-600 dark:text-emerald-300', '+', 'hover:bg-emerald-100/50 dark:hover:bg-emerald-950/20', reconciliationDetails.sales_cash)}
+                                        {reconciliation.abonos_cash > 0 && renderReconRow('abonos_cash', 'Abonos en Efectivo', reconciliation.abonos_cash, 'bg-sky-400', 'text-sky-600 dark:text-sky-300', '+', 'hover:bg-emerald-100/50 dark:hover:bg-emerald-950/20', reconciliationDetails.abonos_cash)}
+                                        {reconciliation.tips_cash > 0 && renderReconRow('tips_cash', 'Propinas en Efectivo', reconciliation.tips_cash, 'bg-amber-400', 'text-amber-600 dark:text-amber-300', '+', 'hover:bg-emerald-100/50 dark:hover:bg-emerald-950/20', reconciliationDetails.tips_cash)}
+                                        {(reconciliation.sales_digital > 0 || reconciliation.abonos_digital > 0 || reconciliation.tips_digital > 0) && (
+                                            <div className="pt-1.5 mt-1 border-t border-dashed border-emerald-200/60 dark:border-emerald-800/30">
+                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide px-2">Digitales</span>
+                                            </div>
+                                        )}
+                                        {reconciliation.sales_digital > 0 && renderReconRow('sales_digital', 'Transferencias / Tarjeta', reconciliation.sales_digital, 'bg-indigo-400', 'text-indigo-600 dark:text-indigo-300', '+', 'hover:bg-indigo-50/50 dark:hover:bg-indigo-950/10', reconciliationDetails.sales_digital)}
+                                        {reconciliation.abonos_digital > 0 && renderReconRow('abonos_digital', 'Abonos Digitales', reconciliation.abonos_digital, 'bg-blue-400', 'text-blue-600 dark:text-blue-300', '+', 'hover:bg-indigo-50/50 dark:hover:bg-indigo-950/10', reconciliationDetails.abonos_digital)}
+                                        {reconciliation.tips_digital > 0 && renderReconRow('tips_digital', 'Propinas Digitales', reconciliation.tips_digital, 'bg-orange-400', 'text-orange-600 dark:text-orange-300', '+', 'hover:bg-indigo-50/50 dark:hover:bg-indigo-950/10', reconciliationDetails.tips_digital)}
                                     </div>
                                 </div>
 
-                                {/* ── RESULTADO ── */}
-                                <div className="mt-3 pt-3 border-t-2 border-slate-900 dark:border-white">
-                                    <div className="px-2 flex items-center justify-between">
-                                        <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                                            <span className="material-symbols-outlined !text-[18px]">account_balance_wallet</span>
-                                            Efectivo en Caja
-                                        </span>
-                                        <span className="text-xl font-black text-emerald-700 dark:text-emerald-400 tabular-nums">${cashFlowTotal.toLocaleString()}</span>
+                                {/* ── TARJETA: Egresos ── */}
+                                {(reconciliation.expenses > 0 || reconciliation.liquidaciones > 0 || reconciliation.sales_credit > 0 || reconciliation.rebajas > 0 || reconciliation.promociones > 0 || reconciliation.uso_interno > 0) && (
+                                    <div className="bg-rose-50/40 dark:bg-rose-950/10 rounded-2xl border border-rose-200/60 dark:border-rose-800/30 overflow-hidden">
+                                        <div className="flex items-center gap-2 px-3.5 py-2.5 bg-rose-100/40 dark:bg-rose-900/15 border-b border-rose-200/60 dark:border-rose-800/30">
+                                            <span className="material-symbols-outlined text-rose-500 !text-[16px]">trending_down</span>
+                                            <span className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-wider">Egresos</span>
+                                            <span className="ml-auto text-[10px] font-black text-rose-600 dark:text-rose-400 tabular-nums">
+                                                −${(reconciliation.expenses + reconciliation.liquidaciones + reconciliation.uso_interno).toLocaleString()}
+                                            </span>
+                                        </div>
+                                        <div className="p-2 space-y-0">
+                                            {reconciliation.expenses > 0 && renderReconRow('expenses', 'Salidas de Caja', reconciliation.expenses, 'bg-rose-400', 'text-rose-600 dark:text-rose-300', '−', 'hover:bg-rose-100/50 dark:hover:bg-rose-950/20', reconciliationDetails.expenses)}
+                                            {reconciliation.liquidaciones > 0 && renderReconRow('liquidaciones', 'Comisiones Pagadas', reconciliation.liquidaciones, 'bg-amber-400', 'text-amber-700 dark:text-amber-400', '−', 'hover:bg-rose-100/50 dark:hover:bg-rose-950/20', reconciliationDetails.liquidaciones)}
+                                            {reconciliation.uso_interno > 0 && renderReconRow('uso_interno', 'Uso Interno', reconciliation.uso_interno, 'bg-orange-400', 'text-orange-600 dark:text-orange-300', '−', 'hover:bg-rose-100/50 dark:hover:bg-rose-950/20', reconciliationDetails.uso_interno)}
+                                            {reconciliation.rebajas > 0 && renderReconRow('rebajas', 'Descuentos Aplicados', reconciliation.rebajas, 'bg-amber-400', 'text-amber-600 dark:text-amber-300', '−', 'hover:bg-rose-100/50 dark:hover:bg-rose-950/20', reconciliationDetails.rebajas)}
+                                            {reconciliation.promociones > 0 && renderReconRow('promociones', 'Promociones (Fidelidad)', reconciliation.promociones, 'bg-purple-400', 'text-purple-600 dark:text-purple-300', '−', 'hover:bg-rose-100/50 dark:hover:bg-rose-950/20', reconciliationDetails.promociones)}
+                                            {reconciliation.sales_credit > 0 && renderReconRow('sales_credit', 'Ventas a Crédito', reconciliation.sales_credit, 'bg-orange-400', 'text-orange-600 dark:text-orange-300', '−', 'hover:bg-rose-100/50 dark:hover:bg-rose-950/20', reconciliationDetails.sales_credit)}
+                                        </div>
                                     </div>
-                                    {sessionOpeningBalance > 0 && (
-                                        <p className="text-[9px] text-slate-400 font-bold px-2 mt-1">Incluye base de apertura: ${sessionOpeningBalance.toLocaleString()}</p>
+                                )}
+
+                                {/* ── MINI FLUJO DEL EFECTIVO ── */}
+                                <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 space-y-1.5">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Flujo del Turno</p>
+                                    <div className="flex items-center justify-between text-[11px]">
+                                        <span className="text-slate-500">Base inicial</span>
+                                        <span className="font-bold text-slate-600 dark:text-slate-300 tabular-nums">${sessionOpeningBalance.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[11px]">
+                                        <span className="text-emerald-600 dark:text-emerald-400">+ Ingresos en efectivo</span>
+                                        <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+                                            +${(reconciliation.sales_cash + reconciliation.tips_cash + reconciliation.abonos_cash + reconciliation.canjes_net_cash).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    {(reconciliation.expenses > 0 || reconciliation.liquidaciones > 0) && (
+                                        <div className="flex items-center justify-between text-[11px]">
+                                            <span className="text-rose-500">− Egresos en efectivo</span>
+                                            <span className="font-bold text-rose-500 tabular-nums">
+                                                −${(reconciliation.expenses + reconciliation.liquidaciones).toLocaleString()}
+                                            </span>
+                                        </div>
                                     )}
+                                    <div className="flex items-center justify-between pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                                        <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase">Efectivo en Caja</span>
+                                        <span className={`text-sm font-black tabular-nums ${cashFlowTotal >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                            ${cashFlowTotal.toLocaleString()}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -921,7 +953,7 @@ export const SalesPage = () => {
                             <div className="hidden lg:block overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-slate-50 dark:bg-slate-900/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">
+                                        <tr className="bg-slate-50 dark:bg-slate-900 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800">
                                             <th className="px-8 py-5">Recibo</th>
                                             {/* Dynamic Header */}
                                             <th className="px-8 py-5 min-w-[200px]">{columnConfig.header}</th>
@@ -985,7 +1017,7 @@ export const SalesPage = () => {
                                                                         )}
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-[8px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700/50 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                                                                    <span className="text-[8px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded uppercase tracking-tighter">
                                                                         {sale.payment_method === 'cash' ? '💵 Efectivo' :
                                                                             sale.payment_method === 'card' ? '💳 Tarjeta' :
                                                                                 sale.payment_method === 'transfer' ? '📲 Transf.' :
