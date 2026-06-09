@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+﻿import { useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useAuthStore, selectIsAdmin } from '@shared/store/useAuthStore';
@@ -40,7 +40,7 @@ export const PrePOSLayout = ({ children }: { children?: React.ReactNode }) => {
     return (
         <div className="h-screen flex flex-col overflow-hidden bg-slate-50 dark:bg-[#090d1f] text-slate-900 dark:text-slate-100 font-display">
             {/* Top Navigation Bar */}
-            <header className="flex-none flex items-center justify-between border-b border-slate-200/40 dark:border-white/5 bg-white/70 dark:bg-[#0b1227]/70 backdrop-blur-md px-6 py-3.5 z-40">
+            <header className="flex-none flex items-center justify-between border-b border-slate-200/40 dark:border-white/5 bg-white dark:bg-slate-900 dark:bg-slate-900 backdrop-blur-md px-6 py-3.5 z-40">
                 {/* Left: Brand + Nav */}
                 <div className="flex items-center gap-6">
                     {/* Brand */}
@@ -61,7 +61,7 @@ export const PrePOSLayout = ({ children }: { children?: React.ReactNode }) => {
                     </div>
 
                     {/* Divider */}
-                    <div className="h-7 w-px bg-slate-200/60 dark:bg-white/10"></div>
+                    <div className="h-7 w-px bg-slate-200/60 dark:bg-slate-100 dark:bg-slate-800"></div>
 
                     {/* Navigation Links */}
                     <nav className="flex items-center gap-1.5 relative h-full">

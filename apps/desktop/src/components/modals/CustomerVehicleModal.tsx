@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -356,7 +356,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                         <button
                                             key={customer.id}
                                             onClick={() => handleSelectCustomer(customer)}
-                                            className="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/50 rounded-2xl hover:border-primary hover:shadow-lg hover:shadow-primary/5 transition-all active:scale-[0.98] group"
+                                            className="w-full flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-700/50 rounded-2xl hover:border-primary hover:shadow-lg hover:shadow-primary/5 transition-all active:scale-[0.98] group"
                                         >
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
@@ -406,7 +406,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                             </div>
                                             <span className="font-bold text-sm text-slate-500 group-hover:text-primary transition-colors">Nuevo Cliente</span>
                                         </button>
-                                        <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-900/50 flex flex-col items-center justify-center gap-2 opacity-50">
+                                        <div className="p-6 rounded-3xl bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-2 opacity-50">
                                             <span className="material-symbols-outlined text-slate-300 text-3xl">qr_code_scanner</span>
                                             <span className="font-bold text-[10px] uppercase text-slate-400 tracking-tighter">Próximamente QR</span>
                                         </div>
@@ -499,7 +499,7 @@ export const CustomerVehicleModal = ({ isOpen, onClose, onSelect, initialPlate, 
                                         placeholder="Ej: 300 000 0000"
                                     />
                                 </div>
-                                <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                                     <div className="flex-1">
                                         <h4 className="text-xs font-bold text-slate-900 dark:text-white">Sin Puntos de Fidelización</h4>
                                         <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Marcar si es Cliente Mayorista o "Público General".</p>

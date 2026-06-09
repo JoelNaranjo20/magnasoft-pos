@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { supabase } from '@shared/lib/supabase';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { SaleDetailsModal } from '@shared/components/modals/SaleDetailsModal';
@@ -460,14 +460,14 @@ export const FinanceDashboard = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                    <div className="flex p-1 bg-white/80 dark:bg-[#0b1227]/80 rounded-2xl shadow-lg border border-slate-200/60 dark:border-white/5 backdrop-blur-sm">
+                    <div className="flex p-1 bg-white/80 dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200/60 dark:border-white/5 backdrop-blur-sm">
                         {['day', 'yesterday', 'week', 'month'].map((p) => (
                             <button
                                 key={p}
                                 onClick={() => setViewPeriod(p as ViewPeriod)}
                                 className={`flex-1 md:flex-none px-4 md:px-6 py-2 rounded-xl text-xs md:text-sm font-bold transition-all ${viewPeriod === p
                                     ? 'bg-gradient-to-r from-primary to-blue-600 text-white shadow-lg shadow-primary/20 scale-105'
-                                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white'
+                                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
                                     }`}
                             >
                                 {p === 'day' ? 'Turno Actual' : p === 'yesterday' ? 'Turno Anterior' : p === 'week' ? 'Semana' : 'Mes'}
@@ -646,7 +646,7 @@ export const FinanceDashboard = () => {
                         <div className="hidden md:block overflow-x-auto -mx-6 md:-mx-8">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-slate-50 dark:bg-slate-900/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-y border-slate-100 dark:border-slate-800">
+                                    <tr className="bg-slate-50 dark:bg-slate-900 text-[10px] font-black text-slate-400 uppercase tracking-widest border-y border-slate-100 dark:border-slate-800">
                                         <th className="px-6 md:px-8 py-3">Recibo</th>
                                         <th className="px-6 md:px-8 py-3">Cliente / Vehículo</th>
                                         <th className="px-4 py-3">Método</th>
@@ -910,7 +910,7 @@ export const FinanceDashboard = () => {
 
                         <div className="hidden md:block overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-slate-50 dark:bg-slate-900/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                <thead className="bg-slate-50 dark:bg-slate-900 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                     <tr>
                                         <th className="px-8 py-4">Usuario</th>
                                         <th className="px-8 py-4">Apertura</th>

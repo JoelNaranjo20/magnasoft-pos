@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 
 import { useState, useEffect } from 'react';
 import { useCartStore } from '../../store/useCartStore';
@@ -598,7 +598,7 @@ export const POSCart = () => {
                         onClick={() => {
                             window.dispatchEvent(new Event('pos-back-to-patio'));
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all active:scale-95"
                     >
                         <span className="material-symbols-outlined !text-[16px]">arrow_back</span>
                         Volver al Patio
@@ -698,8 +698,8 @@ export const POSCart = () => {
             {/* Cart Items List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/10 scrollbar-track-transparent">
                 {items.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-400 border-2 border-dashed border-slate-200/60 dark:border-white/5 rounded-2xl m-4 bg-slate-50/30 dark:bg-white/[0.015]">
-                        <div className="h-20 w-20 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mb-4">
+                    <div className="flex flex-col items-center justify-center h-full text-slate-400 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl m-4 bg-slate-50 dark:bg-slate-800">
+                        <div className="h-20 w-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
                             <span className="material-symbols-outlined !text-[40px] opacity-30">shopping_cart_off</span>
                         </div>
                         <p className="font-medium text-sm text-slate-500 dark:text-slate-400">El carrito está vacío</p>
@@ -707,7 +707,7 @@ export const POSCart = () => {
                     </div>
                 ) : (
                     items.map((item) => (
-                        <div key={item.cartId} className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-white/[0.03] shadow-sm border border-slate-100/80 dark:border-white/5 hover:border-primary/30 dark:hover:border-primary/20 transition-all group relative overflow-hidden">
+                        <div key={item.cartId} className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 hover:border-primary/30 dark:hover:border-primary/20 transition-all group relative overflow-hidden">
                             {/* Item Type Color Strip */}
                             <div className={`absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl ${item.type === 'product' ? 'bg-gradient-to-b from-amber-400 to-orange-500' : 'bg-gradient-to-b from-primary to-blue-600'}`}></div>
 
@@ -885,7 +885,7 @@ export const POSCart = () => {
                 <div className="grid grid-cols-5 gap-2">
                     <button
                         onClick={() => setMovementModal({ isOpen: true, type: 'income' })}
-                        className="col-span-1 h-14 rounded-xl border border-emerald-200/60 dark:border-emerald-500/10 bg-emerald-50/60 dark:bg-emerald-500/5 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-100/80 dark:hover:bg-emerald-500/10 hover:border-emerald-300 dark:hover:border-emerald-500/20 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
+                        className="col-span-1 h-14 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 hover:border-emerald-300 dark:hover:border-emerald-700 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
                         title="Ingreso Extra"
                     >
                         <span className="material-symbols-outlined !text-[20px]">add_circle</span>
@@ -893,7 +893,7 @@ export const POSCart = () => {
                     </button>
                     <button
                         onClick={() => setMovementModal({ isOpen: true, type: 'expense' })}
-                        className="col-span-1 h-14 rounded-xl border border-rose-200/60 dark:border-rose-500/10 bg-rose-50/60 dark:bg-rose-500/5 text-rose-500 dark:text-rose-400 hover:bg-rose-100/80 dark:hover:bg-rose-500/10 hover:border-rose-300 dark:hover:border-rose-500/20 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
+                        className="col-span-1 h-14 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 hover:border-rose-300 dark:hover:border-rose-700 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group focus:outline-none focus:ring-2 focus:ring-rose-400/30"
                         title="Gasto Rápido"
                     >
                         <span className="material-symbols-outlined !text-[20px]">remove_circle</span>
@@ -901,20 +901,20 @@ export const POSCart = () => {
                     </button>
                     <button
                         onClick={() => setMovementModal({ isOpen: true, type: 'favor' })}
-                        className="col-span-1 h-14 rounded-xl border border-blue-200/60 dark:border-blue-500/10 bg-blue-50/60 dark:bg-blue-500/5 text-blue-500 dark:text-blue-400 hover:bg-blue-100/80 dark:hover:bg-blue-500/10 hover:border-blue-300 dark:hover:border-blue-500/20 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group"
+                        className="col-span-1 h-14 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 hover:border-blue-300 dark:hover:border-blue-700 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group focus:outline-none focus:ring-2 focus:ring-blue-400/30"
                         title="Canje de Efectivo/Transferencia"
                     >
                         <span className="material-symbols-outlined !text-[20px] transition-transform group-hover:rotate-180 duration-500">swap_horiz</span>
                         <span className="text-[9px] font-semibold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Canje</span>
                     </button>
-                    <button className="col-span-1 h-14 rounded-xl border border-slate-200/60 dark:border-white/5 bg-slate-50/60 dark:bg-white/[0.03] text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.06] hover:border-slate-300 dark:hover:border-white/10 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group">
+                    <button className="col-span-1 h-14 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:border-slate-300 dark:hover:border-slate-600 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 group focus:outline-none focus:ring-2 focus:ring-slate-400/30">
                         <span className="material-symbols-outlined !text-[20px]">print</span>
                         <span className="text-[9px] font-semibold uppercase tracking-wider leading-none truncate w-full px-1 text-center">Imprimir</span>
                     </button>
                     <button
                         onClick={handlePayment}
                         disabled={items.length === 0}
-                        className="col-span-1 h-14 rounded-xl bg-gradient-to-br from-primary via-blue-600 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/30 flex flex-col items-center justify-center gap-1 font-semibold transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                        className="col-span-1 h-14 rounded-xl bg-gradient-to-br from-primary via-blue-600 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/30 flex flex-col items-center justify-center gap-1 font-semibold transition-all duration-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                     >
                         <span className="material-symbols-outlined !text-[24px]">payments</span>
                         <span className="text-[10px] font-semibold uppercase tracking-wider">Cobrar</span>

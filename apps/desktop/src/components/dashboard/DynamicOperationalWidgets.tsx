@@ -1,4 +1,4 @@
-// apps/desktop/src/components/dashboard/DynamicOperationalWidgets.tsx
+﻿// apps/desktop/src/components/dashboard/DynamicOperationalWidgets.tsx
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -122,7 +122,7 @@ export const DynamicOperationalWidgets = () => {
                                 {typeof displayValue === 'number' ? displayValue.toLocaleString() : displayValue}
                             </span>
                         </div>
-                        <div className="h-2 bg-slate-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
+                        <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                             <div
                                 className={`h-full ${color} rounded-full transition-all duration-700 ease-out`}
                                 style={{ width: `${(numericValue / maxValue) * 100}%` }}

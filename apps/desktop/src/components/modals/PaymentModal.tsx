@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useCartStore } from '../../store/useCartStore';
@@ -857,7 +857,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-surface-dark w-full max-w-6xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row h-[80vh] relative">
+            <div className="bg-white dark:bg-slate-800 w-full max-w-6xl rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden flex flex-col md:flex-row h-[80vh] relative">
 
                 {/* Confirm Overlay for Electronic Payments */}
                 {showPaymentConfirmation && (
@@ -906,7 +906,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                         <p className="text-slate-500 mb-6 font-medium">Asigna responsables y procesa el pago</p>
 
                         {/* Assignment Mode Tabs */}
-                        <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800/50 rounded-xl mb-3 relative">
+                        <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl mb-3 relative">
                             <button
                                 onClick={() => setAssignmentMode('general')}
                                 className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all relative z-10 ${assignmentMode === 'general' ? 'text-primary' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
@@ -949,7 +949,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                             <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">¡Recompensa Disponible!</span>
                                             <span className="ml-auto text-[10px] font-black text-purple-500 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded-full">{customer.loyalty_points} Pts</span>
                                         </div>
-                                        <div className="divide-y divide-purple-100 dark:divide-purple-900/30 bg-white dark:bg-slate-800/50">
+                                        <div className="divide-y divide-purple-100 dark:divide-purple-900/30 bg-white dark:bg-slate-800">
                                             {rewardServices.map(service => {
                                                 const redeemed = redeemedServiceIds.has(service.id);
                                                 return (
@@ -1025,7 +1025,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                     onClick={() => setMethod(m.id as PaymentMethod)}
                                     className={`flex flex-col items-center justify-center gap-1 p-1.5 rounded-xl border-2 transition-all ${method === m.id
                                         ? 'border-primary bg-primary/5 text-primary'
-                                        : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-slate-400 hover:border-primary/50'
+                                        : 'border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:border-primary/50'
                                         }`}
                                 >
                                     <span className="material-symbols-outlined !text-xl">{m.icon}</span>
@@ -1133,7 +1133,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         const hasActiveCommissionConfig = isFixed ? (commission > 0 || (originalItem?.commission_amount || 0) > 0) : percentage > 0;
 
                                         return (
-                                            <div key={item.cartId} className="p-3 bg-white dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center group hover:border-blue-200 transition-colors">
+                                            <div key={item.cartId} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center group hover:border-blue-200 transition-colors">
                                                 <div>
                                                     <h4 className="font-bold text-slate-700 dark:text-slate-300 text-sm">{item.name}</h4>
                                                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">{item.quantity} x ${item.price.toLocaleString()}</p>
@@ -1150,7 +1150,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                                         </div>
                                                     )}
                                                     {item.type === 'service' && !item.commissionEnabled && (
-                                                        <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded flex items-center gap-1 justify-end">
+                                                        <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded flex items-center gap-1 justify-end">
                                                             <span className="material-symbols-outlined !text-[12px]">money_off</span>
                                                             SIN COMISIÓN
                                                         </span>
@@ -1175,7 +1175,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${
                                             parseFloat(tipAmount) > 0
                                                 ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
-                                                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 hover:border-slate-300'
+                                                : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400 hover:text-slate-600 hover:border-slate-300'
                                         }`}
                                     >
                                         <span className="material-symbols-outlined !text-[16px]">volunteer_activism</span>
@@ -1466,7 +1466,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         type="text"
                                         readOnly
                                         value={numericAmount > 0 ? numericAmount.toLocaleString() : ''}
-                                        className="w-full bg-white dark:bg-slate-900/50 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-5xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
+                                        className="w-full bg-white dark:bg-slate-900 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-5xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
                                         placeholder="0"
                                     />
                                 </div>
@@ -1525,7 +1525,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                     <button
                                         key={key}
                                         onClick={() => handleNumpad(key)}
-                                        className={`group relative overflow-hidden rounded-2xl transition-all active:scale-95 ${key === 'backspace' ? 'bg-rose-50 dark:bg-rose-900/10 text-rose-500' : 'bg-white dark:bg-slate-800/50 text-slate-700 dark:text-slate-200 border-b-4 border-slate-200 dark:border-slate-900 shadow-md hover:shadow-lg'}`}
+                                        className={`group relative overflow-hidden rounded-2xl transition-all active:scale-95 ${key === 'backspace' ? 'bg-rose-50 dark:bg-rose-900/10 text-rose-500' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-b-4 border-slate-200 dark:border-slate-900 shadow-md hover:shadow-lg'}`}
                                     >
                                         <span className="relative z-10 text-2xl font-black uppercase">
                                             {key === 'backspace' ? <span className="material-symbols-outlined !text-3xl">backspace</span> : key}
@@ -1550,7 +1550,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                                         step="1"
                                         value={method === 'transfer' ? transferAmount : cardAmount}
                                         onChange={(e) => method === 'transfer' ? setTransferAmount(e.target.value) : setCardAmount(e.target.value)}
-                                        className="w-full bg-white dark:bg-slate-900/50 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-4xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
+                                        className="w-full bg-white dark:bg-slate-900 border-4 border-slate-100 dark:border-slate-800 rounded-3xl py-6 pl-14 pr-6 text-4xl font-black text-right outline-none focus:border-primary focus:bg-white transition-all shadow-inner"
                                         placeholder={String(total)}
                                     />
                                 </div>
@@ -1776,7 +1776,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                     )}
 
                     {activeError && (
-                        <div className="mt-4 p-4 bg-rose-50 text-rose-600 border border-rose-100 rounded-2xl text-xs font-bold text-center flex items-center justify-center gap-2 animate-in slide-in-from-top-4">
+                        <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold text-center flex items-center justify-center gap-2 animate-in slide-in-from-top-4">
                             <span className="material-symbols-outlined !text-[18px]">error</span>
                             {activeError}
                         </div>
@@ -1785,14 +1785,14 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                     <div className="flex gap-4 mt-8 flex-none">
                         <button
                             onClick={onClose}
-                            className="h-16 px-8 rounded-2xl font-black text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all uppercase tracking-widest text-xs"
+                            className="h-14 px-6 inline-flex items-center justify-center text-sm font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-[0.98] uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Cancelar
                         </button>
                         <button
                             onClick={() => handleConfirm()}
                             disabled={!canConfirm || processing}
-                            className="flex-1 h-16 bg-primary text-white rounded-3xl font-black text-xl shadow-2xl shadow-primary/30 hover:scale-[1.03] active:scale-[0.97] transition-all disabled:opacity-30 disabled:grayscale disabled:scale-100 flex items-center justify-center gap-3 group px-6"
+                            className="flex-1 h-14 inline-flex items-center justify-center gap-3 bg-primary hover:bg-[#0b6ddb] dark:hover:bg-[#3b9eff] text-white rounded-lg font-semibold text-base shadow-md hover:shadow-lg transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
                         >
                             {processing ? (
                                 <span className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></span>

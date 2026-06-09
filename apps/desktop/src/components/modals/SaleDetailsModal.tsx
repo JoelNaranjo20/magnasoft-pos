@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import React from 'react';
 
 interface SaleDetailsModalProps {
@@ -99,7 +99,7 @@ export const SaleDetailsModal = ({ isOpen, onClose, sale }: SaleDetailsModalProp
                     {/* Items List */}
                     <div className="space-y-4">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Detalle de Productos y Servicios</p>
-                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden text-sm">
+                        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden text-sm">
                             <table className="w-full text-left">
                                 <thead className="bg-slate-100/50 dark:bg-slate-800 font-bold text-slate-500 border-b border-slate-100 dark:border-slate-800">
                                     <tr>
@@ -170,7 +170,7 @@ export const SaleDetailsModal = ({ isOpen, onClose, sale }: SaleDetailsModalProp
 
                 {/* Cross-change & Tips badges */}
                 {(sale.metadata?.cross_change || sale.metadata?.tip_amount > 0) && (
-                    <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 space-y-1.5">
+                    <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700 space-y-1.5">
                         {sale.metadata?.cross_change && (
                             <div className="flex items-center gap-1.5 text-[10px] font-bold">
                                 <span className="material-symbols-outlined text-sky-500 text-sm">swap_horiz</span>
@@ -202,20 +202,52 @@ export const SaleDetailsModal = ({ isOpen, onClose, sale }: SaleDetailsModalProp
                 )}
 
                 {/* Footer Info */}
-                <div className="p-6 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
-                    <div>Método: {
-                        sale.payment_method === 'cash' ? 'EFECTIVO' :
-                            sale.payment_method === 'card' ? 'TARJETA' :
-                                sale.payment_method === 'transfer' ? 'TRANSFERENCIA' :
-                                    sale.payment_method === 'credit' ? 'CRÉDITO / FIADO' :
-                                        sale.payment_method?.toUpperCase()
-                    }</div>
-                    <div>Estado: {
-                        sale.status === 'completed' ? 'COMPLETADO' :
-                            sale.status === 'pending' ? 'PENDIENTE' :
-                                sale.status === 'cancelled' ? 'CANCELADO' :
-                                    sale.status?.toUpperCase()
-                    }</div>
+                <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-2">
+                    {/* Payment method badge */}
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        sale.payment_method === 'cash'
+                            ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/30'
+                            : sale.payment_method === 'card'
+                            ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/30'
+                            : sale.payment_method === 'transfer'
+                            ? 'text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-900/30'
+                            : sale.payment_method === 'credit'
+                            ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30'
+                            : 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700'
+                    }`}>
+                        <span className="material-symbols-outlined !text-[14px]">
+                            {sale.payment_method === 'cash' ? 'payments' :
+                                sale.payment_method === 'card' ? 'credit_card' :
+                                    sale.payment_method === 'transfer' ? 'swap_horiz' :
+                                        sale.payment_method === 'credit' ? 'schedule' : 'help'}
+                        </span>
+                        {sale.payment_method === 'cash' ? 'Efectivo' :
+                            sale.payment_method === 'card' ? 'Tarjeta' :
+                                sale.payment_method === 'transfer' ? 'Transferencia' :
+                                    sale.payment_method === 'credit' ? 'Crédito' :
+                                        sale.payment_method?.toUpperCase()}
+                    </span>
+
+                    {/* Status badge */}
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        sale.status === 'completed'
+                            ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/30'
+                            : sale.status === 'pending'
+                            ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30'
+                            : sale.status === 'cancelled'
+                            ? 'text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/30'
+                            : 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700'
+                    }`}>
+                        <span className="w-1.5 h-1.5 rounded-full ${
+                            sale.status === 'completed' ? 'bg-emerald-500' :
+                                sale.status === 'pending' ? 'bg-amber-500' :
+                                    sale.status === 'cancelled' ? 'bg-rose-500' : 'bg-slate-400'
+                        }"></span>
+                        {sale.status === 'completed' ? 'Completado' :
+                            sale.status === 'pending' ? 'Pendiente' :
+                                sale.status === 'cancelled' ? 'Cancelado' :
+                                    sale.status?.toUpperCase()}
+                    </span>
                 </div>
             </div>
         </div>

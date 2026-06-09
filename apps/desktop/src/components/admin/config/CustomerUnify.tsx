@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { normalizePhone } from '@shared/lib/normalizePhone';
@@ -668,9 +668,9 @@ export const CustomerUnify = ({ isOpen, onClose }: CustomerUnifyProps) => {
                         <p className="text-xl font-black">¡Unificación Exitosa!</p>
                         <p className="text-sm font-medium opacity-90 mt-1 text-center px-8">{mergeResult.message}</p>
                         <div className="flex gap-5 mt-5 text-sm font-bold">
-                            <span className="bg-white/20 px-3 py-1.5 rounded-xl">{mergeResult.transfers.sales} ventas</span>
-                            <span className="bg-white/20 px-3 py-1.5 rounded-xl">{mergeResult.transfers.debts} deudas</span>
-                            <span className="bg-white/20 px-3 py-1.5 rounded-xl">{mergeResult.transfers.vehicles} vehículos</span>
+                            <span className="bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-xl">{mergeResult.transfers.sales} ventas</span>
+                            <span className="bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-xl">{mergeResult.transfers.debts} deudas</span>
+                            <span className="bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded-xl">{mergeResult.transfers.vehicles} vehículos</span>
                         </div>
                     </div>
                 )}

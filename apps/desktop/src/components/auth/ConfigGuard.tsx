@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -84,7 +84,7 @@ export const ConfigGuard = ({ children, moduleId }: ConfigGuardProps) => {
                                 setPin(e.target.value.replace(/\D/g, ''));
                                 setError('');
                             }}
-                            className="w-full px-4 py-3.5 text-center text-3xl tracking-[0.4em] font-semibold bg-slate-50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-white/5 rounded-2xl focus:border-primary outline-none transition-all dark:text-white"
+                            className="w-full px-4 py-3.5 text-center text-3xl tracking-[0.4em] font-semibold bg-slate-50 dark:bg-slate-900 border border-slate-200/50 dark:border-white/5 rounded-2xl focus:border-primary outline-none transition-all dark:text-white"
                             maxLength={8}
                         />
                         {error && (

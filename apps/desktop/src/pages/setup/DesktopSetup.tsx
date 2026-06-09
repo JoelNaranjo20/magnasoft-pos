@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState } from 'react';
 import { supabase, ensureSession } from "../../lib/supabase";
 import { useAuthStore } from '@shared/store/useAuthStore';
@@ -76,7 +76,7 @@ export const DesktopSetup = () => {
                 {/* Branding / Header */}
                 <div className="text-center space-y-3">
                     <div className="inline-flex size-20 rounded-[2rem] bg-gradient-to-br from-primary via-blue-600 to-indigo-600 p-0.5 shadow-2xl shadow-primary/30 items-center justify-center relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                        <div className="absolute inset-0 bg-slate-200 dark:bg-slate-700 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
                         <div className="w-full h-full bg-[#0d1527] flex items-center justify-center rounded-[1.95rem]">
                             <span className="material-symbols-outlined text-4xl text-transparent bg-clip-text bg-gradient-to-r from-primary to-cyan-400">
                                 rocket_launch
@@ -136,7 +136,7 @@ export const DesktopSetup = () => {
                                         }`}
                                     >
                                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 transition-all ${
-                                            isSelected ? 'bg-primary' : 'bg-white/5 group-hover:bg-white/10'
+                                            isSelected ? 'bg-primary' : 'bg-white/5 group-hover:bg-slate-100 dark:bg-slate-800'
                                         }`}>
                                             <span className={`material-symbols-outlined text-2xl transition-colors ${
                                                 isSelected ? 'text-white' : 'text-slate-400 group-hover:text-slate-350'

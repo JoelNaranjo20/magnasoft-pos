@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, ensureSession } from '../../lib/supabase';
@@ -158,7 +158,7 @@ export const OpenSessionModal = () => {
 
     return (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center min-h-screen px-4 py-8 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm">
-            <div className="w-full max-w-4xl overflow-hidden border shadow-2xl bg-white dark:bg-slate-800 rounded-2xl flex flex-col md:flex-row border-slate-200 dark:border-slate-700">
+            <div className="w-full max-w-4xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xl bg-white dark:bg-slate-800 rounded-xl flex flex-col md:flex-row">
 
                 {/* Left Side: Form & Context */}
                 <div className="flex flex-col justify-between flex-1 p-8">
@@ -241,7 +241,7 @@ export const OpenSessionModal = () => {
                         </div>
 
                         {selectedWorker && (
-                            <div className="p-4 mb-6 border rounded-xl bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-700/50">
+                            <div className="p-4 mb-6 border rounded-xl bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-700/50">
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center justify-center w-10 h-10 font-bold rounded-full bg-blue-100 dark:bg-blue-900/30 text-primary">
                                         {selectedWorker.name.substring(0, 2).toUpperCase()}
@@ -279,7 +279,7 @@ export const OpenSessionModal = () => {
                         <button
                             onClick={handleOpenSession}
                             disabled={loading || !selectedWorkerId}
-                            className="w-full bg-primary hover:bg-primary/90 text-white text-lg font-bold py-4 px-6 rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="w-full bg-primary hover:bg-[#0b6ddb] dark:hover:bg-[#3b9eff] text-white text-lg font-semibold py-4 px-6 rounded-xl shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-1 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Abriendo...' : 'Abrir Caja'}
                         </button>
@@ -287,7 +287,7 @@ export const OpenSessionModal = () => {
                 </div>
 
                 {/* Right Side: Numpad */}
-                <div className="w-full md:w-[320px] bg-slate-50 dark:bg-slate-900/50 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center">
+                <div className="w-full md:w-[320px] bg-slate-50 dark:bg-slate-900 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-700 p-6 flex flex-col justify-center">
                     <div className="grid grid-cols-3 gap-3 h-full max-h-[400px]">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                             <button

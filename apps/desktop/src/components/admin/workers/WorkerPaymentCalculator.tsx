@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
@@ -248,7 +248,7 @@ export const WorkerPaymentCalculator = () => {
             isOpen: true,
             title: 'Confirmar Liquidación',
             message: (
-                <div className="space-y-3 text-left bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                <div className="space-y-3 text-left bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
                     <div className="flex justify-between">
                         <span className="text-slate-500">Total Comisiones:</span>
                         <span className="font-bold text-slate-700 dark:text-slate-300">${totalToPay.toLocaleString()}</span>
@@ -340,7 +340,7 @@ export const WorkerPaymentCalculator = () => {
             isOpen: true,
             title: 'Confirmar Pago Salario',
             message: (
-                <div className="space-y-3 text-left bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                <div className="space-y-3 text-left bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
                     <div className="flex justify-between">
                         <span className="text-slate-500">Salario Base:</span>
                         <span className="font-bold text-slate-700 dark:text-slate-300">${amount.toLocaleString()}</span>
@@ -436,7 +436,7 @@ export const WorkerPaymentCalculator = () => {
                         <select
                             value={selectedWorker}
                             onChange={(e) => setSelectedWorker(e.target.value)}
-                            className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:border-primary font-bold text-slate-700 dark:text-slate-200"
+                            className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:border-primary font-bold text-slate-700 dark:text-slate-200"
                         >
                             <option value="">Seleccionar trabajador...</option>
                             {workers.map(w => (
@@ -452,7 +452,7 @@ export const WorkerPaymentCalculator = () => {
                                 type="date"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:border-primary font-bold text-slate-700 dark:text-slate-200"
+                                className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:border-primary font-bold text-slate-700 dark:text-slate-200"
                             />
                         </div>
                         <div>
@@ -461,15 +461,15 @@ export const WorkerPaymentCalculator = () => {
                                 type="date"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:border-primary font-bold text-slate-700 dark:text-slate-200"
+                                className="w-full px-5 py-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none focus:border-primary font-bold text-slate-700 dark:text-slate-200"
                             />
                         </div>
                     </div>
 
                     <div className="flex gap-2 flex-1">
-                        <button onClick={() => setPeriod('today')} className="flex-1 py-3.5 px-4 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-black text-xs uppercase rounded-2xl transition-all">Hoy</button>
-                        <button onClick={() => setPeriod('week')} className="flex-1 py-3.5 px-4 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-black text-xs uppercase rounded-2xl transition-all">Semana</button>
-                        <button onClick={() => setPeriod('month')} className="flex-1 py-3.5 px-4 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-black text-xs uppercase rounded-2xl transition-all">Mes</button>
+                        <button onClick={() => setPeriod('today')} className="flex-1 py-3.5 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-black text-xs uppercase rounded-2xl transition-all">Hoy</button>
+                        <button onClick={() => setPeriod('week')} className="flex-1 py-3.5 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-black text-xs uppercase rounded-2xl transition-all">Semana</button>
+                        <button onClick={() => setPeriod('month')} className="flex-1 py-3.5 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-600 dark:text-slate-300 font-black text-xs uppercase rounded-2xl transition-all">Mes</button>
                     </div>
                 </div>
             </div>

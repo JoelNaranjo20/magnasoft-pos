@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { CustomerHistoryModal } from '../modals/CustomerHistoryModal';
 
@@ -268,7 +268,7 @@ export const CreditManagement = () => {
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                        <thead className="bg-slate-50 dark:bg-slate-900/50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <thead className="bg-slate-50 dark:bg-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-400">
                             <tr>
                                 <th className="px-6 py-4">Cliente / Detalle</th>
                                 <th className="px-6 py-4">Fecha / Caja</th>

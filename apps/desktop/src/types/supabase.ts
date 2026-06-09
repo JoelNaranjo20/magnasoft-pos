@@ -283,6 +283,9 @@ export type Database = {
           id: string
           type: string
           user_id: string | null
+          payment_method: string | null
+          session_id: string | null
+          metadata: Record<string, number> | null
         }
         Insert: {
           amount: number
@@ -292,6 +295,9 @@ export type Database = {
           id?: string
           type: string
           user_id?: string | null
+          payment_method?: string | null
+          session_id?: string | null
+          metadata?: Record<string, number> | null
         }
         Update: {
           amount?: number
@@ -301,6 +307,9 @@ export type Database = {
           id?: string
           type?: string
           user_id?: string | null
+          payment_method?: string | null
+          session_id?: string | null
+          metadata?: Record<string, number> | null
         }
         Relationships: [
           {

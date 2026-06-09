@@ -1,4 +1,4 @@
-import { useDashboardConfig } from '@shared/hooks/useDashboardConfig';
+﻿import { useDashboardConfig } from '@shared/hooks/useDashboardConfig';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { LayoutDashboard, BarChart3, List, ShoppingBag, TrendingUp } from 'lucide-react';
 
@@ -94,7 +94,7 @@ export const DashboardSettings = () => {
                     </h4>
                     
                     {/* Size Selector */}
-                    <div className="hidden sm:flex bg-slate-100 dark:bg-slate-700/50 p-1 rounded-lg">
+                    <div className="hidden sm:flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg">
                         {(['small', 'medium', 'large'] as const).map((s) => (
                             <button
                                 key={s}
@@ -112,7 +112,7 @@ export const DashboardSettings = () => {
                 </div>
 
                 {/* Mobile Size Selector */}
-                <div className="flex sm:hidden bg-slate-100 dark:bg-slate-700/50 p-1 rounded-lg mb-4 w-full">
+                <div className="flex sm:hidden bg-slate-100 dark:bg-slate-700 p-1 rounded-lg mb-4 w-full">
                     {(['small', 'medium', 'large'] as const).map((s) => (
                         <button
                             key={s}

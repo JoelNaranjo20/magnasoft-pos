@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
@@ -97,11 +97,11 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
                                 <p className="text-[11px] font-medium opacity-80 leading-tight">Consumo sin venta al cliente</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
+                        <button onClick={onClose} className="p-1.5 hover:bg-slate-200 dark:bg-slate-700 rounded-lg transition-colors">
                             <span className="material-symbols-outlined">close</span>
                         </button>
                     </div>
-                    <div className="mt-4 bg-white/15 rounded-2xl p-3 backdrop-blur-sm">
+                    <div className="mt-4 bg-slate-100 dark:bg-slate-800 rounded-2xl p-3 backdrop-blur-sm">
                         <p className="text-sm font-black opacity-90">{product.name}</p>
                         <p className="text-[11px] opacity-70 mt-0.5">Stock actual: <span className="font-bold">{product.stock} unid.</span></p>
                     </div>
@@ -189,7 +189,7 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
                         )}
 
                         {/* Summary chip */}
-                        <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 px-4 py-3 rounded-xl border border-slate-100 dark:border-slate-800">
                             <span className="text-xs font-bold text-slate-500 uppercase">Stock resultante</span>
                             <span className="font-black text-slate-800 dark:text-white text-lg">{Math.max(0, product.stock - qty)} unid.</span>
                         </div>

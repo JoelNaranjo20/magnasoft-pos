@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { SessionHistory } from '../../components/admin/sessions/SessionHistory';
 import { MonthlyReportView } from '../../components/admin/audit/MonthlyReportView';
 
@@ -14,12 +14,12 @@ export const AuditPage = () => {
                     <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Revisa las sesiones de caja y actividad por administrador.</p>
                 </div>
 
-                <div className="flex p-1.5 bg-slate-100 dark:bg-[#0b1227]/85 rounded-2xl border border-slate-200/50 dark:border-white/5 shadow-inner backdrop-blur-sm">
+                <div className="flex p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200/50 dark:border-white/5 shadow-inner backdrop-blur-sm">
                     <button
                         onClick={() => setCurrentView('history')}
                         className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${currentView === 'history'
                                 ? 'bg-gradient-to-r from-primary to-blue-600 text-white shadow-md shadow-primary/20 scale-105'
-                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white'
+                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
                             }`}
                     >
                         Historial Detallado
@@ -28,7 +28,7 @@ export const AuditPage = () => {
                         onClick={() => setCurrentView('report')}
                         className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${currentView === 'report'
                                 ? 'bg-gradient-to-r from-primary to-blue-600 text-white shadow-md shadow-primary/20 scale-105'
-                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white'
+                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
                             }`}
                     >
                         Reporte Mensual

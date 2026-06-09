@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { useCartStore } from '../../store/useCartStore';
 import { useTableStore } from '../../store/useTableStore';
@@ -144,7 +144,7 @@ export const TableOrderModal = ({ isOpen, onClose }: TableOrderModalProps) => {
                             <span className={`material-symbols-outlined !text-[18px] transition-transform ${showCustomerToggle ? 'rotate-180' : ''}`}>expand_more</span>
                         </button>
                         {showCustomerToggle && (
-                            <div className="flex-none px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30">
+                            <div className="flex-none px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800">
                                 <p className="text-xs text-slate-400 italic">
                                     La selección de cliente se puede hacer desde la vista general del POS.
                                 </p>

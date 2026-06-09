@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
@@ -159,7 +159,7 @@ export const WorkerForm = ({ workerToEdit, onSuccess, onCancel }: WorkerFormProp
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-700">
+                <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border-2 border-dashed border-slate-100 dark:border-slate-700">
                     <div className="flex-1">
                         <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Estado de la cuenta</p>
                         <p className="text-[10px] text-slate-500 font-bold uppercase">Permitir que este trabajador aparezca en el sistema</p>

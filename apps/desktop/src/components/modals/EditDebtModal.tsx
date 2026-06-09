@@ -211,7 +211,7 @@ export const EditDebtModal = ({
                     <button
                         onClick={handleSave}
                         disabled={loading}
-                        className="py-4 bg-primary text-white text-xs font-black rounded-2xl hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95 uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="py-4 bg-primary hover:bg-[#0b6ddb] dark:hover:bg-[#3b9eff] text-white font-semibold text-sm rounded-xl shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {loading ? (
                             <>

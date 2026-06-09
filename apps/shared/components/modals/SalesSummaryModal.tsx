@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 
 interface Sale {
     id: string;
@@ -138,7 +138,7 @@ export const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-slate-50 dark:bg-slate-900/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-y border-slate-100 dark:border-slate-800">
+                                    <tr className="bg-slate-50 dark:bg-slate-900 text-[10px] font-black text-slate-400 uppercase tracking-widest border-y border-slate-100 dark:border-slate-800">
                                         <th className="px-6 py-3">Recibo</th>
                                         <th className="px-6 py-3">Cliente / Vehículo</th>
                                         <th className="px-4 py-3 text-center">Pago</th>

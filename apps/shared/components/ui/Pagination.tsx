@@ -20,53 +20,73 @@ export const Pagination: FC<PaginationProps> = ({
     const startItem = (currentPage - 1) * itemsPerPage + 1;
     const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
+    const navButtonClass =
+        'size-10 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors duration-200 hover:border-primary hover:text-primary dark:hover:border-primary dark:hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-[0.95] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-slate-200 disabled:hover:text-slate-500 dark:disabled:hover:border-slate-700 dark:disabled:hover:text-slate-400';
+
     return (
-        <div className="flex items-center justify-between px-2 py-4">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Mostrando del <span className="text-slate-900 dark:text-white">{startItem}</span> al <span className="text-slate-900 dark:text-white">{endItem}</span> de <span className="text-slate-900 dark:text-white">{totalItems}</span> resultados
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-b-xl">
+            <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                <span className="text-slate-700 dark:text-slate-300 font-bold">{startItem}</span>
+                {' – '}
+                <span className="text-slate-700 dark:text-slate-300 font-bold">{endItem}</span>
+                {' de '}
+                <span className="text-slate-700 dark:text-slate-300 font-bold">{totalItems}</span>
             </p>
-            <div className="flex items-center gap-2">
+
+            <div className="flex items-center gap-1.5">
+                {/* Previous */}
                 <button
                     onClick={() => onPageChange(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="size-10 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:grayscale transition-all hover:border-primary hover:text-primary"
+                    className={navButtonClass}
                 >
-                    <span className="material-symbols-outlined">chevron_left</span>
+                    <span className="material-symbols-outlined !text-[18px]">chevron_left</span>
                 </button>
 
-                <div className="flex items-center gap-1 hidden sm:flex">
+                {/* Page numbers (desktop) */}
+                <div className="hidden sm:flex items-center gap-1">
                     {[...Array(totalPages)].map((_, i) => {
-                        // Simple logic for small number of pages, can be improved for large numbers
-                        if (totalPages > 7 && Math.abs(currentPage - (i + 1)) > 2 && i !== 0 && i !== totalPages - 1) {
-                            if (i === 1 || i === totalPages - 2) return <span key={i} className="text-slate-400">...</span>;
+                        const page = i + 1;
+                        const isActive = currentPage === page;
+                        const isNearCurrent = Math.abs(currentPage - page) <= 2;
+                        const isEdge = page === 1 || page === totalPages;
+
+                        // Ellipsis for distant pages
+                        if (totalPages > 7 && !isNearCurrent && !isEdge) {
+                            if (page === 2 || page === totalPages - 1) {
+                                return <span key={page} className="w-8 text-center text-xs text-slate-400 select-none">…</span>;
+                            }
                             return null;
                         }
 
                         return (
                             <button
-                                key={i + 1}
-                                onClick={() => onPageChange(i + 1)}
-                                className={`size-10 flex items-center justify-center rounded-xl text-xs font-black transition-all ${currentPage === i + 1
-                                    ? 'bg-primary text-white shadow-lg shadow-primary/20 scale-110'
-                                    : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:border-primary hover:text-primary'
-                                    }`}
+                                key={page}
+                                onClick={() => onPageChange(page)}
+                                className={`size-10 inline-flex items-center justify-center rounded-lg text-sm font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 active:scale-[0.95] ${
+                                    isActive
+                                        ? 'bg-primary text-white shadow-md shadow-primary/20 scale-105'
+                                        : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-primary hover:text-primary dark:hover:border-primary dark:hover:text-primary'
+                                }`}
                             >
-                                {i + 1}
+                                {page}
                             </button>
                         );
                     })}
                 </div>
-                {/* Mobile page indicator if needed, or just rely on prev/next */}
-                <span className="sm:hidden text-xs font-bold text-slate-500">
+
+                {/* Mobile page indicator */}
+                <span className="sm:hidden text-xs font-bold text-slate-500 dark:text-slate-400 px-2 tabular-nums">
                     {currentPage} / {totalPages}
                 </span>
 
+                {/* Next */}
                 <button
                     onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="size-10 flex items-center justify-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 disabled:opacity-30 disabled:grayscale transition-all hover:border-primary hover:text-primary"
+                    className={navButtonClass}
                 >
-                    <span className="material-symbols-outlined">chevron_right</span>
+                    <span className="material-symbols-outlined !text-[18px]">chevron_right</span>
                 </button>
             </div>
         </div>

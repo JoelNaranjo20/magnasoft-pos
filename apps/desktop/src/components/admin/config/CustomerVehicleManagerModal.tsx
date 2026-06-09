@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 
@@ -197,7 +197,7 @@ export const CustomerVehicleManagerModal = ({ isOpen, onClose, customer }: Props
                             {loading ? (
                                 <div className="py-10 text-center text-slate-400">Cargando vehículos...</div>
                             ) : vehicles.length === 0 ? (
-                                <div className="py-10 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-900/50">
+                                <div className="py-10 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50 dark:bg-slate-900">
                                     <span className="material-symbols-outlined text-4xl text-slate-300 mb-2">directions_car</span>
                                     <p className="text-sm font-bold text-slate-500">Este cliente no tiene vehículos.</p>
                                 </div>

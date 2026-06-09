@@ -2,10 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar for better look */
+/* ==========================================================================
+   MAGNASOFT POS — DESIGN SYSTEM TOKENS
+   ==========================================================================
+   Paleta Semántica (ver docs/design-tokens.md para referencia completa)
+
+   ┌──────────────┬─────────────────────┬─────────────────────┐
+   │ Semántica    │ Light               │ Dark                │
+   ├──────────────┼─────────────────────┼─────────────────────┤
+   │ Éxito/Ingreso│ emerald-600/50      │ emerald-400/950/20  │
+   │ Error/Egreso │ rose-600/50         │ rose-400/950/20     │
+   │ Advertencia  │ amber-600/50        │ amber-400/950/20    │
+   │ Info/Neutral │ indigo-600/50       │ indigo-400/950/20   │
+   │ Primario     │ #0d7ff2            │ #0d7ff2             │
+   │ Texto ppal   │ slate-900          │ slate-100           │
+   │ Texto sec.   │ slate-500          │ slate-400           │
+   │ Superficie   │ white / slate-50   │ slate-800 / slate-900│
+   │ Fondo        │ slate-100          │ slate-900           │
+   └──────────────┴─────────────────────┴─────────────────────┘
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   SCROLLBARS
+   -------------------------------------------------------------------------- */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -14,7 +36,7 @@
 
 ::-webkit-scrollbar-thumb {
     background: #cbd5e1;
-    border-radius: 4px;
+    border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -29,7 +51,7 @@
     background: #475569;
 }
 
-/* Hide scrollbar for category chips */
+/* Hide scrollbar utility */
 .scrollbar-hide::-webkit-scrollbar {
     display: none;
 }
@@ -39,13 +61,28 @@
     scrollbar-width: none;
 }
 
-/* UI Animations */
+/* Custom scrollbar for modals and panels */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 10px;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #334155;
+}
+
+/* --------------------------------------------------------------------------
+   ANIMATIONS — Unified timing system (duration-200 / duration-300)
+   -------------------------------------------------------------------------- */
 @keyframes slideInFromBottom {
     from {
         transform: translateY(1rem);
         opacity: 0;
     }
-
     to {
         transform: translateY(0);
         opacity: 1;
@@ -57,7 +94,6 @@
         transform: translateX(1.5rem);
         opacity: 0;
     }
-
     to {
         transform: translateX(0);
         opacity: 1;
@@ -65,16 +101,41 @@
 }
 
 @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes scaleIn {
     from {
+        transform: scale(0.95);
         opacity: 0;
     }
-
     to {
+        transform: scale(1);
         opacity: 1;
     }
 }
 
+@keyframes pulseGlow {
+    0%, 100% {
+        transform: translate(-50%, -50%) scale(1) rotate(0deg);
+        opacity: 0.12;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.15) rotate(180deg);
+        opacity: 0.18;
+    }
+}
+
+/* Animation base — micro (200ms) */
 .animate-in {
+    animation-duration: 200ms;
+    animation-fill-mode: both;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Animation base — layout (300ms) */
+.animate-in-layout {
     animation-duration: 300ms;
     animation-fill-mode: both;
     animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -89,6 +150,10 @@
     animation-duration: 400ms;
 }
 
+.slide-in-from-right-4 {
+    animation-name: slideInFromRight;
+}
+
 .slide-in-from-right-8 {
     animation-name: slideInFromRight;
 }
@@ -97,28 +162,84 @@
     animation-name: fadeIn;
 }
 
-/* Custom components */
-.custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+.scale-in {
+    animation-name: scaleIn;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
-    border-radius: 10px;
+.animate-glow-slow {
+    animation: pulseGlow 18s infinite ease-in-out;
 }
 
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #334155;
+.animate-glow-slower {
+    animation: pulseGlow 25s infinite ease-in-out reverse;
 }
 
-/* Electron Windows Fixes & Interaction Reset */
+/* --------------------------------------------------------------------------
+   SKELETON / LOADING UTILITIES
+   -------------------------------------------------------------------------- */
+.skeleton {
+    @apply bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse;
+}
+
+.skeleton-text {
+    @apply bg-slate-200 dark:bg-slate-700 rounded h-4 animate-pulse;
+}
+
+.skeleton-circle {
+    @apply bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse;
+}
+
+/* --------------------------------------------------------------------------
+   EMPTY STATE UTILITIES
+   -------------------------------------------------------------------------- */
+.empty-state {
+    @apply flex flex-col items-center justify-center py-12 text-center;
+}
+
+.empty-state-icon {
+    @apply text-[48px] text-slate-300 dark:text-slate-600 mb-3;
+}
+
+.empty-state-title {
+    @apply text-sm font-bold text-slate-500 dark:text-slate-400;
+}
+
+.empty-state-desc {
+    @apply text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs;
+}
+
+/* --------------------------------------------------------------------------
+   GLASSMORPHISM
+   -------------------------------------------------------------------------- */
+.glass-panel {
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-input {
+    background: rgba(15, 23, 42, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-input:focus {
+    border-color: #0d7ff2;
+    background: rgba(15, 23, 42, 0.55);
+    box-shadow: 0 0 20px rgba(13, 127, 242, 0.15);
+}
+
+/* --------------------------------------------------------------------------
+   ELECTRON WINDOW FIXES & INTERACTION RESET
+   -------------------------------------------------------------------------- */
 html,
 body,
 #root {
     -webkit-app-region: no-drag !important;
 }
 
-/* Specific elements that must NOT be draggable and MUST be clickable */
 input,
 textarea,
 button,
@@ -146,8 +267,6 @@ textarea {
 }
 
 body {
-    background-color: #d8dbde;
-    /* Slate-100 fallback */
     background-color: theme('colors.background-light');
 }
 
@@ -155,55 +274,38 @@ body {
     background-color: theme('colors.background-dark');
 }
 
-/* Designation for the top bar ONLY if it's meant to be draggable */
+/* Draggable titlebar region */
 .titlebar-drag {
     -webkit-app-region: drag !important;
 }
 
-/* Global focus visibility fix */
+/* --------------------------------------------------------------------------
+   GLOBAL FOCUS VISIBILITY
+   -------------------------------------------------------------------------- */
 input:focus,
 textarea:focus {
     outline: 2px solid theme('colors.primary') !important;
     outline-offset: -1px;
 }
 
-/* Glassmorphism utility */
-.glass-panel {
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-}
+/* --------------------------------------------------------------------------
+   CUSTOM COMPONENT CLASSES
+   -------------------------------------------------------------------------- */
 
-.glass-input {
-    background: rgba(15, 23, 42, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.glass-input:focus {
-    border-color: #0d7ff2;
-    background: rgba(15, 23, 42, 0.55);
-    box-shadow: 0 0 20px rgba(13, 127, 242, 0.15);
-}
-
-/* Custom keyframes for premium UI animations */
-@keyframes pulseGlow {
-    0%, 100% {
-        transform: translate(-50%, -50%) scale(1) rotate(0deg);
-        opacity: 0.12;
+/* Standard card */
+@layer components {
+    .card-standard {
+        @apply bg-white dark:bg-slate-800
+               border border-slate-200 dark:border-slate-700
+               rounded-xl shadow-sm overflow-hidden;
     }
-    50% {
-        transform: translate(-50%, -50%) scale(1.15) rotate(180deg);
-        opacity: 0.18;
+
+    .card-interactive {
+        @apply bg-white dark:bg-slate-800
+               border border-slate-200 dark:border-slate-700
+               rounded-xl shadow-sm
+               hover:shadow-md hover:bg-slate-50 dark:hover:bg-slate-700/50
+               transition-all duration-200 ease-out
+               cursor-pointer active:scale-[0.99];
     }
-}
-
-.animate-glow-slow {
-    animation: pulseGlow 18s infinite ease-in-out;
-}
-
-.animate-glow-slower {
-    animation: pulseGlow 25s infinite ease-in-out reverse;
 }

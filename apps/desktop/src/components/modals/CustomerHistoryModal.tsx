@@ -1,4 +1,4 @@
-
+﻿
 // @ts-nocheck
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
@@ -159,7 +159,7 @@ export const CustomerHistoryModal = ({ isOpen, onClose, customer, vehicle, initi
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="bg-white dark:bg-slate-900 w-full max-w-5xl max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-300">
                 {/* Header */}
-                <div className="px-8 pt-8 pb-6 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-6 bg-slate-50/50 dark:bg-slate-800/50">
+                <div className="px-8 pt-8 pb-6 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-6 bg-slate-50/50 dark:bg-slate-800">
                     <div className="flex items-start justify-between">
                         <div className="flex items-center gap-5">
                             <div className="h-16 w-16 bg-primary/10 rounded-3xl flex items-center justify-center text-primary shadow-inner">
@@ -223,7 +223,7 @@ export const CustomerHistoryModal = ({ isOpen, onClose, customer, vehicle, initi
                     </div>
 
                     {/* Tab Switcher */}
-                    <div className="flex p-1 bg-slate-200/50 dark:bg-slate-900/50 rounded-2xl w-fit">
+                    <div className="flex p-1 bg-slate-200/50 dark:bg-slate-900 rounded-2xl w-fit">
                         <button
                             onClick={() => setActiveTab('ventas')}
                             className={`flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black transition-all ${activeTab === 'ventas' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -329,7 +329,7 @@ export const CustomerHistoryModal = ({ isOpen, onClose, customer, vehicle, initi
                                         <span className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">
                                             {new Date(sale.created_at).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </span>
-                                        <div className="h-px flex-1 bg-slate-100 dark:bg-slate-800/50"></div>
+                                        <div className="h-px flex-1 bg-slate-100 dark:bg-slate-800"></div>
                                     </div>
 
                                     <div className="grid grid-cols-1 gap-4">

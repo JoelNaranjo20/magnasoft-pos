@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState } from 'react';
 import { useCentralCash } from '../../hooks/useCentralCash';
 
@@ -35,7 +35,7 @@ export const CentralCashModal: React.FC<CentralCashModalProps> = ({ isOpen, onCl
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-            <div className="bg-slate-50 dark:bg-slate-900 w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-300 flex flex-col md:flex-row h-[90vh] md:h-auto md:max-h-[85vh]">
+            <div className="bg-white dark:bg-slate-800 w-full max-w-4xl rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden animate-in scale-in duration-300 flex flex-col md:flex-row h-[90vh] md:h-auto md:max-h-[85vh]">
 
                 {/* Left Side: Summary & Form */}
                 <div className="w-full md:w-1/3 p-8 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
@@ -99,7 +99,7 @@ export const CentralCashModal: React.FC<CentralCashModalProps> = ({ isOpen, onCl
 
                         <button
                             disabled={processing || !amount || !description}
-                            className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${type === 'income' ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'bg-rose-500 hover:bg-rose-600 text-white shadow-lg shadow-rose-500/20'}`}
+                            className={`w-full py-4 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-1 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/20 focus:ring-emerald-400/50' : 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-500/20 focus:ring-rose-400/50'}`}
                         >
                             {processing ? (
                                 <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
@@ -119,7 +119,7 @@ export const CentralCashModal: React.FC<CentralCashModalProps> = ({ isOpen, onCl
                 </div>
 
                 {/* Right Side: History */}
-                <div className="w-full md:w-2/3 p-8 flex flex-col h-full bg-slate-50 dark:bg-slate-900/50">
+                <div className="w-full md:w-2/3 p-8 flex flex-col h-full bg-slate-50 dark:bg-slate-900">
                     <div className="flex justify-between items-center mb-6">
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Historial de Movimientos</h4>
                     </div>
