@@ -43,11 +43,15 @@ export const CloseSessionModal = () => {
     const [sessionTransferLoanPayments, setSessionTransferLoanPayments] = useState(0);
     const [sessionCashOther, setSessionCashOther] = useState(0);
     const [sessionTransferOther, setSessionTransferOther] = useState(0);
+    const [nextDayBase, setNextDayBase] = useState<number>(0);
 
     // Fetch expected total and commissions
     useEffect(() => {
         const fetchTotals = async () => {
             if (!cashSession) return;
+
+            // Pre-fill next day base with current opening balance
+            setNextDayBase(cashSession.opening_balance || 0);
             const businessId = useBusinessStore.getState().id;
 
             // 1. Get cash and mixed sales for this session
@@ -294,7 +298,9 @@ export const CloseSessionModal = () => {
             }
 
             // 3. Registrar movimiento UNIFICADO en Caja Central
+            //    El monto base del día siguiente se descuenta: ese efectivo se queda en caja.
             //    metadata = desglose completo de orígenes (efectivo + transferencia + tarjeta)
+            const safeNextDayBase = Math.max(0, Math.min(nextDayBase, totalCounted));
             const metadataObj = {
                 cash_sales: sessionCashSales,
                 transfer_sales: sessionTransferSales,
@@ -307,6 +313,7 @@ export const CloseSessionModal = () => {
                 cash_other: sessionCashOther,
                 transfer_other: sessionTransferOther,
                 commissions_paid: commissionsPaid,
+                next_day_base: safeNextDayBase,
             };
             const totalGeneral =
                 sessionCashSales + sessionTransferSales + sessionCardSales +
@@ -314,17 +321,20 @@ export const CloseSessionModal = () => {
                 sessionCashLoanPayments + sessionTransferLoanPayments +
                 sessionCashOther + sessionTransferOther;
 
-            if (totalGeneral > 0) {
+            // Neto a transferir = total − base del día siguiente (se queda en caja)
+            const netToCentralCash = Math.max(0, totalGeneral - safeNextDayBase);
+
+            if (netToCentralCash > 0) {
                 const { error: centralError } = await (supabase as any)
                     .from('central_cash_movements')
                     .insert({
                         type: 'income',
-                        amount: totalGeneral,
+                        amount: netToCentralCash,
                         payment_method: 'mixed',
                         session_id: cashSession.id,
                         metadata: metadataObj,
                         business_id: businessId,
-                        description: `Cierre de Sesión #${cashSession.id.slice(0, 8)} — Efectivo: ${formatCurrency(sessionCashSales + cashAbonosTotal + sessionCashLoanPayments + sessionCashOther)} | Transfer: ${formatCurrency(sessionTransferSales + sessionTransferAbonos + sessionTransferLoanPayments + sessionTransferOther)}`,
+                        description: `Cierre de Sesión #${cashSession.id.slice(0, 8)} — Efectivo: ${formatCurrency(sessionCashSales + cashAbonosTotal + sessionCashLoanPayments + sessionCashOther)} | Transfer: ${formatCurrency(sessionTransferSales + sessionTransferAbonos + sessionTransferLoanPayments + sessionTransferOther)}${safeNextDayBase > 0 ? ` | Base próximo día: ${formatCurrency(safeNextDayBase)}` : ''}`,
                         user_id: user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id) ? user.id : null
                     });
                 if (centralError) console.error('Error recording central cash entry:', centralError);
@@ -627,6 +637,33 @@ export const CloseSessionModal = () => {
                                         {formatCurrency(difference)}
                                     </span>
                                 </div>
+                            </div>
+
+                            {/* Card: Base Próximo Día */}
+                            <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border rounded-xl border-amber-200 dark:border-amber-800">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                                        💵 Base Próximo Día
+                                    </span>
+                                    <span className="text-[9px] text-amber-500 font-bold">
+                                        Se descuenta de Caja Central
+                                    </span>
+                                </div>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-amber-400">$</span>
+                                    <input
+                                        type="number"
+                                        value={nextDayBase || ''}
+                                        onChange={(e) => setNextDayBase(Math.max(0, parseInt(e.target.value) || 0))}
+                                        className="w-full pl-8 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-lg text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                {nextDayBase > 0 && (
+                                    <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1.5 font-medium">
+                                        Se dejarán {formatCurrency(nextDayBase)} en caja para el próximo turno.
+                                    </p>
+                                )}
                             </div>
 
                             {/* Spacer */}

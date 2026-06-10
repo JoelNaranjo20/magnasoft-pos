@@ -534,7 +534,7 @@ export const CentralCash = () => {
                                                     <div>
                                                         <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{month.label}</p>
                                                         <p className="text-[10px] text-slate-400">
-                                                            {month.sessionCount} cierres · {month.manualIncomeCount} ingresos manuales
+                                                            {month.sessionCount} cierres{month.manualIncomeCount > 0 ? ` · ${month.manualIncomeCount} ingresos manuales` : ''}{month.abonos > 0 ? ` · abonos ya incluidos` : ''}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -571,28 +571,42 @@ export const CentralCash = () => {
                                                             <div className="flex justify-between text-xs">
                                                                 <span className="text-slate-500">Ingresos Manuales ({month.manualIncomeCount})</span>
                                                                 <span className="font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                                                                    {formatCurrency(movements.filter(m => m.type === 'income' && !m.session_id && (m.created_at || '').startsWith(month.month)).reduce((s, m) => s + m.amount, 0))}
+                                                                    {formatCurrency(movements.filter(m => m.type === 'income' && !m.session_id && (m.created_at || '').startsWith(month.month) && !(m.description || '').toLowerCase().includes('abono crédito')).reduce((s, m) => s + m.amount, 0))}
                                                                 </span>
                                                             </div>
                                                         </div>
+                                                        {month.abonos > 0 && (
+                                                            <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-2 ml-1">
+                                                                💡 Los abonos de cartera (+{formatCurrency(month.abonos)}) están incluidos dentro del efectivo de cada cierre de turno.
+                                                            </p>
+                                                        )}
                                                     </div>
 
                                                     {/* Gastos */}
                                                     <div>
                                                         <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">📤 Gastos del Mes</p>
                                                         <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-1">
-                                                            <div className="flex justify-between text-xs">
-                                                                <span className="text-slate-500">💰 Comisiones Pagadas a Trabajadores</span>
-                                                                <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">−{formatCurrency(month.commissionsPaid)}</span>
-                                                            </div>
-                                                            <div className="flex justify-between text-xs">
-                                                                <span className="text-slate-500">👷 Salarios / Adelantos / Préstamos</span>
-                                                                <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">−{formatCurrency(month.salaryExpenses)}</span>
-                                                            </div>
-                                                            <div className="flex justify-between text-xs">
-                                                                <span className="text-slate-500">📌 Otros Egresos Manuales</span>
-                                                                <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">−{formatCurrency(month.otherExpenses)}</span>
-                                                            </div>
+                                                            {month.commissionsPaid > 0 && (
+                                                                <div className="flex justify-between text-xs">
+                                                                    <span className="text-slate-500">💰 Comisiones Pagadas a Trabajadores</span>
+                                                                    <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">−{formatCurrency(month.commissionsPaid)}</span>
+                                                                </div>
+                                                            )}
+                                                            {month.salaryExpenses > 0 && (
+                                                                <div className="flex justify-between text-xs">
+                                                                    <span className="text-slate-500">👷 Salarios / Adelantos / Préstamos</span>
+                                                                    <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">−{formatCurrency(month.salaryExpenses)}</span>
+                                                                </div>
+                                                            )}
+                                                            {month.otherExpenses > 0 && (
+                                                                <div className="flex justify-between text-xs">
+                                                                    <span className="text-slate-500">📌 Otros Egresos Manuales</span>
+                                                                    <span className="font-bold text-rose-600 dark:text-rose-400 tabular-nums">−{formatCurrency(month.otherExpenses)}</span>
+                                                                </div>
+                                                            )}
+                                                            {month.expenses === 0 && (
+                                                                <p className="text-xs text-slate-400 italic">Sin gastos este mes</p>
+                                                            )}
                                                         </div>
                                                     </div>
 

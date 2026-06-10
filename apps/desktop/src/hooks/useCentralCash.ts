@@ -138,6 +138,7 @@ export function useCentralCash() {
             net: number;
             sessionCount: number;
             manualIncomeCount: number;
+            abonos: number;
             commissionsPaid: number;
             salaryExpenses: number;
             otherExpenses: number;
@@ -151,17 +152,24 @@ export function useCentralCash() {
             const label = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
 
             if (!monthsMap.has(key)) {
-                monthsMap.set(key, { month: key, label, incomes: 0, expenses: 0, net: 0, sessionCount: 0, manualIncomeCount: 0, commissionsPaid: 0, salaryExpenses: 0, otherExpenses: 0 });
+                monthsMap.set(key, { month: key, label, incomes: 0, expenses: 0, net: 0, sessionCount: 0, manualIncomeCount: 0, abonos: 0, commissionsPaid: 0, salaryExpenses: 0, otherExpenses: 0 });
             }
             const entry = monthsMap.get(key)!;
 
+            const isAbono = (m.description || '').toLowerCase().includes('abono crédito');
+
             if (m.type === 'income') {
-                entry.incomes += m.amount;
-                if (m.session_id) entry.sessionCount++;
-                else entry.manualIncomeCount++;
+                if (isAbono) {
+                    // Los abonos de cartera YA están incluidos en el efectivo del cierre de turno.
+                    // No los sumamos a "incomes" para no duplicar. Solo los trackeamos como referencia.
+                    entry.abonos += m.amount;
+                } else {
+                    entry.incomes += m.amount;
+                    if (m.session_id) entry.sessionCount++;
+                    else entry.manualIncomeCount++;
+                }
             } else {
                 entry.expenses += m.amount;
-                // Categorizar egresos por descripción
                 const desc = (m.description || '').toLowerCase();
                 if (desc.includes('comisión') || desc.includes('comision')) {
                     entry.commissionsPaid += m.amount;
