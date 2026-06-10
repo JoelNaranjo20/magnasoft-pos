@@ -462,6 +462,7 @@ export const CarteraHub = () => {
                         .insert({
                             type: 'income',
                             amount: amount,
+                            payment_method: paymentMethod,
                             description: `Abono crédito - ${selectedItem.name} (${new Date(selectedItem.date).toLocaleDateString()})`,
                             user_id: user?.id,
                             business_id: useBusinessStore.getState().id,

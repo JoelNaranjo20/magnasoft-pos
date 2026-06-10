@@ -169,6 +169,7 @@ export const CreditManagement = () => {
                     .insert({
                         type: 'income',
                         amount: amount,
+                        payment_method: paymentMethod,
                         description: `Abono crédito - ${selectedDebt.customer?.name || 'Cliente'} (${new Date(selectedDebt.created_at).toLocaleDateString()})`,
                         user_id: user?.id,
                     });

@@ -93,6 +93,7 @@ export const RegisterAbonoModal = ({ isOpen, onClose, onSuccess }: RegisterAbono
                         .insert({
                             type: 'income',
                             amount: numAmount,
+                            payment_method: paymentMethod,
                             description: `Abono crédito - ${selectedDebt.customer.name} (${new Date(selectedDebt.created_at).toLocaleDateString()})`,
                             user_id: authUser?.id,
                             business_id: profile?.business_id,
