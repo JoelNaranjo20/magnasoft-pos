@@ -1,6 +1,6 @@
 {
     "name": "@shared/logic",
-    "version": "1.0.48",
+    "version": "1.0.49",
     "private": true,
     "dependencies": {
         "@supabase/supabase-js": "^2.97.0",
