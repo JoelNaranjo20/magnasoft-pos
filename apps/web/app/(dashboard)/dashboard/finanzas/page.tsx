@@ -1,191 +1,162 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useCentralCash } from '@/app/hooks/useCentralCash';
+import { CategorySalesModal } from '@shared/components/modals/CategorySalesModal';
+import { CashDashboardDetailModal } from '@shared/components/modals/CashDashboardDetailModal';
+import { CentralCashHistoryModal } from '@shared/components/modals/CentralCashHistoryModal';
+import { NominaDetailModal } from '@shared/components/modals/NominaDetailModal';
+import { CarteraDetailModal } from '@shared/components/modals/CarteraDetailModal';
 import DashboardHeader from '@/app/components/DashboardHeader';
+import { useAuth } from '@/app/context/AuthContext';
+import { useModule } from '@shared/hooks/useModule';
 
-export default function FinanzasPage() {
-    const { movements, balance, loading, addMovement } = useCentralCash();
-    const [amount, setAmount] = useState('');
-    const [description, setDescription] = useState('');
-    const [type, setType] = useState<'income' | 'expense'>('expense');
-    const [processing, setProcessing] = useState(false);
+export default function CentralCashPage() {
+    const {
+        movements, loading, addMovement,
+        cashBalance, transferBalance, totalBalance,
+        monthlySummary, categorySales, categorySalesLoading, fetchCategorySales,
+        carteraTotal, carteraTotalLoading,
+        recuperacionEfectivo, recuperacionTransferencia,
+        liquidacionesDelMes, liquidacionesLoading, liquidacionesDetail,
+        nominaTotal, nominaTotalLoading,
+        totalServicios, totalServiciosLoading,
+        egresosDelMes, egresosDetail,
+        cashMovementsDelMes, transferMovementsDelMes,
+        nominaAsalariados, nominaSemanas, liquidacionesComisionistas,
+        carteraClientes, carteraClientesLoading,
+        recuperacionEfectivoDetalle, recuperacionTransferenciaDetalle, recuperacionDetalleLoading,
+    } = useCentralCash();
+    const { profile } = useAuth();
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const hasCartera = useModule('customers');
+    const hasCommissions = useModule('commissions');
+    const hasPayroll = useModule('payroll');
+
+    const [showMovementModal, setShowMovementModal] = useState(false);
+    const [showHistoryModal, setShowHistoryModal] = useState(false);
+    const [showEgresosModal, setShowEgresosModal] = useState(false);
+    const [showLiquidacionesModal, setShowLiquidacionesModal] = useState(false);
+    const [showServiciosModal, setShowServiciosModal] = useState(false);
+    const [showEfectivoModal, setShowEfectivoModal] = useState(false);
+    const [showTransferenciaModal, setShowTransferenciaModal] = useState(false);
+    const [showNominaModal, setShowNominaModal] = useState(false);
+    const [showCarteraTotalModal, setShowCarteraTotalModal] = useState(false);
+    const [showRecupEfectivoModal, setShowRecupEfectivoModal] = useState(false);
+    const [showRecupTransferModal, setShowRecupTransferModal] = useState(false);
+
+    const [mvAmount, setMvAmount] = useState('');
+    const [mvDescription, setMvDescription] = useState('');
+    const [mvType, setMvType] = useState<'income' | 'expense'>('expense');
+    const [mvPaymentMethod, setMvPaymentMethod] = useState<'cash' | 'transfer'>('cash');
+    const [mvProcessing, setMvProcessing] = useState(false);
+
+    const formatCurrency = (n: number) =>
+        '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+    const handleSubmitMovement = async (e: React.FormEvent) => {
         e.preventDefault();
-        const val = parseFloat(amount);
-        if (!val || val <= 0 || !description) return;
-
-        setProcessing(true);
-        const res = await addMovement(type, val, description);
-        setProcessing(false);
-
-        if (res.success) {
-            setAmount('');
-            setDescription('');
-        } else {
-            alert('Error al registrar movimiento');
-        }
+        const val = parseFloat(mvAmount);
+        if (!val || val <= 0 || !mvDescription) return;
+        setMvProcessing(true);
+        await addMovement(mvType, val, mvDescription, mvPaymentMethod);
+        setMvProcessing(false); setMvAmount(''); setMvDescription(''); setShowMovementModal(false);
     };
+
+    const kpiLoading = loading && movements.length === 0;
 
     return (
         <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-[#0a0f14]">
             <DashboardHeader />
-
-            <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 md:space-y-12 pb-20 w-full animate-in fade-in duration-700">
-                {/* Header Section */}
-                <div>
-                    <h1 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-none mb-2">
-                        Caja <span className="text-primary tracking-tighter">Central</span>
-                    </h1>
-                    <p className="text-sm md:text-lg text-slate-500 dark:text-slate-400 font-medium">Gestión financiera y tesorería principal del negocio.</p>
+            <div className="p-4 md:p-6 max-w-7xl mx-auto w-full animate-in fade-in duration-500 space-y-6 pb-20">
+                <div className="flex items-center justify-between">
+                    <div><h1 className="text-2xl font-black text-slate-900 dark:text-white">💰 Caja Central</h1><p className="text-xs text-slate-500 mt-1">Dashboard Financiero</p></div>
                 </div>
 
-                <div className="flex flex-col lg:flex-row gap-8">
-                    {/* Left Column: Register Form & Balance */}
-                    <div className="w-full lg:w-1/3 space-y-8">
-                        {/* Balance Card */}
-                        <div className="bg-slate-900 dark:bg-slate-800 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 w-40 h-40 bg-primary/20 rounded-full -mr-10 -mt-10 blur-[60px] group-hover:bg-primary/30 transition-all duration-700"></div>
-                            <div className="relative z-10">
-                                <span className="flex items-center gap-2 text-primary font-black uppercase tracking-[0.2em] text-[10px] mb-2">
-                                    <span className="material-symbols-outlined !text-lg">account_balance</span>
-                                    Tesorería
-                                </span>
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Saldo Disponible</p>
-                                <h2 className="text-5xl font-black text-white tabular-nums tracking-tighter">${balance.toLocaleString()}</h2>
+                <div className="flex flex-col lg:flex-row gap-6">
+                    {/* COLUMNA IZQUIERDA */}
+                    <div className="w-full lg:w-[380px] flex-shrink-0 space-y-4">
+                        <div className="bg-gradient-to-br from-slate-800 to-slate-900 dark:from-slate-700 dark:to-slate-800 text-white rounded-2xl p-6 shadow-lg">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Balance Total</p>
+                            {kpiLoading ? <div className="h-10 w-48 bg-white/10 rounded-lg animate-pulse mt-2" /> : <h2 className={`text-3xl font-black tabular-nums ${totalBalance >= 0 ? 'text-white' : 'text-rose-400'}`}>{totalBalance >= 0 ? '' : '−'}{formatCurrency(Math.abs(totalBalance))}</h2>}
+                            <div className="flex gap-4 mt-3">
+                                <button onClick={() => setShowEfectivoModal(true)} className="flex-1 bg-white/10 rounded-lg p-2.5 hover:bg-white/20 transition-colors text-left cursor-pointer"><p className="text-[9px] font-bold text-emerald-300 uppercase">Efectivo</p>{kpiLoading ? <div className="h-5 w-16 bg-white/10 rounded mt-1 animate-pulse" /> : <p className="text-sm font-black text-emerald-400 tabular-nums">{formatCurrency(cashBalance)}</p>}</button>
+                                <button onClick={() => setShowTransferenciaModal(true)} className="flex-1 bg-white/10 rounded-lg p-2.5 hover:bg-white/20 transition-colors text-left cursor-pointer"><p className="text-[9px] font-bold text-sky-300 uppercase">Transferencia</p>{kpiLoading ? <div className="h-5 w-16 bg-white/10 rounded mt-1 animate-pulse" /> : <p className="text-sm font-black text-sky-400 tabular-nums">{formatCurrency(transferBalance)}</p>}</button>
                             </div>
                         </div>
 
-                        {/* Transaction Form */}
-                        <div className="bg-white dark:bg-slate-900/50 rounded-[2.5rem] p-8 shadow-xl border border-slate-100 dark:border-slate-800">
-                            <h3 className="text-xl font-black text-slate-900 dark:text-white mb-6 flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary">edit_square</span>
-                                Registrar Movimiento
-                            </h3>
+                        <button onClick={() => setShowEfectivoModal(true)} className="w-full text-left bg-white dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all group">
+                            <div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"><span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 !text-[20px]">payments</span></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Efectivo Disponible</p>{kpiLoading ? <div className="h-6 w-20 bg-slate-100 dark:bg-slate-800 rounded mt-1 animate-pulse" /> : <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(cashBalance)}</p>}</div></div><span className="material-symbols-outlined text-slate-300 group-hover:text-slate-500 transition-colors">chevron_right</span></div>
+                        </button>
 
-                            <form onSubmit={handleSubmit} className="space-y-5">
-                                <div className="flex bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl">
-                                    <button
-                                        type="button"
-                                        onClick={() => setType('expense')}
-                                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${type === 'expense' ? 'bg-white dark:bg-slate-700 text-rose-500 shadow-md transform scale-[1.02]' : 'text-slate-400 hover:text-slate-600'}`}
-                                    >
-                                        Egreso
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setType('income')}
-                                        className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${type === 'income' ? 'bg-white dark:bg-slate-700 text-emerald-500 shadow-md transform scale-[1.02]' : 'text-slate-400 hover:text-slate-600'}`}
-                                    >
-                                        Ingreso
-                                    </button>
-                                </div>
+                        <button onClick={() => setShowTransferenciaModal(true)} className="w-full text-left bg-white dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md hover:border-sky-300 dark:hover:border-sky-700 transition-all group">
+                            <div className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center"><span className="material-symbols-outlined text-sky-600 dark:text-sky-400 !text-[20px]">account_balance</span></div><div><p className="text-[10px] font-black text-slate-400 uppercase">Transferencia Disponible</p>{kpiLoading ? <div className="h-6 w-20 bg-slate-100 dark:bg-slate-800 rounded mt-1 animate-pulse" /> : <p className="text-lg font-black text-sky-600 dark:text-sky-400 tabular-nums">{formatCurrency(transferBalance)}</p>}</div></div><span className="material-symbols-outlined text-slate-300 group-hover:text-slate-500 transition-colors">chevron_right</span></div>
+                        </button>
 
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Monto</label>
-                                    <div className="relative group">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400 group-focus-within:text-primary transition-colors">$</span>
-                                        <input
-                                            type="number"
-                                            value={amount}
-                                            onChange={(e) => setAmount(e.target.value)}
-                                            placeholder="0.00"
-                                            className="w-full pl-8 pr-4 py-4 bg-slate-50 dark:bg-slate-800/80 border-2 border-slate-100 dark:border-slate-800 rounded-2xl outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 font-black text-xl text-slate-900 dark:text-white transition-all"
-                                            required
-                                        />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Concepto</label>
-                                    <textarea
-                                        value={description}
-                                        onChange={(e) => setDescription(e.target.value)}
-                                        placeholder="Descripción del movimiento..."
-                                        className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-800/80 border-2 border-slate-100 dark:border-slate-800 rounded-2xl outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 font-bold text-slate-900 dark:text-white h-32 resize-none transition-all"
-                                        required
-                                    />
-                                </div>
-
-                                <button
-                                    disabled={processing || !amount || !description}
-                                    className={`w-full py-5 rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2 transform active:scale-[0.98] ${type === 'income' ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-500/30' : 'bg-rose-500 hover:bg-rose-600 text-white shadow-xl shadow-rose-500/30'}`}
-                                >
-                                    {processing ? (
-                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    ) : (
-                                        <>
-                                            <span className="material-symbols-outlined !text-xl">{type === 'income' ? 'add_circle' : 'remove_circle'}</span>
-                                            {type === 'income' ? 'Registrar Ingreso' : 'Registrar Egreso'}
-                                        </>
-                                    )}
-                                </button>
-                            </form>
-                        </div>
+                        <button onClick={() => setShowMovementModal(true)} className="w-full py-3.5 bg-primary hover:bg-[#0b6ddb] text-white rounded-xl font-bold text-sm shadow-md shadow-primary/20 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2"><span className="material-symbols-outlined !text-[18px]">add_circle</span>Nuevo Movimiento</button>
                     </div>
 
-                    {/* Right Column: History */}
-                    <div className="flex-1 bg-white dark:bg-slate-900/50 rounded-[3rem] p-8 border border-slate-100 dark:border-slate-800 shadow-xl flex flex-col h-[600px] lg:h-auto">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                            <div>
-                                <h3 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                                    <span className="material-symbols-outlined text-primary">history</span>
-                                    Historial de Movimientos
-                                </h3>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Registro cronológico de operaciones</p>
+                    {/* COLUMNA DERECHA */}
+                    <div className="flex-1 space-y-4">
+                        <div className="bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+                            <h3 className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">📊 Resumen Operativo</h3>
+                            <div className="grid grid-cols-3 gap-3">
+                                <button onClick={() => setShowServiciosModal(true)} className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-xl p-3 text-left hover:bg-emerald-100 dark:hover:bg-emerald-900/20 transition-colors group"><p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1">Total Servicios</p>{totalServiciosLoading && !totalServicios ? <div className="h-6 w-20 bg-emerald-100 dark:bg-emerald-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(totalServicios)}</p>}<p className="text-[8px] text-emerald-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p></button>
+                                <button onClick={() => setShowEgresosModal(true)} className="bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-800/30 rounded-xl p-3 text-left hover:bg-rose-100 dark:hover:bg-rose-900/20 transition-colors group"><p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase mb-1">Egresos</p><p className="text-lg font-black text-rose-700 dark:text-rose-300 tabular-nums">{formatCurrency(egresosDelMes)}</p><p className="text-[8px] text-rose-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p></button>
+                                {hasCommissions && (<button onClick={() => setShowLiquidacionesModal(true)} className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-xl p-3 text-left hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-colors group"><p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">Liquidaciones</p>{liquidacionesLoading ? <div className="h-6 w-20 bg-amber-100 dark:bg-amber-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-amber-700 dark:text-amber-300 tabular-nums">{formatCurrency(liquidacionesDelMes)}</p>}<p className="text-[8px] text-amber-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p></button>)}
                             </div>
-
-                            {/* Filter placeholder or export button could go here */}
-                            <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                Últimos registros
-                            </div>
+                            <button onClick={() => setShowHistoryModal(true)} className="mt-4 w-full py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center gap-2"><span className="material-symbols-outlined !text-[18px]">history</span>Ver Historial Completo</button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
-                            {loading && movements.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full gap-4 opacity-50">
-                                    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                    <p className="text-xs font-black uppercase tracking-[0.2em]">Cargando...</p>
+                        {hasCartera && (
+                            <div className="bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+                                <h3 className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">💳 Cartera</h3>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <button onClick={() => setShowCarteraTotalModal(true)} className="bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800/30 rounded-xl p-3 text-left hover:bg-purple-100 dark:hover:bg-purple-900/20 transition-colors group"><p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase mb-1">Cartera Total</p>{carteraTotalLoading ? <div className="h-6 w-20 bg-purple-100 dark:bg-purple-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-purple-700 dark:text-purple-300 tabular-nums">{formatCurrency(carteraTotal)}</p>}<p className="text-[8px] text-purple-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p></button>
+                                    <button onClick={() => setShowRecupEfectivoModal(true)} className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-xl p-3 text-left hover:bg-emerald-100 dark:hover:bg-emerald-900/20 transition-colors group"><p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1">Recup. Efectivo</p>{carteraTotalLoading ? <div className="h-6 w-20 bg-emerald-100 dark:bg-emerald-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(recuperacionEfectivo)}</p>}<p className="text-[8px] text-emerald-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p></button>
+                                    <button onClick={() => setShowRecupTransferModal(true)} className="bg-sky-50 dark:bg-sky-900/10 border border-sky-100 dark:border-sky-800/30 rounded-xl p-3 text-left hover:bg-sky-100 dark:hover:bg-sky-900/20 transition-colors group"><p className="text-[10px] font-bold text-sky-600 dark:text-sky-400 uppercase mb-1">Recup. Transfer</p>{carteraTotalLoading ? <div className="h-6 w-20 bg-sky-100 dark:bg-sky-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-sky-700 dark:text-sky-300 tabular-nums">{formatCurrency(recuperacionTransferencia)}</p>}<p className="text-[8px] text-sky-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p></button>
                                 </div>
-                            ) : movements.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full opacity-20 filter grayscale py-20">
-                                    <span className="material-symbols-outlined !text-9xl">receipt_long</span>
-                                    <p className="font-black uppercase tracking-widest text-xs mt-6">Sin movimientos registrados</p>
+                            </div>
+                        )}
+
+                        {hasPayroll && (
+                            <button onClick={() => setShowNominaModal(true)} className="w-full text-left bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700 transition-all group">
+                                <h3 className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">👥 Total Nómina</h3>
+                                <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-xl p-4 flex items-center justify-between">
+                                    <div><p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">Salarios Mensuales</p>{nominaTotalLoading ? <div className="h-7 w-24 bg-indigo-100 dark:bg-indigo-900/20 rounded mt-1 animate-pulse" /> : <p className="text-xl font-black text-indigo-700 dark:text-indigo-300 tabular-nums">{formatCurrency(nominaTotal)}</p>}</div>
+                                    <div className="flex items-center gap-2"><span className="material-symbols-outlined text-indigo-300 dark:text-indigo-600 !text-[32px]">group</span><span className="material-symbols-outlined text-slate-300 group-hover:text-slate-500 transition-colors">chevron_right</span></div>
                                 </div>
-                            ) : (
-                                movements.map((mov) => (
-                                    <div key={mov.id} className="bg-slate-50 dark:bg-slate-800/80 p-6 rounded-[2rem] flex items-center justify-between group hover:bg-white dark:hover:bg-slate-800 hover:shadow-xl hover:shadow-slate-200/40 dark:hover:shadow-none transition-all duration-300 border border-transparent hover:border-slate-100 dark:hover:border-slate-700">
-                                        <div className="flex items-center gap-6">
-                                            <div className={`size-16 rounded-2xl flex items-center justify-center ${mov.type === 'income' ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-500' : 'bg-rose-100 dark:bg-rose-900/20 text-rose-500'} group-hover:scale-110 transition-transform duration-300`}>
-                                                <span className="material-symbols-outlined !text-3xl">
-                                                    {mov.type === 'income' ? 'trending_up' : 'trending_down'}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-slate-800 dark:text-slate-200 text-lg leading-tight mb-1">{mov.description}</p>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="px-2 py-1 bg-slate-200 dark:bg-slate-700/50 rounded-md text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                                                        {new Date(mov.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-slate-400">
-                                                        {new Date(mov.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right pl-4">
-                                            <p className={`text-2xl font-black tabular-nums tracking-tighter ${mov.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                {mov.type === 'income' ? '+' : '-'}${mov.amount.toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
+
+            {/* ================================================================ */}
+            {/* MODALES */}
+            {/* ================================================================ */}
+
+            {/* Movimiento */}{showMovementModal && (<div className="fixed inset-0 z-[310] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"><div className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden"><div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-slate-200 dark:border-slate-700"><h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2"><span className="material-symbols-outlined text-primary">add_circle</span>Nuevo Movimiento</h2><button onClick={() => setShowMovementModal(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><span className="material-symbols-outlined !text-[20px]">close</span></button></div><form onSubmit={handleSubmitMovement} className="p-6 space-y-4"><div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-xl"><button type="button" onClick={() => setMvType('expense')} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${mvType === 'expense' ? 'bg-white dark:bg-slate-800 text-rose-500 shadow-sm' : 'text-slate-400'}`}>Egreso</button><button type="button" onClick={() => setMvType('income')} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${mvType === 'income' ? 'bg-white dark:bg-slate-800 text-emerald-500 shadow-sm' : 'text-slate-400'}`}>Ingreso</button></div><div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-xl"><button type="button" onClick={() => setMvPaymentMethod('cash')} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${mvPaymentMethod === 'cash' ? 'bg-white dark:bg-slate-800 text-emerald-600 shadow-sm' : 'text-slate-400'}`}>💰 Efectivo</button><button type="button" onClick={() => setMvPaymentMethod('transfer')} className={`flex-1 py-2 text-xs font-black uppercase rounded-lg transition-all ${mvPaymentMethod === 'transfer' ? 'bg-white dark:bg-slate-800 text-sky-600 shadow-sm' : 'text-slate-400'}`}>🏦 Transferencia</button></div><div><label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Monto</label><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-slate-400">$</span><input type="number" value={mvAmount} onChange={e => setMvAmount(e.target.value)} className="w-full pl-8 pr-4 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:border-primary font-bold text-sm text-slate-900 dark:text-white" placeholder="0" required /></div></div><div><textarea value={mvDescription} onChange={e => setMvDescription(e.target.value)} placeholder="Concepto del movimiento..." className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:border-primary font-bold text-sm text-slate-900 dark:text-white h-24 resize-none" required /></div><button type="submit" disabled={mvProcessing || !mvAmount || !mvDescription} className={`w-full py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${mvType === 'income' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-rose-600 hover:bg-rose-700 text-white'} disabled:opacity-50`}>{mvProcessing ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : mvType === 'income' ? 'Registrar Ingreso' : 'Registrar Egreso'}</button></form></div></div>)}
+
+            <CentralCashHistoryModal isOpen={showHistoryModal} onClose={() => setShowHistoryModal(false)} movements={movements} monthlySummary={monthlySummary} loading={loading} categorySales={categorySales || []} categorySalesLoading={categorySalesLoading} fetchCategorySales={fetchCategorySales} />
+
+            <CashDashboardDetailModal isOpen={showEfectivoModal} onClose={() => setShowEfectivoModal(false)} title="💰 Efectivo — Mes en Curso" showIncomes ingresos={cashMovementsDelMes.ingresos} egresos={cashMovementsDelMes.egresos} neto={cashMovementsDelMes.neto} loading={loading} />
+
+            <CashDashboardDetailModal isOpen={showTransferenciaModal} onClose={() => setShowTransferenciaModal(false)} title="🏦 Transferencia — Mes en Curso" showIncomes ingresos={transferMovementsDelMes.ingresos} egresos={transferMovementsDelMes.egresos} neto={transferMovementsDelMes.neto} loading={loading} />
+
+            <CashDashboardDetailModal isOpen={showEgresosModal} onClose={() => setShowEgresosModal(false)} title="📤 Egresos del Mes" items={egresosDetail} loading={loading} />
+
+            <CashDashboardDetailModal isOpen={showLiquidacionesModal} onClose={() => setShowLiquidacionesModal(false)} title="💰 Liquidaciones del Mes" items={liquidacionesDetail} loading={liquidacionesLoading} />
+
+            <NominaDetailModal isOpen={showNominaModal} onClose={() => setShowNominaModal(false)} nominaTotal={nominaTotal} asalariados={nominaAsalariados} semanas={nominaSemanas} comisionistas={liquidacionesComisionistas} loading={nominaTotalLoading} />
+
+            <CarteraDetailModal isOpen={showCarteraTotalModal} onClose={() => setShowCarteraTotalModal(false)} mode="total" items={carteraClientes} loading={carteraClientesLoading} />
+
+            <CarteraDetailModal isOpen={showRecupEfectivoModal} onClose={() => setShowRecupEfectivoModal(false)} mode="recuperacion-efectivo" items={recuperacionEfectivoDetalle} loading={recuperacionDetalleLoading} />
+
+            <CarteraDetailModal isOpen={showRecupTransferModal} onClose={() => setShowRecupTransferModal(false)} mode="recuperacion-transferencia" items={recuperacionTransferenciaDetalle} loading={recuperacionDetalleLoading} />
+
+            <CategorySalesModal isOpen={showServiciosModal} onClose={() => setShowServiciosModal(false)} monthLabel={new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })} categoryData={categorySales || []} loading={categorySalesLoading || totalServiciosLoading} />
         </div>
     );
 }

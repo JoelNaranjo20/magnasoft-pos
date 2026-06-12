@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/008-digital-central-cash/plan.md
+at specs/011-central-cash-drilldown/plan.md
 <!-- SPECKIT END -->
 
 ## Regla de Oro: Pausa para Revisión

@@ -297,47 +297,87 @@ export const CloseSessionModal = () => {
                 throw new Error(`Error en sesión: ${sessionError.message} (${sessionError.code})`);
             }
 
-            // 3. Registrar movimiento UNIFICADO en Caja Central
-            //    El monto base del día siguiente se descuenta: ese efectivo se queda en caja.
-            //    metadata = desglose completo de orígenes (efectivo + transferencia + tarjeta)
+            // 3. Registrar movimientos en Caja Central
+            //    ── INGRESO EFECTIVO:    Todo lo que entró en efectivo en esta sesión
+            //    ── INGRESO TRANSFERENCIA: Todo lo que entró por transferencia/tarjeta
+            //    ── EGRESO:              Base del día siguiente (efectivo retenido en caja)
             const safeNextDayBase = Math.max(0, Math.min(nextDayBase, totalCounted));
-            const metadataObj = {
+
+            const cashIngresos = sessionCashSales + cashAbonosTotal + sessionCashLoanPayments + sessionCashOther;
+            const transferIngresos = sessionTransferSales + sessionCardSales + sessionTransferAbonos + sessionCardAbonos + sessionTransferLoanPayments + sessionTransferOther;
+
+            const totalGeneral = cashIngresos + transferIngresos;
+
+            const sessionTag = cashSession.id.slice(0, 8);
+            const userId = user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id) ? user.id : null;
+
+            // Metadata completa para cada movimiento (mismos datos, el hook las suma sin duplicar)
+            const cashMeta = {
                 cash_sales: sessionCashSales,
-                transfer_sales: sessionTransferSales,
-                card_sales: sessionCardSales,
                 cash_abonos: cashAbonosTotal,
-                transfer_abonos: sessionTransferAbonos,
-                card_abonos: sessionCardAbonos,
                 cash_loan_payments: sessionCashLoanPayments,
-                transfer_loan_payments: sessionTransferLoanPayments,
                 cash_other: sessionCashOther,
-                transfer_other: sessionTransferOther,
                 commissions_paid: commissionsPaid,
                 next_day_base: safeNextDayBase,
             };
-            const totalGeneral =
-                sessionCashSales + sessionTransferSales + sessionCardSales +
-                cashAbonosTotal + sessionTransferAbonos + sessionCardAbonos +
-                sessionCashLoanPayments + sessionTransferLoanPayments +
-                sessionCashOther + sessionTransferOther;
+            const transferMeta = {
+                transfer_sales: sessionTransferSales,
+                card_sales: sessionCardSales,
+                transfer_abonos: sessionTransferAbonos,
+                card_abonos: sessionCardAbonos,
+                transfer_loan_payments: sessionTransferLoanPayments,
+                transfer_other: sessionTransferOther,
+            };
 
-            // Neto a transferir = total − base del día siguiente (se queda en caja)
-            const netToCentralCash = Math.max(0, totalGeneral - safeNextDayBase);
-
-            if (netToCentralCash > 0) {
-                const { error: centralError } = await (supabase as any)
+            // ── 3a. INGRESO en EFECTIVO ──
+            if (cashIngresos > 0) {
+                const { error: cashErr } = await (supabase as any)
                     .from('central_cash_movements')
                     .insert({
                         type: 'income',
-                        amount: netToCentralCash,
-                        payment_method: 'mixed',
+                        amount: cashIngresos,
+                        payment_method: 'cash',
                         session_id: cashSession.id,
-                        metadata: metadataObj,
+                        metadata: cashMeta,
                         business_id: businessId,
-                        description: `Cierre de Sesión #${cashSession.id.slice(0, 8)} — Efectivo: ${formatCurrency(sessionCashSales + cashAbonosTotal + sessionCashLoanPayments + sessionCashOther)} | Transfer: ${formatCurrency(sessionTransferSales + sessionTransferAbonos + sessionTransferLoanPayments + sessionTransferOther)}${safeNextDayBase > 0 ? ` | Base próximo día: ${formatCurrency(safeNextDayBase)}` : ''}`,
-                        user_id: user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user.id) ? user.id : null
+                        description: `💰 Cierre Sesión #${sessionTag} — Efectivo`,
+                        user_id: userId,
                     });
-                if (centralError) console.error('Error recording central cash entry:', centralError);
+                if (cashErr) console.error('Error registrando ingreso efectivo en Caja Central:', cashErr);
+            }
+
+            // ── 3b. INGRESO en TRANSFERENCIA ──
+            if (transferIngresos > 0) {
+                const { error: transferErr } = await (supabase as any)
+                    .from('central_cash_movements')
+                    .insert({
+                        type: 'income',
+                        amount: transferIngresos,
+                        payment_method: 'transfer',
+                        session_id: cashSession.id,
+                        metadata: transferMeta,
+                        business_id: businessId,
+                        description: `🏦 Cierre Sesión #${sessionTag} — Transferencia`,
+                        user_id: userId,
+                    });
+                if (transferErr) console.error('Error registrando ingreso transferencia en Caja Central:', transferErr);
+            }
+
+            // ── 3c. EGRESO: Base del día siguiente (efectivo que se queda en la registradora) ──
+            if (safeNextDayBase > 0) {
+                const { error: expenseErr } = await (supabase as any)
+                    .from('central_cash_movements')
+                    .insert({
+                        type: 'expense',
+                        amount: safeNextDayBase,
+                        payment_method: 'cash',
+                        session_id: cashSession.id,
+                        metadata: { next_day_base: safeNextDayBase },
+                        business_id: businessId,
+                        description: `💵 Base próximo día — Sesión #${sessionTag}`,
+                        user_id: userId,
+                    });
+                if (expenseErr) console.error('Error registrando base próximo día en Caja Central:', expenseErr);
             }
 
             setCashSession(null); // Clear session from store
