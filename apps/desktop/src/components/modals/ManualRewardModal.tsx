@@ -103,7 +103,21 @@ export const ManualRewardModal = ({ isOpen, onClose, customer, onSuccess }: Manu
                 .eq('id', customer.id);
 
             if (updateError) throw updateError;
-            
+
+            // Sync to loyalty tracking table — update last_activity_at (redemption is activity)
+            try {
+                const businessId = useBusinessStore.getState().id;
+                if (businessId) {
+                    await (supabase as any).from('customer_loyalty_points').upsert({
+                        customer_id: customer.id,
+                        business_id: businessId,
+                        points: newBalance,
+                        last_activity_at: new Date().toISOString(),
+                        status: 'active'
+                    }, { onConflict: 'customer_id' });
+                }
+            } catch {}
+
             // Replicate PaymentModal behavior: if they already have the normal-priced item in the cart, 
             // decrement it so it doesn't duplicate but rather "discounts" the existing one.
             const cartItems = useCartStore.getState().items;

@@ -1,12 +1,11 @@
 // @ts-nocheck
 import React, { useState } from 'react';
 import { useCentralCash } from '../../hooks/useCentralCash';
-import { CategorySalesModal } from '@shared/components/modals/CategorySalesModal';
 import { CashDashboardDetailModal } from '@shared/components/modals/CashDashboardDetailModal';
-import { CentralCashHistoryModal } from '@shared/components/modals/CentralCashHistoryModal';
 import { CentralCashMovementModal } from './CentralCashMovementModal';
-import { NominaDetailModal } from '@shared/components/modals/NominaDetailModal';
 import { CarteraDetailModal } from '@shared/components/modals/CarteraDetailModal';
+import { BonosDetalleModal } from '@shared/components/modals/BonosDetalleModal';
+import { VentasServiciosDetalleModal } from '@shared/components/modals/VentasServiciosDetalleModal';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useModule } from '@shared/hooks/useModule';
 
@@ -14,36 +13,39 @@ export const CentralCash = () => {
     const {
         movements, loading, addMovement,
         cashBalance, transferBalance, totalBalance,
-        monthlySummary, categorySales, categorySalesLoading, fetchCategorySales,
         carteraTotal, carteraTotalLoading,
         recuperacionEfectivo, recuperacionTransferencia,
-        liquidacionesDelMes, liquidacionesLoading, liquidacionesDetail,
-        nominaTotal, nominaTotalLoading,
-        totalServicios, totalServiciosLoading,
-        egresosDelMes, egresosDetail,
         cashMovementsDelMes, transferMovementsDelMes,
-        nominaAsalariados, nominaSemanas, liquidacionesComisionistas,
         carteraClientes, carteraClientesLoading,
         recuperacionEfectivoDetalle, recuperacionTransferenciaDetalle, recuperacionDetalleLoading,
+        monthlyBreakdown, fetchCategorySales,
+        bonosTotal, bonosLoading, bonosDetalle,
+        ventasServiciosTotal, ventasServiciosLoading, ventasServiciosDetalle,
     } = useCentralCash();
     const user = useSessionStore(state => state.user);
 
     const hasCartera = useModule('customers');
-    const hasCommissions = useModule('commissions');
-    const hasPayroll = useModule('payroll');
 
     // Modal states
     const [showMovementModal, setShowMovementModal] = useState(false);
-    const [showHistoryModal, setShowHistoryModal] = useState(false);
-    const [showEgresosModal, setShowEgresosModal] = useState(false);
-    const [showLiquidacionesModal, setShowLiquidacionesModal] = useState(false);
-    const [showServiciosModal, setShowServiciosModal] = useState(false);
     const [showEfectivoModal, setShowEfectivoModal] = useState(false);
     const [showTransferenciaModal, setShowTransferenciaModal] = useState(false);
-    const [showNominaModal, setShowNominaModal] = useState(false);
+    const [showBonosModal, setShowBonosModal] = useState(false);
+    const [showVentasServiciosModal, setShowVentasServiciosModal] = useState(false);
     const [showCarteraTotalModal, setShowCarteraTotalModal] = useState(false);
     const [showRecupEfectivoModal, setShowRecupEfectivoModal] = useState(false);
     const [showRecupTransferModal, setShowRecupTransferModal] = useState(false);
+    // Accordion state for Resumen Operativo
+    const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set([monthlyBreakdown[0]?.month || '']));
+
+    const toggleMonth = (month: string) => {
+        setExpandedMonths(prev => {
+            const next = new Set(prev);
+            if (next.has(month)) { next.delete(month); }
+            else { next.add(month); fetchCategorySales(month); }
+            return next;
+        });
+    };
 
     const formatCurrency = (n: number) =>
         '$' + n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -125,32 +127,102 @@ export const CentralCash = () => {
 
                     {/* COLUMNA DERECHA */}
                     <div className="flex-1 space-y-4">
-                        {/* Resumen Operativo */}
+                        {/* Resumen Operativo — acordeones mensuales */}
                         <div className="bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
                             <h3 className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">📊 Resumen Operativo</h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                <button onClick={() => setShowServiciosModal(true)} className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-xl p-3 text-left hover:bg-emerald-100 dark:hover:bg-emerald-900/20 transition-colors group">
-                                    <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1">Total Servicios</p>
-                                    {totalServiciosLoading && !totalServicios ? <div className="h-6 w-20 bg-emerald-100 dark:bg-emerald-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(totalServicios)}</p>}
-                                    <p className="text-[8px] text-emerald-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p>
-                                </button>
-                                <button onClick={() => setShowEgresosModal(true)} className="bg-rose-50 dark:bg-rose-900/10 border border-rose-100 dark:border-rose-800/30 rounded-xl p-3 text-left hover:bg-rose-100 dark:hover:bg-rose-900/20 transition-colors group">
-                                    <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase mb-1">Egresos</p>
-                                    <p className="text-lg font-black text-rose-700 dark:text-rose-300 tabular-nums">{formatCurrency(egresosDelMes)}</p>
-                                    <p className="text-[8px] text-rose-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p>
-                                </button>
-                                {hasCommissions && (
-                                    <button onClick={() => setShowLiquidacionesModal(true)} className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-xl p-3 text-left hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-colors group">
-                                        <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">Liquidaciones</p>
-                                        {liquidacionesLoading ? <div className="h-6 w-20 bg-amber-100 dark:bg-amber-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-amber-700 dark:text-amber-300 tabular-nums">{formatCurrency(liquidacionesDelMes)}</p>}
-                                        <p className="text-[8px] text-amber-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p>
-                                    </button>
-                                )}
-                            </div>
-                            <button onClick={() => setShowHistoryModal(true)} className="mt-4 w-full py-2.5 text-sm font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-center gap-2">
-                                <span className="material-symbols-outlined !text-[18px]">history</span>
-                                Ver Historial Completo
-                            </button>
+                            {monthlyBreakdown.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic text-center py-8">Sin movimientos aún</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {monthlyBreakdown.map(mb => {
+                                        const isExpanded = expandedMonths.has(mb.month);
+                                        const totalIngresos = mb.totalCash + mb.totalTransfer;
+                                        return (
+                                            <div key={mb.month} className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                                <button onClick={() => toggleMonth(mb.month)}
+                                                    className="w-full flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-0 justify-between p-3 hover:bg-slate-100 dark:hover:bg-slate-700/30 transition-colors text-left">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="material-symbols-outlined text-slate-400 !text-[18px] transition-transform duration-200"
+                                                            style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>chevron_right</span>
+                                                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{mb.label}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 ml-7 sm:ml-0 text-xs">
+                                                        <span className="text-emerald-600 font-bold">+{formatCurrency(totalIngresos)}</span>
+                                                        <span className="text-rose-600 font-bold">−{formatCurrency(mb.totalEgresos)}</span>
+                                                        <span className={`font-black ${mb.neto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                            {mb.neto >= 0 ? '+' : '−'}{formatCurrency(Math.abs(mb.neto))}
+                                                        </span>
+                                                    </div>
+                                                </button>
+                                                {isExpanded && (
+                                                    <div className="px-4 pb-4 space-y-4 border-t border-slate-200 dark:border-slate-700 pt-4 animate-in slide-in-from-top-2">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <div className="bg-emerald-50/50 dark:bg-emerald-900/5 rounded-xl border border-emerald-200 dark:border-emerald-800/30 overflow-hidden">
+                                                                <div className="px-3 py-2 bg-emerald-100 dark:bg-emerald-900/20 border-b border-emerald-200 dark:border-emerald-800/30 flex justify-between items-center">
+                                                                    <h4 className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase">💰 Ingresos Efectivo</h4>
+                                                                    <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 tabular-nums">{formatCurrency(mb.totalCash)}</span>
+                                                                </div>
+                                                                <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                                                                    {mb.cashIngresos.length === 0 ? <p className="text-[10px] text-slate-400 italic p-3 text-center">Sin ingresos en efectivo</p> :
+                                                                        mb.cashIngresos.map((item, i) => (
+                                                                            <div key={i} className="flex items-center justify-between px-3 py-1.5 border-b border-emerald-100 dark:border-emerald-800/10 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors">
+                                                                                <div className="min-w-0 flex-1 mr-2">
+                                                                                    <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">{item.label}</p>
+                                                                                    {item.date && <p className="text-[9px] text-slate-400">{new Date(item.date).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}</p>}
+                                                                                </div>
+                                                                                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums flex-shrink-0">+{formatCurrency(item.amount)}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-sky-50/50 dark:bg-sky-900/5 rounded-xl border border-sky-200 dark:border-sky-800/30 overflow-hidden">
+                                                                <div className="px-3 py-2 bg-sky-100 dark:bg-sky-900/20 border-b border-sky-200 dark:border-sky-800/30 flex justify-between items-center">
+                                                                    <h4 className="text-[10px] font-black text-sky-700 dark:text-sky-400 uppercase">🏦 Ingresos Transferencia</h4>
+                                                                    <span className="text-xs font-black text-sky-700 dark:text-sky-400 tabular-nums">{formatCurrency(mb.totalTransfer)}</span>
+                                                                </div>
+                                                                <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                                                                    {mb.transferIngresos.length === 0 ? <p className="text-[10px] text-slate-400 italic p-3 text-center">Sin ingresos por transferencia</p> :
+                                                                        mb.transferIngresos.map((item, i) => (
+                                                                            <div key={i} className="flex items-center justify-between px-3 py-1.5 border-b border-sky-100 dark:border-sky-800/10 hover:bg-sky-50 dark:hover:bg-sky-900/10 transition-colors">
+                                                                                <div className="min-w-0 flex-1 mr-2">
+                                                                                    <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">{item.label}</p>
+                                                                                    {item.date && <p className="text-[9px] text-slate-400">{new Date(item.date).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}</p>}
+                                                                                </div>
+                                                                                <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400 tabular-nums flex-shrink-0">+{formatCurrency(item.amount)}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="bg-rose-50/50 dark:bg-rose-900/5 rounded-xl border border-rose-200 dark:border-rose-800/30 overflow-hidden">
+                                                            <div className="px-3 py-2 bg-rose-100 dark:bg-rose-900/20 border-b border-rose-200 dark:border-rose-800/30 flex justify-between items-center">
+                                                                <h4 className="text-[10px] font-black text-rose-700 dark:text-rose-400 uppercase">📤 Egresos</h4>
+                                                                <span className="text-xs font-black text-rose-700 dark:text-rose-400 tabular-nums">−{formatCurrency(mb.totalEgresos)}</span>
+                                                            </div>
+                                                            <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                                                {mb.egresos.length === 0 ? <p className="text-[10px] text-slate-400 italic p-3 text-center">Sin egresos</p> :
+                                                                    mb.egresos.map((item, i) => (
+                                                                        <div key={i} className="flex items-center justify-between px-3 py-1.5 border-b border-rose-100 dark:border-rose-800/10 hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors">
+                                                                            <div className="min-w-0 flex-1 mr-2">
+                                                                                <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 truncate">{item.label}</p>
+                                                                                {item.date && <p className="text-[9px] text-slate-400">{new Date(item.date).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })}</p>}
+                                                                            </div>
+                                                                            <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 tabular-nums flex-shrink-0">−{formatCurrency(item.amount)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                            </div>
+                                                        </div>
+                                                        <div className={`p-3 rounded-lg flex justify-between items-center text-sm font-bold ${mb.neto >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-900/10 text-rose-700 dark:text-rose-400'}`}>
+                                                            <span>Neto de {mb.label}</span>
+                                                            <span className="text-lg tabular-nums">{mb.neto >= 0 ? '' : '−'}{formatCurrency(Math.abs(mb.neto))}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
                         {/* Cartera */}
@@ -177,22 +249,19 @@ export const CentralCash = () => {
                             </div>
                         )}
 
-                        {/* Nómina (cliqueable) */}
-                        {hasPayroll && (
-                            <button onClick={() => setShowNominaModal(true)} className="w-full text-left bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700 transition-all group">
-                                <h3 className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">👥 Total Nómina</h3>
-                                <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800/30 rounded-xl p-4 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">Salarios Mensuales</p>
-                                        {nominaTotalLoading ? <div className="h-7 w-24 bg-indigo-100 dark:bg-indigo-900/20 rounded mt-1 animate-pulse" /> : <p className="text-xl font-black text-indigo-700 dark:text-indigo-300 tabular-nums">{formatCurrency(nominaTotal)}</p>}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-indigo-300 dark:text-indigo-600 !text-[32px]">group</span>
-                                        <span className="material-symbols-outlined text-slate-300 group-hover:text-slate-500 transition-colors">chevron_right</span>
-                                    </div>
-                                </div>
+                        {/* Bonos Entregados + Total Ventas Servicios */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <button onClick={() => setShowBonosModal(true)} className="bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/30 rounded-xl p-3 text-left hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-colors group">
+                                <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">🎁 Bonos Entregados</p>
+                                {bonosLoading ? <div className="h-6 w-20 bg-amber-100 dark:bg-amber-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-amber-700 dark:text-amber-300 tabular-nums">{formatCurrency(bonosTotal)}</p>}
+                                <p className="text-[8px] text-amber-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p>
                             </button>
-                        )}
+                            <button onClick={() => setShowVentasServiciosModal(true)} className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-xl p-3 text-left hover:bg-emerald-100 dark:hover:bg-emerald-900/20 transition-colors group">
+                                <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase mb-1">📊 Ventas Servicios</p>
+                                {ventasServiciosLoading ? <div className="h-6 w-20 bg-emerald-100 dark:bg-emerald-900/20 rounded animate-pulse" /> : <p className="text-lg font-black text-emerald-700 dark:text-emerald-300 tabular-nums">{formatCurrency(ventasServiciosTotal)}</p>}
+                                <p className="text-[8px] text-emerald-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -203,7 +272,7 @@ export const CentralCash = () => {
 
             <CentralCashMovementModal isOpen={showMovementModal} onClose={() => setShowMovementModal(false)} addMovement={addMovement} />
 
-            <CentralCashHistoryModal isOpen={showHistoryModal} onClose={() => setShowHistoryModal(false)} movements={movements} monthlySummary={monthlySummary} loading={loading} categorySales={categorySales || []} categorySalesLoading={categorySalesLoading} fetchCategorySales={fetchCategorySales} />
+            {/* Historial movido al Resumen Operativo como acordeones inline */}
 
             {/* Efectivo Drill-Down */}
             <CashDashboardDetailModal isOpen={showEfectivoModal} onClose={() => setShowEfectivoModal(false)} title="💰 Efectivo — Mes en Curso" showIncomes ingresos={cashMovementsDelMes.ingresos} egresos={cashMovementsDelMes.egresos} neto={cashMovementsDelMes.neto} loading={loading} />
@@ -211,14 +280,11 @@ export const CentralCash = () => {
             {/* Transferencia Drill-Down */}
             <CashDashboardDetailModal isOpen={showTransferenciaModal} onClose={() => setShowTransferenciaModal(false)} title="🏦 Transferencia — Mes en Curso" showIncomes ingresos={transferMovementsDelMes.ingresos} egresos={transferMovementsDelMes.egresos} neto={transferMovementsDelMes.neto} loading={loading} />
 
-            {/* Egresos */}
-            <CashDashboardDetailModal isOpen={showEgresosModal} onClose={() => setShowEgresosModal(false)} title="📤 Egresos del Mes" items={egresosDetail} loading={loading} />
+            {/* Bonos Entregados */}
+            <BonosDetalleModal isOpen={showBonosModal} onClose={() => setShowBonosModal(false)} items={bonosDetalle} total={bonosTotal} loading={bonosLoading} />
 
-            {/* Liquidaciones */}
-            <CashDashboardDetailModal isOpen={showLiquidacionesModal} onClose={() => setShowLiquidacionesModal(false)} title="💰 Liquidaciones del Mes" items={liquidacionesDetail} loading={liquidacionesLoading} />
-
-            {/* Nómina */}
-            <NominaDetailModal isOpen={showNominaModal} onClose={() => setShowNominaModal(false)} nominaTotal={nominaTotal} asalariados={nominaAsalariados} semanas={nominaSemanas} comisionistas={liquidacionesComisionistas} loading={nominaTotalLoading} />
+            {/* Ventas Servicios */}
+            <VentasServiciosDetalleModal isOpen={showVentasServiciosModal} onClose={() => setShowVentasServiciosModal(false)} items={ventasServiciosDetalle} total={ventasServiciosTotal} loading={ventasServiciosLoading} />
 
             {/* Cartera Total */}
             <CarteraDetailModal isOpen={showCarteraTotalModal} onClose={() => setShowCarteraTotalModal(false)} mode="total" items={carteraClientes} loading={carteraClientesLoading} />
@@ -228,9 +294,6 @@ export const CentralCash = () => {
 
             {/* Recuperación Transferencia */}
             <CarteraDetailModal isOpen={showRecupTransferModal} onClose={() => setShowRecupTransferModal(false)} mode="recuperacion-transferencia" items={recuperacionTransferenciaDetalle} loading={recuperacionDetalleLoading} />
-
-            {/* Total Servicios */}
-            <CategorySalesModal isOpen={showServiciosModal} onClose={() => setShowServiciosModal(false)} monthLabel={new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })} categoryData={categorySales || []} loading={categorySalesLoading || totalServiciosLoading} />
         </div>
     );
 };

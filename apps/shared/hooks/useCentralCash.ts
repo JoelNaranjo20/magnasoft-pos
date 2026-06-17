@@ -126,6 +126,12 @@ export function useCentralCash() {
     const [recuperacionEfectivoDetalle, setRecuperacionEfectivoDetalle] = useState<CarteraItem[]>([]);
     const [recuperacionTransferenciaDetalle, setRecuperacionTransferenciaDetalle] = useState<CarteraItem[]>([]);
     const [recuperacionDetalleLoading, setRecuperacionDetalleLoading] = useState(false);
+    const [bonosTotal, setBonosTotal] = useState(0);
+    const [bonosLoading, setBonosLoading] = useState(false);
+    const [bonosDetalle, setBonosDetalle] = useState<DetailItem[]>([]);
+    const [ventasServiciosTotal, setVentasServiciosTotal] = useState(0);
+    const [ventasServiciosLoading, setVentasServiciosLoading] = useState(false);
+    const [ventasServiciosDetalle, setVentasServiciosDetalle] = useState<DetailItem[]>([]);
 
     const user = useSessionStore((state) => state.user);
     const businessId = useBusinessStore((state) => state.id);
@@ -296,6 +302,70 @@ export function useCentralCash() {
             .sort((a, b) => b.month.localeCompare(a.month));
     }, [movements]);
 
+    /** Monthly breakdown para acordeones del modal de historial */
+    const monthlyBreakdown = useMemo(() => {
+        const mbMap = new Map<string, {
+            month: string;
+            label: string;
+            cashIngresos: DetailItem[];
+            transferIngresos: DetailItem[];
+            egresos: DetailItem[];
+            totalCash: number;
+            totalTransfer: number;
+            totalEgresos: number;
+            neto: number;
+        }>();
+
+        movements.forEach(m => {
+            const date = new Date(m.created_at);
+            const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                              'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            const label = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+
+            if (!mbMap.has(key)) {
+                mbMap.set(key, { month: key, label, cashIngresos: [], transferIngresos: [], egresos: [], totalCash: 0, totalTransfer: 0, totalEgresos: 0, neto: 0 });
+            }
+            const entry = mbMap.get(key)!;
+            const item: DetailItem = { label: m.description || 'Movimiento', amount: m.amount, date: m.created_at, description: m.description };
+
+            if (m.type === 'income') {
+                if (m.payment_method === 'transfer' || m.payment_method === 'card') {
+                    entry.transferIngresos.push(item);
+                    entry.totalTransfer += m.amount;
+                } else if (m.payment_method === 'mixed' && m.metadata) {
+                    // Split mixed by metadata (same logic as cashBalance/transferBalance)
+                    const cashPart = (m.metadata.cash_sales || 0) + (m.metadata.cash_abonos || 0) + (m.metadata.cash_loan_payments || 0) + (m.metadata.cash_other || 0);
+                    const transferPart = (m.metadata.transfer_sales || 0) + (m.metadata.transfer_abonos || 0) + (m.metadata.card_sales || 0) + (m.metadata.card_abonos || 0) + (m.metadata.transfer_loan_payments || 0) + (m.metadata.transfer_other || 0);
+                    if (cashPart > 0) {
+                        entry.cashIngresos.push({ ...item, amount: cashPart, label: `${item.label} (parte efectivo)` });
+                        entry.totalCash += cashPart;
+                    }
+                    if (transferPart > 0) {
+                        entry.transferIngresos.push({ ...item, amount: transferPart, label: `${item.label} (parte transf.)` });
+                        entry.totalTransfer += transferPart;
+                    }
+                } else {
+                    entry.cashIngresos.push(item);
+                    entry.totalCash += m.amount;
+                }
+            } else {
+                entry.egresos.push(item);
+                entry.totalEgresos += m.amount;
+            }
+        });
+
+        return Array.from(mbMap.values())
+            .map(m => ({
+                ...m,
+                neto: m.totalCash + m.totalTransfer - m.totalEgresos,
+                cashIngresos: m.cashIngresos.sort((a, b) => (b.date || '').localeCompare(a.date || '')),
+                transferIngresos: m.transferIngresos.sort((a, b) => (b.date || '').localeCompare(a.date || '')),
+                egresos: m.egresos.sort((a, b) => (b.date || '').localeCompare(a.date || '')),
+            }))
+            .sort((a, b) => b.month.localeCompare(a.month));
+    }, [movements]);
+
     /** Egresos del mes en curso + detalle */
     const computeEgresosDelMes = useMemo(() => {
         const { start, end } = currentMonthRange();
@@ -368,6 +438,21 @@ export function useCentralCash() {
         });
         return { ingresos: ingresos.sort((a, b) => (b.date || '').localeCompare(a.date || '')), egresos: egresos.sort((a, b) => (b.date || '').localeCompare(a.date || '')), neto };
     }, [movements]);
+
+    /** T013: Servicios vendidos — cantidad de veces por servicio (no monto) */
+    const serviceSalesCount = useMemo(() => {
+        if (!categorySales || categorySales.length === 0) return [];
+        const nameMap = new Map<string, number>();
+        categorySales.forEach(cat => {
+            cat.services.forEach(svc => {
+                const prev = nameMap.get(svc.serviceName) || 0;
+                nameMap.set(svc.serviceName, prev + svc.quantity);
+            });
+        });
+        return [...nameMap.entries()]
+            .map(([name, quantity]) => ({ name, quantity }))
+            .sort((a, b) => b.quantity - a.quantity);
+    }, [categorySales]);
 
     // ─── Queries nuevas para dashboard ───
 
@@ -752,7 +837,150 @@ export function useCentralCash() {
         }
     };
 
-    /** T003: fetchDashboardData — carga paralela de todas las queries nuevas */
+    /** T003: Bonos — servicios regalados por fidelidad (unit_price = 0) */
+    const fetchBonosData = async () => {
+        if (!businessId) return;
+        setBonosLoading(true);
+        try {
+            const { start, end } = currentMonthRange();
+            // 1. Get completed sales in this month
+            const { data: monthSales } = await (supabase as any)
+                .from('sales')
+                .select('id, customer:customers(name), created_at')
+                .eq('business_id', businessId)
+                .eq('status', 'completed')
+                .gte('created_at', start)
+                .lt('created_at', end);
+
+            if (!monthSales || monthSales.length === 0) {
+                setBonosTotal(0); setBonosDetalle([]); setBonosLoading(false); return;
+            }
+
+            const saleIds = monthSales.map((s: any) => s.id);
+            const saleMap = new Map<string, any>();
+            monthSales.forEach((s: any) => saleMap.set(s.id, s));
+
+            // 2. Get sale_items with unit_price = 0 for these sales
+            let allFreeItems: any[] = [];
+            for (let i = 0; i < saleIds.length; i += 500) {
+                const batch = saleIds.slice(i, i + 500);
+                const { data } = await (supabase as any)
+                    .from('sale_items')
+                    .select('id, service_id, quantity, sale_id')
+                    .eq('business_id', businessId)
+                    .eq('unit_price', 0)
+                    .not('service_id', 'is', null)
+                    .in('sale_id', batch);
+                if (data) allFreeItems.push(...data);
+            }
+
+            if (allFreeItems.length === 0) {
+                setBonosTotal(0); setBonosDetalle([]); setBonosLoading(false); return;
+            }
+
+            const svcIds = [...new Set(allFreeItems.map((i: any) => i.service_id))];
+            const { data: svcs } = await (supabase as any)
+                .from('services').select('id, name, price').in('id', svcIds).eq('business_id', businessId);
+            const svcMap = new Map<string, { name: string; price: number }>();
+            (svcs || []).forEach((s: any) => svcMap.set(s.id, { name: s.name, price: Number(s.price || 0) }));
+
+            let total = 0;
+            const items: DetailItem[] = [];
+            allFreeItems.forEach(item => {
+                const svc = svcMap.get(item.service_id) || { name: 'Servicio', price: 0 };
+                const valor = svc.price * Number(item.quantity || 1);
+                total += valor;
+                const sale = saleMap.get(item.sale_id);
+                const cliente = sale?.customer?.name || 'Cliente';
+                const fecha = sale?.created_at || '';
+                items.push({
+                    label: `${svc.name} — ${cliente} (×${item.quantity})`,
+                    amount: valor,
+                    date: fecha,
+                    description: `Canje de fidelidad: ${svc.name}`,
+                });
+            });
+
+            setBonosTotal(total);
+            setBonosDetalle(items.sort((a, b) => (b.date || '').localeCompare(a.date || '')));
+        } catch (err) {
+            console.error('[useCentralCash] Error fetching bonos:', err);
+        } finally {
+            setBonosLoading(false);
+        }
+    };
+
+    /** T004: Ventas Servicios — total facturado en servicios del mes (tiempo real) */
+    const fetchVentasServiciosData = async () => {
+        if (!businessId) return;
+        setVentasServiciosLoading(true);
+        try {
+            const { start, end } = currentMonthRange();
+            // 1. Get completed sales in this month
+            const { data: monthSales } = await (supabase as any)
+                .from('sales')
+                .select('id')
+                .eq('business_id', businessId)
+                .eq('status', 'completed')
+                .gte('created_at', start)
+                .lt('created_at', end);
+
+            if (!monthSales || monthSales.length === 0) {
+                setVentasServiciosTotal(0); setVentasServiciosDetalle([]); setVentasServiciosLoading(false); return;
+            }
+
+            const saleIds = monthSales.map((s: any) => s.id);
+
+            // 2. Get sale_items with service_id for these sales
+            let allItems: any[] = [];
+            for (let i = 0; i < saleIds.length; i += 500) {
+                const batch = saleIds.slice(i, i + 500);
+                const { data } = await (supabase as any)
+                    .from('sale_items')
+                    .select('service_id, quantity, unit_price')
+                    .eq('business_id', businessId)
+                    .not('service_id', 'is', null)
+                    .gt('unit_price', 0)
+                    .in('sale_id', batch);
+                if (data) allItems.push(...data);
+            }
+
+            if (allItems.length === 0) {
+                setVentasServiciosTotal(0); setVentasServiciosDetalle([]); setVentasServiciosLoading(false); return;
+            }
+
+            const svcIds = [...new Set(allItems.map((i: any) => i.service_id))];
+            const { data: svcs } = await (supabase as any)
+                .from('services').select('id, name').in('id', svcIds).eq('business_id', businessId);
+            const svcMap = new Map<string, string>();
+            (svcs || []).forEach((s: any) => svcMap.set(s.id, s.name));
+
+            const agg = new Map<string, { name: string; cantidad: number; total: number }>();
+            allItems.forEach(item => {
+                const name = svcMap.get(item.service_id) || 'Servicio';
+                const prev = agg.get(item.service_id) || { name, cantidad: 0, total: 0 };
+                prev.cantidad += Number(item.quantity || 1);
+                prev.total += Number(item.unit_price || 0) * Number(item.quantity || 1);
+                agg.set(item.service_id, prev);
+            });
+
+            let grandTotal = 0;
+            const items: DetailItem[] = [];
+            agg.forEach(v => {
+                grandTotal += v.total;
+                items.push({ label: `${v.name} (×${v.cantidad})`, amount: v.total, description: `${v.cantidad} ventas de ${v.name}` });
+            });
+
+            setVentasServiciosTotal(grandTotal);
+            setVentasServiciosDetalle(items.sort((a, b) => b.amount - a.amount));
+        } catch (err) {
+            console.error('[useCentralCash] Error fetching ventas servicios:', err);
+        } finally {
+            setVentasServiciosLoading(false);
+        }
+    };
+
+    /** fetchDashboardData — carga paralela de todas las queries */
     const fetchDashboardData = async () => {
         if (!businessId) return;
         await Promise.allSettled([
@@ -762,6 +990,8 @@ export function useCentralCash() {
             fetchRecuperacionDetalle(),
             fetchNominaData(),
             fetchLiquidacionesData(),
+            fetchBonosData(),
+            fetchVentasServiciosData(),
             fetchCategorySales(currentMonthRange().key),
         ]);
     };
@@ -914,5 +1144,10 @@ export function useCentralCash() {
         recuperacionEfectivoDetalle,
         recuperacionTransferenciaDetalle,
         recuperacionDetalleLoading,
+        serviceSalesCount,
+        monthlyBreakdown,
+        // bonos & ventas servicios
+        bonosTotal, bonosLoading, bonosDetalle,
+        ventasServiciosTotal, ventasServiciosLoading, ventasServiciosDetalle,
     };
 }

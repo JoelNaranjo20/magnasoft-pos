@@ -9,6 +9,7 @@ interface LoyaltySettingsData {
     points_threshold: number;
     reward_service_id: string; // legacy, kept for backward compat
     reward_service_ids: string[]; // new: multiple rewards
+    expiration_months: number;  // 0 = nunca expiran
 }
 
 export const LoyaltySettings = () => {
@@ -20,7 +21,8 @@ export const LoyaltySettings = () => {
         enabled: true,
         points_threshold: 50,
         reward_service_id: '',
-        reward_service_ids: []
+        reward_service_ids: [],
+        expiration_months: 6,
     });
 
     const fetchServices = async () => {
@@ -190,6 +192,30 @@ export const LoyaltySettings = () => {
                             ✓ {settings.reward_service_ids.length} servicio{settings.reward_service_ids.length !== 1 ? 's' : ''} seleccionado{settings.reward_service_ids.length !== 1 ? 's' : ''}.
                         </p>
                     )}
+                </div>
+
+                {/* Expiration */}
+                <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px] text-rose-500">timer_off</span>
+                        Meses para expirar puntos
+                    </label>
+                    <div className="relative group">
+                        <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={settings.expiration_months || 0}
+                            onChange={(e) => setSettings({ ...settings, expiration_months: parseInt(e.target.value) || 0 })}
+                            className="w-full pl-4 pr-12 py-4 bg-slate-50 dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl focus:border-rose-500 outline-none font-bold text-lg transition-all"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs uppercase">Meses</span>
+                    </div>
+                    <p className="text-xs text-slate-500 pl-1">
+                        {settings.expiration_months === 0
+                            ? 'Los puntos nunca expiran.'
+                            : `Si un cliente no acumula ni canjea puntos en ${settings.expiration_months} meses, todos sus puntos expiran.`}
+                    </p>
                 </div>
 
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl flex gap-3">

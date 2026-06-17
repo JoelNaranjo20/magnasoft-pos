@@ -1,7 +1,8 @@
 ﻿// @ts-nocheck
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
+import { useBusinessStore } from '@shared/store/useBusinessStore';
 
 interface Product {
     id: string;
@@ -29,17 +30,48 @@ const REASONS = [
 
 export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
     const user = useSessionStore((state) => state.user);
+    const businessId = useBusinessStore((state) => state.id);
 
     const [quantity, setQuantity] = useState('1');
     const [reason, setReason] = useState(REASONS[0]);
     const [customReason, setCustomReason] = useState('');
     const [loading, setLoading] = useState(false);
     const [done, setDone] = useState(false);
+    const [avgCost, setAvgCost] = useState<number | null>(null);
+    const [loadingCost, setLoadingCost] = useState(true);
 
     const qty = parseInt(quantity) || 0;
     const finalReason = reason === 'Otro' ? customReason : reason;
     const [registerExpense, setRegisterExpense] = useState(true);
-    const cost = (product.price || product.cost_price || 0) * qty;
+
+    // Fetch average purchase cost via RPC on mount
+    useEffect(() => {
+        const fetchAvgCost = async () => {
+            if (!businessId || !product?.id) { setLoadingCost(false); return; }
+            setLoadingCost(true);
+            try {
+                const { data, error } = await supabase.rpc('get_product_avg_cost', {
+                    p_product_id: product.id,
+                    p_business_id: businessId,
+                });
+                if (!error && data != null) {
+                    setAvgCost(Number(data));
+                } else {
+                    setAvgCost(product.cost_price ?? product.price ?? 0);
+                }
+            } catch {
+                setAvgCost(product.cost_price ?? product.price ?? 0);
+            } finally {
+                setLoadingCost(false);
+            }
+        };
+        fetchAvgCost();
+    }, [product, businessId]);
+
+    // Use avg purchase cost (0 is valid), fallback to cost_price, then price
+    const unitCost = avgCost ?? product.cost_price ?? product.price ?? 0;
+    const sellPrice = product.price ?? product.cost_price ?? 0;
+    const cost = unitCost * qty;
 
     const handleConfirm = async () => {
         if (qty <= 0) { alert('Ingresa una cantidad válida.'); return; }
@@ -101,9 +133,13 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
                             <span className="material-symbols-outlined">close</span>
                         </button>
                     </div>
-                    <div className="mt-4 bg-slate-100 dark:bg-slate-800 rounded-2xl p-3 backdrop-blur-sm">
+                    <div className="mt-4 bg-white/20 dark:bg-slate-800/50 rounded-2xl p-3 backdrop-blur-sm space-y-1">
                         <p className="text-sm font-black opacity-90">{product.name}</p>
-                        <p className="text-[11px] opacity-70 mt-0.5">Stock actual: <span className="font-bold">{product.stock} unid.</span></p>
+                        <p className="text-[11px] opacity-70">Stock actual: <span className="font-bold">{product.stock} unid.</span></p>
+                        <div className="flex gap-3 text-[11px] opacity-90 mt-1">
+                            <span>Costo prom.: <b>{loadingCost ? '...' : '$' + (avgCost || 0).toLocaleString()}</b></span>
+                            <span>P. Venta: <b>${(sellPrice || 0).toLocaleString()}</b></span>
+                        </div>
                     </div>
                 </div>
 
@@ -168,7 +204,7 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
                         </div>
 
                         {/* Expense toggle */}
-                        {(product.price || product.cost_price || 0) > 0 && (
+                        {(sellPrice || 0) > 0 && (
                             <div
                                 onClick={() => setRegisterExpense(v => !v)}
                                 className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${registerExpense
@@ -177,10 +213,13 @@ export const InternalUseModal = ({ product, onClose, onSuccess }: Props) => {
                                 }`}
                             >
                                 <div>
-                                    <p className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider">Registrar como gasto</p>
+                                    <p className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider">Registrar como gasto (costo prom.)</p>
                                     <p className="text-[10px] text-slate-400 mt-0.5">
-                                        Precio actual: <span className="font-bold">${cost.toLocaleString()}</span> (${(product.price || product.cost_price || 0).toLocaleString()} × {qty})
+                                        {loadingCost ? 'Calculando costo...' : `Costo prom. compra: $${unitCost.toLocaleString()} × ${qty} = $${cost.toLocaleString()}`}
                                     </p>
+                                    {avgCost && avgCost < sellPrice && (
+                                        <p className="text-[9px] text-emerald-500 mt-0.5">Ahorro vs precio venta: ${((sellPrice - unitCost) * qty).toLocaleString()}</p>
+                                    )}
                                 </div>
                                 <div className={`relative w-10 h-6 rounded-full transition-colors ${registerExpense ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
                                     <div className={`absolute top-1 size-4 bg-white rounded-full shadow transition-transform ${registerExpense ? 'translate-x-5' : 'translate-x-1'}`} />

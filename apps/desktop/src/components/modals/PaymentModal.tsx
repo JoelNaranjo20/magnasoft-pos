@@ -87,7 +87,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
     const [assignmentMode, setAssignmentMode] = useState<'general' | 'individual'>('general');
     const [generalWorkerId, setGeneralWorkerId] = useState<string>('');
     const [itemWorkers, setItemWorkers] = useState<Record<string, string>>({});
-    const [loyaltySettings, setLoyaltySettings] = useState<any>({ points_per_visit: 10, points_threshold: 50 });
+    const [loyaltySettings, setLoyaltySettings] = useState<any>({ points_per_visit: 10, points_threshold: 50, expiration_months: 6 });
     const [rewardServices, setRewardServices] = useState<any[]>([]); // multiple rewards
     const [redeemedServiceIds, setRedeemedServiceIds] = useState<Set<string>>(new Set()); // which services have been redeemed
     const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -706,6 +706,32 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
             // 4.5. Update Customer Loyalty (Skip for Quick Client, "Público General", or explicitly opted out)
             const customerMetadata = (customer as any)?.metadata || {};
             if (customer && customer.id !== 'anonymous' && customer.name !== 'Público General' && customer.id !== '00000000-0000-0000-0000-000000000000' && !customerMetadata.loyalty_opt_out) {
+                // Check loyalty expiration (6 months without activity)
+                if (businessId) {
+                    const { data: loyaltyData } = await (supabase as any)
+                        .from('customer_loyalty_points')
+                        .select('last_activity_at, status')
+                        .eq('customer_id', customer.id)
+                        .eq('business_id', businessId)
+                        .maybeSingle();
+                    const expirationMonths = loyaltySettings?.expiration_months ?? 6;
+                    if (loyaltyData?.last_activity_at && expirationMonths > 0) {
+                        const expirationDate = new Date();
+                        expirationDate.setMonth(expirationDate.getMonth() - expirationMonths);
+                        if (new Date(loyaltyData.last_activity_at) < expirationDate) {
+                            // Points expired — mark as expired in loyalty table and reset customer points
+                            await (supabase as any).from('customer_loyalty_points')
+                                .update({ status: 'expired', points: 0 })
+                                .eq('customer_id', customer.id)
+                                .eq('business_id', businessId);
+                            await (supabase as any).from('customers')
+                                .update({ loyalty_points: 0 })
+                                .eq('id', customer.id);
+                            customer.loyalty_points = 0;
+                        }
+                    }
+                }
+
                 const { data: currentCustomer } = await (supabase as any)
                     .from('customers')
                     .select('loyalty_points, total_visits')
@@ -737,11 +763,23 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
                     pointsChange = (loyaltySettings.points_per_visit || 10);
                 }
 
+                const newPoints = Math.max(0, currentPoints + pointsChange);
                 await (supabase as any).from('customers').update({
-                    loyalty_points: Math.max(0, currentPoints + pointsChange),
+                    loyalty_points: newPoints,
                     total_visits: currentVisits + 1,
                     last_visit: new Date().toISOString()
                 }).eq('id', customer.id);
+
+                // Sync to loyalty tracking table for 6-month expiration
+                if (businessId) {
+                    await (supabase as any).from('customer_loyalty_points').upsert({
+                        customer_id: customer.id,
+                        business_id: businessId,
+                        points: newPoints,
+                        last_activity_at: new Date().toISOString(),
+                        status: 'active'
+                    }, { onConflict: 'customer_id' }).then(() => {}, () => {});
+                }
             }
 
             // 4.6. If payment method is Credit, create customer_debts record (Disabled for anonymous)
