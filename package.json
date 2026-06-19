@@ -1,6 +1,6 @@
 {
   "name": "magnasoft",
-  "version": "1.0.50",
+  "version": "1.0.51",
   "private": true,
   "packageManager": "pnpm@10.2.0",
   "engines": {
