@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react';
 import { PayrollPage } from './PayrollPage';
 import { CarteraHub } from '../components/finance/CarteraHub';
-import { WorkerLoans } from '../components/finance/WorkerLoans';
+import { CreditorDebts } from '../components/finance/CreditorDebts';
 import { CentralCash } from '../components/finance/CentralCash';
 
 export const FinancePage = () => {
@@ -45,8 +45,8 @@ export const FinancePage = () => {
                         : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
                         }`}
                 >
-                    <span className="material-symbols-outlined !text-[20px]">credit_card</span>
-                    Préstamos
+                    <span className="material-symbols-outlined !text-[20px]">construction</span>
+                    Acreedores
                 </button>
                 <button
                     onClick={() => setActiveTab('central_cash')}
@@ -63,7 +63,7 @@ export const FinancePage = () => {
             <div className="mt-6">
                 <div className={activeTab !== 'payroll' ? 'hidden' : ''}><PayrollPage /></div>
                 <div className={activeTab !== 'cash_sessions' ? 'hidden' : ''}><CarteraHub /></div>
-                <div className={activeTab !== 'loans' ? 'hidden' : ''}><WorkerLoans /></div>
+                <div className={activeTab !== 'loans' ? 'hidden' : ''}><CreditorDebts /></div>
                 <div className={activeTab !== 'central_cash' ? 'hidden' : ''}><CentralCash /></div>
             </div>
         </div>

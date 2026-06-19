@@ -93,6 +93,65 @@ export interface CarteraItem {
     fecha?: string;
 }
 
+// ─── Interfaces para tabla 3 niveles (014-resumen-operativo-mes-completo) ───
+
+/** Fila de nivel 2 (Mes) en la tabla multi-mes */
+export interface MonthlyTableRow {
+    monthKey: string;          // "2026-06"
+    monthLabel: string;        // "Junio"
+    year: number;              // 2026
+    ingresos: number;
+    egresos: number;
+    neto: number;
+    bonos: number;
+    servicios: number;
+    // Detalles para N3
+    cashIngresos: DetailItem[];
+    transferIngresos: DetailItem[];
+    egresosDetalle: DetailItem[];
+    serviciosDetalle: DetailItem[];
+    bonosDetalle: DetailItem[];
+}
+
+/** Agrupación de nivel 1 (Año) */
+export interface YearGroup {
+    year: number;
+    months: MonthlyTableRow[];
+    totalIngresos: number;
+    totalEgresos: number;
+    totalNeto: number;
+    totalBonos: number;
+    totalServicios: number;
+}
+
+/** Fila fija al pie de la tabla */
+export interface GeneralTotal {
+    ingresos: number;
+    egresos: number;
+    neto: number;
+    bonos: number;
+    servicios: number;
+}
+
+/** Deuda con acreedor (015-acreedores-modulo) */
+export interface AcreedorItem {
+    id: string;
+    creditor_name: string;
+    amount: number;
+    remaining_amount: number;
+    invoice_date: string | null;
+    status: 'pending' | 'partial' | 'paid';
+}
+
+/** Abono a acreedor (015-acreedores-modulo) */
+export interface AcreedorPagoItem {
+    id: string;
+    creditor_name: string;
+    amount: number;
+    payment_method: 'cash' | 'transfer';
+    created_at: string;
+}
+
 export function useCentralCash() {
     const [movements, setMovements] = useState<CentralMovement[]>([]);
     const [balance, setBalance] = useState(0);
@@ -133,6 +192,18 @@ export function useCentralCash() {
     const [ventasServiciosLoading, setVentasServiciosLoading] = useState(false);
     const [ventasServiciosDetalle, setVentasServiciosDetalle] = useState<DetailItem[]>([]);
 
+    // ─── Estados para tabla 3 niveles ───
+    const [yearGroups, setYearGroups] = useState<YearGroup[]>([]);
+    const [generalTotal, setGeneralTotal] = useState<GeneralTotal>({ ingresos: 0, egresos: 0, neto: 0, bonos: 0, servicios: 0 });
+    const [tableLoading, setTableLoading] = useState(false);
+
+    // ─── Estados de Acreedores (015-acreedores-modulo) ───
+    const [acreedoresTotal, setAcreedoresTotal] = useState(0);
+    const [acreedoresPagadoMes, setAcreedoresPagadoMes] = useState(0);
+    const [acreedoresLoading, setAcreedoresLoading] = useState(false);
+    const [acreedoresDetalle, setAcreedoresDetalle] = useState<AcreedorItem[]>([]);
+    const [acreedoresPagosDetalle, setAcreedoresPagosDetalle] = useState<AcreedorPagoItem[]>([]);
+
     const user = useSessionStore((state) => state.user);
     const businessId = useBusinessStore((state) => state.id);
 
@@ -146,6 +217,32 @@ export function useCentralCash() {
             end: new Date(y, m + 1, 1).toISOString(),
             key: `${y}-${String(m + 1).padStart(2, '0')}`,
         };
+    }
+
+    /** Convierte un monthKey "YYYY-MM" en rango { start, end } */
+    function monthRangeForKey(monthKey: string) {
+        const [y, m] = monthKey.split('-').map(Number);
+        return {
+            start: new Date(y, m - 1, 1).toISOString(),
+            end: new Date(y, m, 1).toISOString(),
+        };
+    }
+
+    /** T006: Obtiene todos los monthKeys desde la primera venta hasta hoy */
+    function getAllMonthKeys(): string[] {
+        const keys: string[] = [];
+        const now = new Date();
+        // Empezar desde enero 2026
+        let y = 2026;
+        let m = 1;
+        const endY = now.getFullYear();
+        const endM = now.getMonth() + 1;
+        while (y < endY || (y === endY && m <= endM)) {
+            keys.push(`${y}-${String(m).padStart(2, '0')}`);
+            m++;
+            if (m > 12) { m = 1; y++; }
+        }
+        return keys;
     }
 
     const fetchMovements = async () => {
@@ -666,9 +763,8 @@ export function useCentralCash() {
                 const batch = saleIds.slice(i, i + BATCH_SIZE);
                 const { data: batchItems, error: itemsErr } = await (supabase as any)
                     .from('sale_items')
-                    .select('id, service_id, product_id, quantity, unit_price, business_id')
-                    .in('sale_id', batch)
-                    .eq('business_id', businessId);
+                    .select('id, service_id, product_id, quantity, unit_price')
+                    .in('sale_id', batch);
 
                 if (itemsErr) {
                     console.error('[fetchCategorySales] Error fetching sale items batch:', itemsErr);
@@ -837,12 +933,11 @@ export function useCentralCash() {
         }
     };
 
-    /** T003: Bonos — servicios regalados por fidelidad (unit_price = 0) */
-    const fetchBonosData = async () => {
-        if (!businessId) return;
-        setBonosLoading(true);
+    /** T004: Bonos para un mes específico — retorna { total, items } sin tocar estado */
+    const fetchBonosDataForMonth = async (monthKey: string): Promise<{ total: number; items: DetailItem[] }> => {
+        if (!businessId) return { total: 0, items: [] };
         try {
-            const { start, end } = currentMonthRange();
+            const { start, end } = monthRangeForKey(monthKey);
             // 1. Get completed sales in this month
             const { data: monthSales } = await (supabase as any)
                 .from('sales')
@@ -852,9 +947,7 @@ export function useCentralCash() {
                 .gte('created_at', start)
                 .lt('created_at', end);
 
-            if (!monthSales || monthSales.length === 0) {
-                setBonosTotal(0); setBonosDetalle([]); setBonosLoading(false); return;
-            }
+            if (!monthSales || monthSales.length === 0) return { total: 0, items: [] };
 
             const saleIds = monthSales.map((s: any) => s.id);
             const saleMap = new Map<string, any>();
@@ -867,16 +960,13 @@ export function useCentralCash() {
                 const { data } = await (supabase as any)
                     .from('sale_items')
                     .select('id, service_id, quantity, sale_id')
-                    .eq('business_id', businessId)
                     .eq('unit_price', 0)
                     .not('service_id', 'is', null)
                     .in('sale_id', batch);
                 if (data) allFreeItems.push(...data);
             }
 
-            if (allFreeItems.length === 0) {
-                setBonosTotal(0); setBonosDetalle([]); setBonosLoading(false); return;
-            }
+            if (allFreeItems.length === 0) return { total: 0, items: [] };
 
             const svcIds = [...new Set(allFreeItems.map((i: any) => i.service_id))];
             const { data: svcs } = await (supabase as any)
@@ -901,21 +991,28 @@ export function useCentralCash() {
                 });
             });
 
-            setBonosTotal(total);
-            setBonosDetalle(items.sort((a, b) => (b.date || '').localeCompare(a.date || '')));
+            return { total, items: items.sort((a, b) => (b.date || '').localeCompare(a.date || '')) };
         } catch (err) {
-            console.error('[useCentralCash] Error fetching bonos:', err);
-        } finally {
-            setBonosLoading(false);
+            console.error('[useCentralCash] Error fetching bonos for month:', monthKey, err);
+            return { total: 0, items: [] };
         }
     };
 
-    /** T004: Ventas Servicios — total facturado en servicios del mes (tiempo real) */
-    const fetchVentasServiciosData = async () => {
+    /** Wrapper: Bonos del mes en curso (para cards del dashboard) */
+    const fetchBonosData = async () => {
         if (!businessId) return;
-        setVentasServiciosLoading(true);
+        setBonosLoading(true);
+        const { total, items } = await fetchBonosDataForMonth(currentMonthRange().key);
+        setBonosTotal(total);
+        setBonosDetalle(items);
+        setBonosLoading(false);
+    };
+
+    /** T005: Ventas Servicios para un mes específico — retorna { total, items } sin tocar estado */
+    const fetchVentasServiciosForMonth = async (monthKey: string): Promise<{ total: number; items: DetailItem[] }> => {
+        if (!businessId) return { total: 0, items: [] };
         try {
-            const { start, end } = currentMonthRange();
+            const { start, end } = monthRangeForKey(monthKey);
             // 1. Get completed sales in this month
             const { data: monthSales } = await (supabase as any)
                 .from('sales')
@@ -925,9 +1022,7 @@ export function useCentralCash() {
                 .gte('created_at', start)
                 .lt('created_at', end);
 
-            if (!monthSales || monthSales.length === 0) {
-                setVentasServiciosTotal(0); setVentasServiciosDetalle([]); setVentasServiciosLoading(false); return;
-            }
+            if (!monthSales || monthSales.length === 0) return { total: 0, items: [] };
 
             const saleIds = monthSales.map((s: any) => s.id);
 
@@ -938,16 +1033,13 @@ export function useCentralCash() {
                 const { data } = await (supabase as any)
                     .from('sale_items')
                     .select('service_id, quantity, unit_price')
-                    .eq('business_id', businessId)
                     .not('service_id', 'is', null)
                     .gt('unit_price', 0)
                     .in('sale_id', batch);
                 if (data) allItems.push(...data);
             }
 
-            if (allItems.length === 0) {
-                setVentasServiciosTotal(0); setVentasServiciosDetalle([]); setVentasServiciosLoading(false); return;
-            }
+            if (allItems.length === 0) return { total: 0, items: [] };
 
             const svcIds = [...new Set(allItems.map((i: any) => i.service_id))];
             const { data: svcs } = await (supabase as any)
@@ -971,16 +1063,229 @@ export function useCentralCash() {
                 items.push({ label: `${v.name} (×${v.cantidad})`, amount: v.total, description: `${v.cantidad} ventas de ${v.name}` });
             });
 
-            setVentasServiciosTotal(grandTotal);
-            setVentasServiciosDetalle(items.sort((a, b) => b.amount - a.amount));
+            return { total: grandTotal, items: items.sort((a, b) => b.amount - a.amount) };
         } catch (err) {
-            console.error('[useCentralCash] Error fetching ventas servicios:', err);
-        } finally {
-            setVentasServiciosLoading(false);
+            console.error('[useCentralCash] Error fetching ventas servicios for month:', monthKey, err);
+            return { total: 0, items: [] };
         }
     };
 
-    /** fetchDashboardData — carga paralela de todas las queries */
+    /** Wrapper: Ventas Servicios del mes en curso (para cards del dashboard) */
+    const fetchVentasServiciosData = async () => {
+        if (!businessId) return;
+        setVentasServiciosLoading(true);
+        const { total, items } = await fetchVentasServiciosForMonth(currentMonthRange().key);
+        setVentasServiciosTotal(total);
+        setVentasServiciosDetalle(items);
+        setVentasServiciosLoading(false);
+    };
+
+    /** T007: Bulk fetch de todas las ventas + sale_items para armar la tabla 3 niveles.
+     *  Usa 1 query de sales + 1 query batch de sale_items + 1 query de services.
+     *  Los ingresos/egresos vienen de monthlyBreakdown (ya actualizado vía useEffect). */
+    const computeMonthlyTable = async () => {
+        if (!businessId) return;
+        setTableLoading(true);
+        try {
+            const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                              'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+            // ── Bulk: 1 query para TODAS las ventas completadas ──
+            const { data: allSales } = await (supabase as any)
+                .from('sales')
+                .select('id, customer:customers(name), created_at')
+                .eq('business_id', businessId)
+                .eq('status', 'completed')
+                .gte('created_at', '2026-01-01')
+                .order('created_at', { ascending: false });
+
+            const bonosByMonth = new Map<string, { total: number; items: DetailItem[] }>();
+            const ventasByMonth = new Map<string, { total: number; items: DetailItem[] }>();
+
+            if (allSales && allSales.length > 0) {
+                const saleIds = allSales.map((s: any) => s.id);
+                const saleMap = new Map<string, any>();
+                allSales.forEach((s: any) => saleMap.set(s.id, s));
+
+                // ── Bulk: batch query de TODOS los sale_items con service_id ──
+                let allSaleItems: any[] = [];
+                for (let i = 0; i < saleIds.length; i += 500) {
+                    const batch = saleIds.slice(i, i + 500);
+                    const { data } = await (supabase as any)
+                        .from('sale_items')
+                        .select('id, service_id, quantity, unit_price, sale_id')
+                        .not('service_id', 'is', null)
+                        .in('sale_id', batch);
+                    if (data) allSaleItems.push(...data);
+                }
+
+                // ── Bulk: 1 query para TODOS los services ──
+                const svcIds = [...new Set(allSaleItems.map((i: any) => i.service_id))];
+                const { data: allSvcs } = svcIds.length > 0
+                    ? await (supabase as any).from('services').select('id, name, price').in('id', svcIds).eq('business_id', businessId)
+                    : { data: [] };
+                const svcMap = new Map<string, { name: string; price: number }>();
+                (allSvcs || []).forEach((s: any) => svcMap.set(s.id, { name: s.name, price: Number(s.price || 0) }));
+
+                // ── Agrupar sale_items por mes ──
+                allSaleItems.forEach((item: any) => {
+                    const sale = saleMap.get(item.sale_id);
+                    if (!sale) return;
+                    const d = new Date(sale.created_at);
+                    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const svc = svcMap.get(item.service_id) || { name: 'Servicio', price: 0 };
+                    const qty = Number(item.quantity || 1);
+                    const unitPrice = Number(item.unit_price || 0);
+
+                    if (unitPrice === 0) {
+                        // Bono (canje de fidelidad): valor = services.price × quantity
+                        const valor = svc.price * qty;
+                        const entry = bonosByMonth.get(monthKey) || { total: 0, items: [] };
+                        entry.total += valor;
+                        entry.items.push({
+                            label: `${svc.name} — ${sale.customer?.name || 'Cliente'} (×${qty})`,
+                            amount: valor,
+                            date: sale.created_at,
+                            description: `Canje de fidelidad: ${svc.name}`,
+                        });
+                        bonosByMonth.set(monthKey, entry);
+                    } else {
+                        // Servicio facturado
+                        const total = unitPrice * qty;
+                        const entry = ventasByMonth.get(monthKey) || { total: 0, items: [] };
+                        entry.total += total;
+                        // Agregar o acumular por servicio
+                        const existing = entry.items.find(e => e.label.startsWith(svc.name + ' (×'));
+                        if (existing) {
+                            // Parsear y acumular: "Lavado (×3)" → "Lavado (×5)"
+                            const prevQty = parseInt(existing.label.match(/×(\d+)/)?.[1] || '0') || 0;
+                            existing.label = `${svc.name} (×${prevQty + qty})`;
+                            existing.amount += total;
+                        } else {
+                            entry.items.push({
+                                label: `${svc.name} (×${qty})`,
+                                amount: total,
+                                description: `${qty} ventas de ${svc.name}`,
+                            });
+                        }
+                        ventasByMonth.set(monthKey, entry);
+                    }
+                });
+            }
+
+            // ── Combinar con monthlyBreakdown (ingresos/egresos) ──
+            // Aquí monthlyBreakdown YA está actualizado porque esta función se llama
+            // desde un useEffect que depende de [movements].
+            const monthKeys = getAllMonthKeys();
+            const allRows: MonthlyTableRow[] = [];
+            monthKeys.forEach(key => {
+                const [y, mon] = key.split('-').map(Number);
+                const bonos = bonosByMonth.get(key) || { total: 0, items: [] };
+                const ventas = ventasByMonth.get(key) || { total: 0, items: [] };
+
+                const mbEntry = monthlyBreakdown.find(m => m.month === key);
+                const ingresos = mbEntry ? mbEntry.totalCash + mbEntry.totalTransfer : 0;
+                const egresos = mbEntry ? mbEntry.totalEgresos : 0;
+                const neto = ingresos - egresos;
+
+                allRows.push({
+                    monthKey: key, monthLabel: monthNames[mon - 1], year: y,
+                    ingresos, egresos, neto,
+                    bonos: bonos.total, servicios: ventas.total,
+                    cashIngresos: mbEntry?.cashIngresos || [],
+                    transferIngresos: mbEntry?.transferIngresos || [],
+                    egresosDetalle: mbEntry?.egresos || [],
+                    serviciosDetalle: ventas.items.sort((a, b) => b.amount - a.amount),
+                    bonosDetalle: bonos.items.sort((a, b) => (b.date || '').localeCompare(a.date || '')),
+                });
+            });
+
+            // Agrupar por año
+            const yearMap = new Map<number, MonthlyTableRow[]>();
+            allRows.forEach(row => {
+                if (!yearMap.has(row.year)) yearMap.set(row.year, []);
+                yearMap.get(row.year)!.push(row);
+            });
+
+            const groups: YearGroup[] = [];
+            let gtIngresos = 0, gtEgresos = 0, gtNeto = 0, gtBonos = 0, gtServicios = 0;
+            [...yearMap.entries()].sort((a, b) => b[0] - a[0]).forEach(([year, months]) => {
+                const totalIngresos = months.reduce((s, r) => s + r.ingresos, 0);
+                const totalEgresos = months.reduce((s, r) => s + r.egresos, 0);
+                const totalBonos = months.reduce((s, r) => s + r.bonos, 0);
+                const totalServicios = months.reduce((s, r) => s + r.servicios, 0);
+                const totalNeto = totalIngresos - totalEgresos;
+                groups.push({ year, months, totalIngresos, totalEgresos, totalNeto, totalBonos, totalServicios });
+                gtIngresos += totalIngresos; gtEgresos += totalEgresos;
+                gtNeto += totalNeto; gtBonos += totalBonos; gtServicios += totalServicios;
+            });
+
+            setYearGroups(groups);
+            setGeneralTotal({ ingresos: gtIngresos, egresos: gtEgresos, neto: gtNeto, bonos: gtBonos, servicios: gtServicios });
+        } catch (err) {
+            console.error('[useCentralCash] Error computing monthly table:', err);
+        } finally {
+            setTableLoading(false);
+        }
+    };
+
+    /** T006: Queries de acreedores (015-acreedores-modulo) */
+    const fetchCreditorData = async () => {
+        if (!businessId) return;
+        setAcreedoresLoading(true);
+        try {
+            const { start, end } = currentMonthRange();
+            // Total deuda pendiente (todos los saldos no pagados)
+            const { data: debts } = await (supabase as any)
+                .from('creditor_debts')
+                .select('remaining_amount')
+                .eq('business_id', businessId)
+                .neq('status', 'paid');
+            const total = (debts || []).reduce((s: number, d: any) => s + Number(d.remaining_amount), 0);
+            setAcreedoresTotal(total);
+
+            // Pagado del mes
+            const { data: payments } = await (supabase as any)
+                .from('creditor_payments')
+                .select('amount')
+                .eq('business_id', businessId)
+                .gte('created_at', start)
+                .lt('created_at', end);
+            const pagado = (payments || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+            setAcreedoresPagadoMes(pagado);
+
+            // Detalle de acreedores (para modal)
+            const { data: detalle } = await (supabase as any)
+                .from('creditor_debts')
+                .select('*')
+                .eq('business_id', businessId)
+                .neq('status', 'paid')
+                .order('created_at', { ascending: false });
+            setAcreedoresDetalle((detalle || []).map((d: any) => ({
+                id: d.id, creditor_name: d.creditor_name, amount: Number(d.amount),
+                remaining_amount: Number(d.remaining_amount), invoice_date: d.invoice_date, status: d.status,
+            })));
+
+            // Detalle de pagos del mes (para modal)
+            const { data: pagosDetalle } = await (supabase as any)
+                .from('creditor_payments')
+                .select('id, amount, payment_method, created_at, creditor_debt:creditor_debts(creditor_name)')
+                .eq('business_id', businessId)
+                .gte('created_at', start)
+                .lt('created_at', end)
+                .order('created_at', { ascending: false });
+            setAcreedoresPagosDetalle((pagosDetalle || []).map((p: any) => ({
+                id: p.id, creditor_name: p.creditor_debt?.creditor_name || 'Acreedor',
+                amount: Number(p.amount), payment_method: p.payment_method, created_at: p.created_at,
+            })));
+        } catch (err) {
+            console.error('[useCentralCash] Error fetching creditor data:', err);
+        } finally {
+            setAcreedoresLoading(false);
+        }
+    };
+
+    /** fetchDashboardData — carga paralela de queries principales (sin tabla multi-mes) */
     const fetchDashboardData = async () => {
         if (!businessId) return;
         await Promise.allSettled([
@@ -993,6 +1298,7 @@ export function useCentralCash() {
             fetchBonosData(),
             fetchVentasServiciosData(),
             fetchCategorySales(currentMonthRange().key),
+            fetchCreditorData(),
         ]);
     };
 
@@ -1099,6 +1405,14 @@ export function useCentralCash() {
         setEgresosDetail(computeEgresosDelMes.items);
     }, [computeEgresosDelMes]);
 
+    // Tabla 3 niveles: se construye cuando los movements ya están en el state
+    // (monthlyBreakdown es un useMemo derivado de movements, por lo que ya está actualizado aquí)
+    useEffect(() => {
+        if (movements.length > 0 || !loading) {
+            computeMonthlyTable();
+        }
+    }, [movements]);
+
     return {
         // originales
         movements,
@@ -1149,5 +1463,9 @@ export function useCentralCash() {
         // bonos & ventas servicios
         bonosTotal, bonosLoading, bonosDetalle,
         ventasServiciosTotal, ventasServiciosLoading, ventasServiciosDetalle,
+        // tabla 3 niveles (014-resumen-operativo-mes-completo)
+        yearGroups, generalTotal, tableLoading,
+        // acreedores (015-acreedores-modulo)
+        acreedoresTotal, acreedoresPagadoMes, acreedoresLoading, acreedoresDetalle, acreedoresPagosDetalle,
     };
 }

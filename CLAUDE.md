@@ -1,7 +1,7 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/012-cross-cutting-improvements/plan.md
+at specs/015-acreedores-modulo/plan.md
 <!-- SPECKIT END -->
 
 ## Regla de Oro: Pausa para Revisión

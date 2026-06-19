@@ -545,6 +545,7 @@ export const PaymentModal = ({ isOpen, onClose, customer, vehicle, workers, quic
 
                 return {
                     sale_id: sale.id,
+                    business_id: businessId,
                     product_id: item.type === 'product' ? item.id : null,
                     service_id: item.type === 'service' ? item.id : null,
                     quantity: item.quantity,
