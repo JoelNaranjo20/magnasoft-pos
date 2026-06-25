@@ -111,6 +111,18 @@ export interface MonthlyTableRow {
     egresosDetalle: DetailItem[];
     serviciosDetalle: DetailItem[];
     bonosDetalle: DetailItem[];
+    // Desglose diario (016-resumen-diario)
+    dailyBreakdown: DailyBreakdown[];
+}
+
+/** Desglose diario dentro de un mes (016-resumen-diario) */
+export interface DailyBreakdown {
+    day: number;           // 1-31
+    ingresos: number;
+    egresos: number;
+    bonos: number;
+    servicios: number;
+    neto: number;
 }
 
 /** Agrupación de nivel 1 (Año) */
@@ -1080,9 +1092,9 @@ export function useCentralCash() {
         setVentasServiciosLoading(false);
     };
 
-    /** T007: Bulk fetch de todas las ventas + sale_items para armar la tabla 3 niveles.
-     *  Usa 1 query de sales + 1 query batch de sale_items + 1 query de services.
-     *  Los ingresos/egresos vienen de monthlyBreakdown (ya actualizado vía useEffect). */
+    /** T007: Bulk fetch de todas las ventas + sale_items + movimientos para armar la tabla 3 niveles.
+     *  Corre en paralelo con fetchMovements dentro de fetchDashboardData.
+     *  NO depende de React state — todo lo obtiene directo de Supabase. */
     const computeMonthlyTable = async () => {
         if (!businessId) return;
         setTableLoading(true);
@@ -1090,14 +1102,22 @@ export function useCentralCash() {
             const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
                               'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-            // ── Bulk: 1 query para TODAS las ventas completadas ──
-            const { data: allSales } = await (supabase as any)
-                .from('sales')
-                .select('id, customer:customers(name), created_at')
-                .eq('business_id', businessId)
-                .eq('status', 'completed')
-                .gte('created_at', '2026-01-01')
-                .order('created_at', { ascending: false });
+            // ── 1. Query de ventas + movimientos en paralelo ──
+            const [salesRes, movsRes] = await Promise.all([
+                (supabase as any)
+                    .from('sales')
+                    .select('id, customer:customers(name), created_at')
+                    .eq('business_id', businessId)
+                    .eq('status', 'completed')
+                    .gte('created_at', '2026-01-01')
+                    .order('created_at', { ascending: false }),
+                (supabase as any)
+                    .from('central_cash_movements')
+                    .select('type, amount, description, payment_method, metadata, created_at, session_id')
+                    .eq('business_id', businessId)
+                    .order('created_at', { ascending: false }),
+            ]);
+            const allSales = salesRes.data;
 
             const bonosByMonth = new Map<string, { total: number; items: DetailItem[] }>();
             const ventasByMonth = new Map<string, { total: number; items: DetailItem[] }>();
@@ -1173,9 +1193,28 @@ export function useCentralCash() {
                 });
             }
 
-            // ── Combinar con monthlyBreakdown (ingresos/egresos) ──
-            // Aquí monthlyBreakdown YA está actualizado porque esta función se llama
-            // desde un useEffect que depende de [movements].
+            // ── Compute local monthly breakdown from fetched movements (parallel, no state dependency) ──
+            const movs = (movsRes.data || []) as any[];
+            const lbMap = new Map<string, { totalCash: number; totalTransfer: number; totalEgresos: number; cashIngresos: DetailItem[]; transferIngresos: DetailItem[]; egresos: DetailItem[] }>();
+            movs.forEach((m: any) => {
+                const d = new Date(m.created_at);
+                const mkey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                if (!lbMap.has(mkey)) lbMap.set(mkey, { totalCash: 0, totalTransfer: 0, totalEgresos: 0, cashIngresos: [], transferIngresos: [], egresos: [] });
+                const e = lbMap.get(mkey)!;
+                const item: DetailItem = { label: m.description || 'Movimiento', amount: m.amount, date: m.created_at, description: m.description };
+                if (m.type === 'income') {
+                    if (m.payment_method === 'transfer' || m.payment_method === 'card') { e.totalTransfer += m.amount; e.transferIngresos.push(item); }
+                    else if (m.payment_method === 'mixed' && m.metadata) {
+                        const cp = (m.metadata.cash_sales || 0) + (m.metadata.cash_abonos || 0) + (m.metadata.cash_loan_payments || 0) + (m.metadata.cash_other || 0);
+                        const tp = (m.metadata.transfer_sales || 0) + (m.metadata.transfer_abonos || 0) + (m.metadata.card_sales || 0) + (m.metadata.card_abonos || 0) + (m.metadata.transfer_loan_payments || 0) + (m.metadata.transfer_other || 0);
+                        if (cp > 0) { e.totalCash += cp; e.cashIngresos.push({ ...item, amount: cp, label: (item.label || 'Movimiento') + ' (parte efectivo)' }); }
+                        if (tp > 0) { e.totalTransfer += tp; e.transferIngresos.push({ ...item, amount: tp, label: (item.label || 'Movimiento') + ' (parte transf.)' }); }
+                    } else { e.totalCash += m.amount; e.cashIngresos.push(item); }
+                } else { e.totalEgresos += m.amount; e.egresos.push(item); }
+            });
+            const localBD: Array<{ month: string; totalCash: number; totalTransfer: number; totalEgresos: number; cashIngresos: DetailItem[]; transferIngresos: DetailItem[]; egresos: DetailItem[] }> = [...lbMap.entries()].map(([month, v]) => ({ month, ...v }));
+
+            // ── Combinar con movimientos locales ──
             const monthKeys = getAllMonthKeys();
             const allRows: MonthlyTableRow[] = [];
             monthKeys.forEach(key => {
@@ -1183,20 +1222,42 @@ export function useCentralCash() {
                 const bonos = bonosByMonth.get(key) || { total: 0, items: [] };
                 const ventas = ventasByMonth.get(key) || { total: 0, items: [] };
 
-                const mbEntry = monthlyBreakdown.find(m => m.month === key);
+                const mbEntry = localBD.find(m => m.month === key);
                 const ingresos = mbEntry ? mbEntry.totalCash + mbEntry.totalTransfer : 0;
                 const egresos = mbEntry ? mbEntry.totalEgresos : 0;
                 const neto = ingresos - egresos;
+                const cashIng = mbEntry?.cashIngresos || [];
+                const transfIng = mbEntry?.transferIngresos || [];
+                const egresosD = mbEntry?.egresos || [];
+
+                // ─── Desglose diario (016-resumen-diario) ───
+                const dayMap = new Map<number, { ingresos: number; egresos: number; bonos: number; servicios: number }>();
+                const addToDay = (day: number, field: string, amount: number) => {
+                    if (!day || day < 1 || day > 31) return;
+                    if (!dayMap.has(day)) dayMap.set(day, { ingresos: 0, egresos: 0, bonos: 0, servicios: 0 });
+                    const entry = dayMap.get(day)!;
+                    if (field === 'ingresos') entry.ingresos += amount;
+                    else if (field === 'egresos') entry.egresos += amount;
+                    else if (field === 'bonos') entry.bonos += amount;
+                    else if (field === 'servicios') entry.servicios += amount;
+                };
+                cashIng.forEach(i => addToDay(new Date(i.date || '').getDate(), 'ingresos', i.amount));
+                transfIng.forEach(i => addToDay(new Date(i.date || '').getDate(), 'ingresos', i.amount));
+                egresosD.forEach(i => addToDay(new Date(i.date || '').getDate(), 'egresos', i.amount));
+                bonos.items.forEach(i => addToDay(new Date(i.date || '').getDate(), 'bonos', i.amount));
+                ventas.items.forEach(i => addToDay(new Date(i.date || '').getDate(), 'servicios', i.amount));
+                const dailyBreakdown: DailyBreakdown[] = [...dayMap.entries()]
+                    .map(([day, d]) => ({ day, ...d, neto: d.ingresos - d.egresos }))
+                    .sort((a, b) => a.day - b.day);
 
                 allRows.push({
                     monthKey: key, monthLabel: monthNames[mon - 1], year: y,
                     ingresos, egresos, neto,
                     bonos: bonos.total, servicios: ventas.total,
-                    cashIngresos: mbEntry?.cashIngresos || [],
-                    transferIngresos: mbEntry?.transferIngresos || [],
-                    egresosDetalle: mbEntry?.egresos || [],
+                    cashIngresos: cashIng, transferIngresos: transfIng, egresosDetalle: egresosD,
                     serviciosDetalle: ventas.items.sort((a, b) => b.amount - a.amount),
                     bonosDetalle: bonos.items.sort((a, b) => (b.date || '').localeCompare(a.date || '')),
+                    dailyBreakdown,
                 });
             });
 
@@ -1285,7 +1346,7 @@ export function useCentralCash() {
         }
     };
 
-    /** fetchDashboardData — carga paralela de queries principales (sin tabla multi-mes) */
+    /** fetchDashboardData — carga paralela de TODAS las queries incluyendo la tabla multi-mes */
     const fetchDashboardData = async () => {
         if (!businessId) return;
         await Promise.allSettled([
@@ -1299,6 +1360,7 @@ export function useCentralCash() {
             fetchVentasServiciosData(),
             fetchCategorySales(currentMonthRange().key),
             fetchCreditorData(),
+            computeMonthlyTable(), // ← corre en paralelo, no espera a movements state
         ]);
     };
 
@@ -1404,14 +1466,6 @@ export function useCentralCash() {
         setEgresosDelMes(computeEgresosDelMes.total);
         setEgresosDetail(computeEgresosDelMes.items);
     }, [computeEgresosDelMes]);
-
-    // Tabla 3 niveles: se construye cuando los movements ya están en el state
-    // (monthlyBreakdown es un useMemo derivado de movements, por lo que ya está actualizado aquí)
-    useEffect(() => {
-        if (movements.length > 0 || !loading) {
-            computeMonthlyTable();
-        }
-    }, [movements]);
 
     return {
         // originales

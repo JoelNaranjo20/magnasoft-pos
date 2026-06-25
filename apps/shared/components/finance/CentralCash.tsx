@@ -45,6 +45,22 @@ export const CentralCash = () => {
     // Table 3-level state (014-resumen-operativo-mes-completo)
     const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
     const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+    const [fullscreenTable, setFullscreenTable] = useState(false);
+    const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+    // ─── Current month row for simplified Resumen Operativo ───
+    const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+    const currentMonthRow = yearGroups.flatMap(yg => yg.months).find(r => r.monthKey === currentMonthKey);
+    const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const currentMonthLabel = `${monthNames[new Date().getMonth()]} ${new Date().getFullYear()}`;
+
+    // ─── Todos los días del mes (1..último), rellenando huecos sin actividad ───
+    const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+    const allMonthDays = Array.from({ length: daysInMonth }, (_, i) => {
+        const day = i + 1;
+        const found = currentMonthRow?.dailyBreakdown?.find((d: any) => d.day === day);
+        return found || { day, ingresos: 0, egresos: 0, bonos: 0, servicios: 0, neto: 0 };
+    });
 
     const toggleYear = (year: number) => {
         setExpandedYears(prev => {
@@ -76,6 +92,14 @@ export const CentralCash = () => {
             if (input) { input.focus(); input.select(); }
         }
     }, [editingCell]);
+
+    // Escape key to exit fullscreen table mode
+    useEffect(() => {
+        if (!fullscreenTable) return;
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreenTable(false); };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, [fullscreenTable]);
 
     const startEdit = (monthKey: string, field: EditableField, currentValue: number) => {
         setEditingCell({ monthKey, field });
@@ -148,6 +172,7 @@ export const CentralCash = () => {
 
                 <div className="flex flex-col lg:flex-row gap-6">
                     {/* COLUMNA IZQUIERDA */}
+                    {!fullscreenTable && (
                     <div className="w-full lg:w-[380px] flex-shrink-0 space-y-4">
                         {/* Balance Total */}
                         <div className="bg-gradient-to-br from-slate-800 to-slate-900 dark:from-slate-700 dark:to-slate-800 text-white rounded-2xl p-6 shadow-lg">
@@ -210,244 +235,123 @@ export const CentralCash = () => {
                             Nuevo Movimiento
                         </button>
                     </div>
+                    )}
 
                     {/* COLUMNA DERECHA */}
-                    <div className="flex-1 space-y-4">
-                        {/* Resumen Operativo — tabla 3 niveles */}
-                        <div className="bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
-                            <h3 className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-4">📊 Resumen Operativo</h3>
-                            {yearGroups.length === 0 ? (
-                                <div className="text-center py-10">
-                                    {tableLoading ? (
-                                        <div className="flex flex-col items-center gap-3">
-                                            <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
-                                            <p className="text-xs text-slate-500 font-medium">Calculando resumen operativo...</p>
-                                        </div>
-                                    ) : (
-                                        <p className="text-xs text-slate-400 italic">Sin movimientos aún</p>
+                    <div className={`space-y-4 ${fullscreenTable ? 'w-full' : 'flex-1'}`}>
+                        {/* Resumen Operativo — mes en curso con desglose diario */}
+                        <div className={`bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 ${fullscreenTable ? 'fixed inset-0 z-[400] m-0 rounded-none flex flex-col overflow-auto' : ''}`}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">📊 Resumen Operativo — {currentMonthLabel}</h3>
+                                <div className="flex items-center gap-2">
+                                    {!fullscreenTable && (
+                                        <button onClick={() => setShowHistoryModal(true)}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
+                                            <span className="material-symbols-outlined !text-[16px]">history</span>
+                                            Historial
+                                        </button>
+                                    )}
+                                    <button onClick={() => setFullscreenTable(v => !v)}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                                        title={fullscreenTable ? 'Salir de pantalla completa' : 'Modo pantalla completa'}>
+                                        <span className="material-symbols-outlined !text-[16px]">{fullscreenTable ? 'fullscreen_exit' : 'fullscreen'}</span>
+                                        {fullscreenTable ? 'Salir' : 'Pantalla completa'}
+                                    </button>
+                                    {fullscreenTable && (
+                                        <button onClick={() => setFullscreenTable(false)}
+                                            className="flex items-center justify-center w-8 h-8 rounded-full bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm shadow-lg hover:scale-105 active:scale-95 transition-all"
+                                            title="Cerrar pantalla completa (Esc)">
+                                            ✕
+                                        </button>
                                     )}
                                 </div>
+                            </div>
+                            {tableLoading ? (
+                                <div className="flex flex-col items-center gap-3 py-10">
+                                    <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
+                                    <p className="text-xs text-slate-500 font-medium">Calculando...</p>
+                                </div>
+                            ) : !currentMonthRow || allMonthDays.length === 0 ? (
+                                <p className="text-xs text-slate-400 italic text-center py-10">Sin actividad este mes</p>
                             ) : (
-                                <div className="max-h-[500px] overflow-y-auto custom-scrollbar rounded-lg border border-slate-200 dark:border-slate-700">
-                                    <table className="w-full text-xs">
-                                        <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800">
-                                            <tr className="text-left">
-                                                <th className="px-3 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider">Año / Mes</th>
-                                                <th className="px-3 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">Ingresos</th>
-                                                <th className="px-3 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">Egresos</th>
-                                                <th className="px-3 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">🎁 Bonos</th>
-                                                <th className="px-3 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">📊 Servicios</th>
-                                                <th className="px-3 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">Neto</th>
+                                <div className={`overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm ${fullscreenTable ? 'max-w-4xl mx-auto' : ''}`}>
+                                    <table className={`${fullscreenTable ? 'w-auto mx-auto text-[10px]' : 'w-full text-xs'}`}>
+                                        <thead>
+                                            <tr className="text-left bg-slate-100 dark:bg-slate-800">
+                                                <th className={`${fullscreenTable ? 'py-1 px-2' : 'py-2.5 px-4'} text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider rounded-tl-xl`}>Día</th>
+                                                <th className={`${fullscreenTable ? 'py-1 px-2' : 'py-2.5 px-4'} text-[10px] font-black text-emerald-600 dark:text-emerald-300 uppercase tracking-wider text-right`}>Ingresos</th>
+                                                <th className={`${fullscreenTable ? 'py-1 px-2' : 'py-2.5 px-4'} text-[10px] font-black text-rose-600 dark:text-rose-300 uppercase tracking-wider text-right`}>Egresos</th>
+                                                <th className={`${fullscreenTable ? 'py-1 px-2' : 'py-2.5 px-4'} text-[10px] font-black text-amber-600 dark:text-amber-300 uppercase tracking-wider text-right`}>🎁 Bonos</th>
+                                                <th className={`${fullscreenTable ? 'py-1 px-2' : 'py-2.5 px-4'} text-[10px] font-black text-purple-600 dark:text-purple-300 uppercase tracking-wider text-right`}>📊 Serv.</th>
+                                                <th className={`${fullscreenTable ? 'py-1 px-2' : 'py-2.5 px-4'} text-[10px] font-black text-sky-600 dark:text-sky-300 uppercase tracking-wider text-right rounded-tr-xl`}>Neto</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            {yearGroups.map(yg => {
-                                                const isYearExpanded = expandedYears.has(yg.year);
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                            {allMonthDays.map((d, i) => {
+                                                const rowBg = d.ingresos > 0 || d.egresos > 0
+                                                    ? (i % 2 === 0 ? 'bg-white dark:bg-slate-900/30' : 'bg-slate-50/50 dark:bg-slate-800/20')
+                                                    : 'bg-slate-50/30 dark:bg-slate-900/10';
+                                                const cellPad = fullscreenTable ? 'py-0.5 px-2' : 'py-2.5 px-4';
+                                                const circleSize = fullscreenTable ? 'w-5 h-5 text-[9px]' : 'w-7 h-7 text-[11px]';
                                                 return (
-                                                    <React.Fragment key={yg.year}>
-                                                        {/* N1 — Fila de Año */}
-                                                        <tr>
-                                                            <td colSpan={6} className="px-0 py-0">
-                                                                <button onClick={() => toggleYear(yg.year)}
-                                                                    className="w-full flex items-center px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/30 transition-colors text-left font-bold text-sm text-slate-800 dark:text-slate-200">
-                                                                    <span className="material-symbols-outlined text-slate-400 !text-[16px] mr-2 transition-transform duration-200"
-                                                                        style={{ transform: isYearExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>chevron_right</span>
-                                                                    <span className="flex-1">{yg.year}</span>
-                                                                    <span className="text-emerald-600 tabular-nums mr-3">{formatCurrency(yg.totalIngresos)}</span>
-                                                                    <span className="text-rose-600 tabular-nums mr-3">{formatCurrency(yg.totalEgresos)}</span>
-                                                                    <span className="text-amber-600 tabular-nums mr-3">{formatCurrency(yg.totalBonos)}</span>
-                                                                    <span className="text-emerald-600 tabular-nums mr-3">{formatCurrency(yg.totalServicios)}</span>
-                                                                    <span className={`tabular-nums mr-3 font-black ${yg.totalNeto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{yg.totalNeto >= 0 ? '' : '−'}{formatCurrency(Math.abs(yg.totalNeto))}</span>
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                        {/* N2 — Filas de Meses */}
-                                                        {isYearExpanded && yg.months.map(row => {
-                                                            const isMonthExpanded = expandedMonth === row.monthKey;
-                                                            const hasDetail = row.cashIngresos.length > 0 || row.transferIngresos.length > 0 || row.egresosDetalle.length > 0 || row.serviciosDetalle.length > 0 || row.bonosDetalle.length > 0;
-                                                            return (
-                                                                <React.Fragment key={row.monthKey}>
-                                                                    <tr className={`border-t border-slate-100 dark:border-slate-800 ${isMonthExpanded ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'} transition-colors`}>
-                                                                        <td className="px-3 py-2 pl-10 text-[11px] font-semibold text-slate-600 dark:text-slate-400 cursor-pointer" onClick={() => hasDetail && toggleMonthDetail(row.monthKey)}>
-                                                                            <span className="flex items-center gap-2">
-                                                                                {hasDetail && <span className="material-symbols-outlined text-slate-300 !text-[12px] transition-transform duration-200"
-                                                                                    style={{ transform: isMonthExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>chevron_right</span>}
-                                                                                {row.monthLabel}
-                                                                            </span>
-                                                                        </td>
-                                                                        {/* Ingresos */}
-                                                                        <td className="px-3 py-2 text-right tabular-nums"
-                                                                            onClick={(e) => { if (e.ctrlKey || e.metaKey) { e.stopPropagation(); startEdit(row.monthKey, 'ingresos', row.ingresos); } }}>
-                                                                            {editingCell?.monthKey === row.monthKey && editingCell?.field === 'ingresos' ? (
-                                                                                <input type="number" value={editValue} data-edit={`${row.monthKey}-ingresos`}
-                                                                                    onChange={e => setEditValue(e.target.value)}
-                                                                                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingCell(null); }}
-                                                                                    onBlur={saveEdit}
-                                                                                    className="w-20 text-right px-1 py-0.5 border border-primary rounded bg-white dark:bg-slate-700 text-emerald-600 font-bold text-[11px] outline-none focus:ring-1 ring-primary"
-                                                                                    onClick={e => e.stopPropagation()} />
-                                                                            ) : (
-                                                                                <span className="text-emerald-600 font-bold cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded px-1 -mx-1" title="Ctrl+clic para editar">{formatCurrency(row.ingresos)}</span>
-                                                                            )}
-                                                                        </td>
-                                                                        {/* Egresos */}
-                                                                        <td className="px-3 py-2 text-right tabular-nums"
-                                                                            onClick={(e) => { if (e.ctrlKey || e.metaKey) { e.stopPropagation(); startEdit(row.monthKey, 'egresos', row.egresos); } }}>
-                                                                            {editingCell?.monthKey === row.monthKey && editingCell?.field === 'egresos' ? (
-                                                                                <input type="number" value={editValue} data-edit={`${row.monthKey}-egresos`}
-                                                                                    onChange={e => setEditValue(e.target.value)}
-                                                                                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingCell(null); }}
-                                                                                    onBlur={saveEdit}
-                                                                                    className="w-20 text-right px-1 py-0.5 border border-primary rounded bg-white dark:bg-slate-700 text-rose-600 font-bold text-[11px] outline-none focus:ring-1 ring-primary"
-                                                                                    onClick={e => e.stopPropagation()} />
-                                                                            ) : (
-                                                                                <span className="text-rose-600 font-bold cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded px-1 -mx-1" title="Ctrl+clic para editar">{formatCurrency(row.egresos)}</span>
-                                                                            )}
-                                                                        </td>
-                                                                        {/* Bonos */}
-                                                                        <td className="px-3 py-2 text-right tabular-nums"
-                                                                            onClick={(e) => { if (e.ctrlKey || e.metaKey) { e.stopPropagation(); startEdit(row.monthKey, 'bonos', row.bonos); } }}>
-                                                                            {editingCell?.monthKey === row.monthKey && editingCell?.field === 'bonos' ? (
-                                                                                <input type="number" value={editValue} data-edit={`${row.monthKey}-bonos`}
-                                                                                    onChange={e => setEditValue(e.target.value)}
-                                                                                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingCell(null); }}
-                                                                                    onBlur={saveEdit}
-                                                                                    className="w-20 text-right px-1 py-0.5 border border-primary rounded bg-white dark:bg-slate-700 text-amber-600 font-bold text-[11px] outline-none focus:ring-1 ring-primary"
-                                                                                    onClick={e => e.stopPropagation()} />
-                                                                            ) : (
-                                                                                <span className="text-amber-600 font-bold cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded px-1 -mx-1" title="Ctrl+clic para editar">{formatCurrency(row.bonos)}</span>
-                                                                            )}
-                                                                        </td>
-                                                                        {/* Servicios */}
-                                                                        <td className="px-3 py-2 text-right tabular-nums"
-                                                                            onClick={(e) => { if (e.ctrlKey || e.metaKey) { e.stopPropagation(); startEdit(row.monthKey, 'servicios', row.servicios); } }}>
-                                                                            {editingCell?.monthKey === row.monthKey && editingCell?.field === 'servicios' ? (
-                                                                                <input type="number" value={editValue} data-edit={`${row.monthKey}-servicios`}
-                                                                                    onChange={e => setEditValue(e.target.value)}
-                                                                                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingCell(null); }}
-                                                                                    onBlur={saveEdit}
-                                                                                    className="w-20 text-right px-1 py-0.5 border border-primary rounded bg-white dark:bg-slate-700 text-purple-600 font-bold text-[11px] outline-none focus:ring-1 ring-primary"
-                                                                                    onClick={e => e.stopPropagation()} />
-                                                                            ) : (
-                                                                                <span className="text-emerald-600 font-bold cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded px-1 -mx-1" title="Ctrl+clic para editar">{formatCurrency(row.servicios)}</span>
-                                                                            )}
-                                                                        </td>
-                                                                        {/* Neto */}
-                                                                        <td className={`px-3 py-2 text-right font-black tabular-nums ${row.neto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}
-                                                                            onClick={(e) => { if (e.ctrlKey || e.metaKey) { e.stopPropagation(); startEdit(row.monthKey, 'neto', row.neto); } else if (hasDetail) { toggleMonthDetail(row.monthKey); } }}>
-                                                                            {editingCell?.monthKey === row.monthKey && editingCell?.field === 'neto' ? (
-                                                                                <input type="number" value={editValue} data-edit={`${row.monthKey}-neto`}
-                                                                                    onChange={e => setEditValue(e.target.value)}
-                                                                                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingCell(null); }}
-                                                                                    onBlur={saveEdit}
-                                                                                    className="w-20 text-right px-1 py-0.5 border border-primary rounded bg-white dark:bg-slate-700 text-slate-800 font-black text-[11px] outline-none focus:ring-1 ring-primary"
-                                                                                    onClick={e => e.stopPropagation()} />
-                                                                            ) : (
-                                                                                <span className="cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/30 rounded px-1 -mx-1" title="Ctrl+clic para editar neto">{row.neto >= 0 ? '' : '−'}{formatCurrency(Math.abs(row.neto))}</span>
-                                                                            )}
-                                                                        </td>
-                                                                    </tr>
-                                                                    {/* N3 — Detalle del Mes */}
-                                                                    {isMonthExpanded && (
-                                                                        <tr>
-                                                                            <td colSpan={6} className="px-4 py-3 bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-2">
-                                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                                                    <div className="bg-emerald-50/50 dark:bg-emerald-900/5 rounded-lg border border-emerald-200 dark:border-emerald-800/30 overflow-hidden">
-                                                                                        <div className="px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/20 text-[9px] font-black text-emerald-700 dark:text-emerald-400 uppercase">💰 Efectivo</div>
-                                                                                        <div className="max-h-[120px] overflow-y-auto">
-                                                                                            {row.cashIngresos.length === 0 ? <p className="text-[9px] text-slate-400 italic p-2 text-center">—</p> :
-                                                                                                row.cashIngresos.slice(0, 8).map((item, i) => (
-                                                                                                    <div key={i} className="flex justify-between px-3 py-1 text-[10px] border-b border-emerald-100 dark:border-emerald-800/10">
-                                                                                                        <span className="truncate mr-2 text-slate-600 dark:text-slate-400">{item.label}</span>
-                                                                                                        <span className="font-bold text-emerald-600 tabular-nums flex-shrink-0">+{formatCurrency(item.amount)}</span>
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="bg-sky-50/50 dark:bg-sky-900/5 rounded-lg border border-sky-200 dark:border-sky-800/30 overflow-hidden">
-                                                                                        <div className="px-3 py-1.5 bg-sky-100 dark:bg-sky-900/20 text-[9px] font-black text-sky-700 dark:text-sky-400 uppercase">🏦 Transferencia</div>
-                                                                                        <div className="max-h-[120px] overflow-y-auto">
-                                                                                            {row.transferIngresos.length === 0 ? <p className="text-[9px] text-slate-400 italic p-2 text-center">—</p> :
-                                                                                                row.transferIngresos.slice(0, 8).map((item, i) => (
-                                                                                                    <div key={i} className="flex justify-between px-3 py-1 text-[10px] border-b border-sky-100 dark:border-sky-800/10">
-                                                                                                        <span className="truncate mr-2 text-slate-600 dark:text-slate-400">{item.label}</span>
-                                                                                                        <span className="font-bold text-sky-600 tabular-nums flex-shrink-0">+{formatCurrency(item.amount)}</span>
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="bg-rose-50/50 dark:bg-rose-900/5 rounded-lg border border-rose-200 dark:border-rose-800/30 overflow-hidden">
-                                                                                        <div className="px-3 py-1.5 bg-rose-100 dark:bg-rose-900/20 text-[9px] font-black text-rose-700 dark:text-rose-400 uppercase">📤 Egresos</div>
-                                                                                        <div className="max-h-[120px] overflow-y-auto">
-                                                                                            {row.egresosDetalle.length === 0 ? <p className="text-[9px] text-slate-400 italic p-2 text-center">—</p> :
-                                                                                                row.egresosDetalle.slice(0, 8).map((item, i) => (
-                                                                                                    <div key={i} className="flex justify-between px-3 py-1 text-[10px] border-b border-rose-100 dark:border-rose-800/10">
-                                                                                                        <span className="truncate mr-2 text-slate-600 dark:text-slate-400">{item.label}</span>
-                                                                                                        <span className="font-bold text-rose-600 tabular-nums flex-shrink-0">−{formatCurrency(item.amount)}</span>
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="bg-purple-50/50 dark:bg-purple-900/5 rounded-lg border border-purple-200 dark:border-purple-800/30 overflow-hidden">
-                                                                                        <div className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900/20 text-[9px] font-black text-purple-700 dark:text-purple-400 uppercase">📊 Servicios</div>
-                                                                                        <div className="max-h-[120px] overflow-y-auto">
-                                                                                            {row.serviciosDetalle.length === 0 ? <p className="text-[9px] text-slate-400 italic p-2 text-center">—</p> :
-                                                                                                row.serviciosDetalle.slice(0, 8).map((item, i) => (
-                                                                                                    <div key={i} className="flex justify-between px-3 py-1 text-[10px] border-b border-purple-100 dark:border-purple-800/10">
-                                                                                                        <span className="truncate mr-2 text-slate-600 dark:text-slate-400">{item.label}</span>
-                                                                                                        <span className="font-bold text-purple-600 tabular-nums flex-shrink-0">{formatCurrency(item.amount)}</span>
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="bg-amber-50/50 dark:bg-amber-900/5 rounded-lg border border-amber-200 dark:border-amber-800/30 overflow-hidden md:col-span-2">
-                                                                                        <div className="px-3 py-1.5 bg-amber-100 dark:bg-amber-900/20 text-[9px] font-black text-amber-700 dark:text-amber-400 uppercase">🎁 Bonos Canjeados</div>
-                                                                                        <div className="max-h-[120px] overflow-y-auto">
-                                                                                            {row.bonosDetalle.length === 0 ? <p className="text-[9px] text-slate-400 italic p-2 text-center">—</p> :
-                                                                                                row.bonosDetalle.slice(0, 8).map((item, i) => (
-                                                                                                    <div key={i} className="flex justify-between px-3 py-1 text-[10px] border-b border-amber-100 dark:border-amber-800/10">
-                                                                                                        <span className="truncate mr-2 text-slate-600 dark:text-slate-400">{item.label}</span>
-                                                                                                        <span className="font-bold text-amber-600 tabular-nums flex-shrink-0">{formatCurrency(item.amount)}</span>
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </td>
-                                                                        </tr>
-                                                                    )}
-                                                                </React.Fragment>
-                                                            );
-                                                        })}
-                                                        {/* Subtotal del año */}
-                                                        {isYearExpanded && (
-                                                            <tr className="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-100/50 dark:bg-slate-700/30">
-                                                                <td className="px-3 py-2 pl-10 text-[10px] font-black text-slate-500 uppercase">Total {yg.year}</td>
-                                                                <td className="px-3 py-2 text-right font-black text-emerald-700 tabular-nums">{formatCurrency(yg.totalIngresos)}</td>
-                                                                <td className="px-3 py-2 text-right font-black text-rose-700 tabular-nums">{formatCurrency(yg.totalEgresos)}</td>
-                                                                <td className="px-3 py-2 text-right font-black text-amber-700 tabular-nums">{formatCurrency(yg.totalBonos)}</td>
-                                                                <td className="px-3 py-2 text-right font-black text-emerald-700 tabular-nums">{formatCurrency(yg.totalServicios)}</td>
-                                                                <td className={`px-3 py-2 text-right font-black tabular-nums ${yg.totalNeto >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{yg.totalNeto >= 0 ? '' : '−'}{formatCurrency(Math.abs(yg.totalNeto))}</td>
-                                                            </tr>
-                                                        )}
-                                                    </React.Fragment>
-                                                );
-                                            })}
+                                                <tr key={d.day} className={`${rowBg} hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors group`}>
+                                                    <td className={`${cellPad}`}>
+                                                        <span className={`inline-flex items-center justify-center ${circleSize} rounded-full font-black ${d.ingresos > 0 || d.egresos > 0 ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                                                            {d.day}
+                                                        </span>
+                                                    </td>
+                                                    <td className={`${cellPad} text-right font-semibold tabular-nums`}>
+                                                        {d.ingresos > 0
+                                                            ? <span className="text-emerald-600 dark:text-emerald-400 group-hover:scale-105 inline-block transition-transform">+{formatCurrency(d.ingresos)}</span>
+                                                            : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                                                    </td>
+                                                    <td className={`${cellPad} text-right font-semibold tabular-nums`}>
+                                                        {d.egresos > 0
+                                                            ? <span className="text-rose-500 dark:text-rose-400 group-hover:scale-105 inline-block transition-transform">−{formatCurrency(d.egresos)}</span>
+                                                            : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                                                    </td>
+                                                    <td className={`${cellPad} text-right font-semibold tabular-nums`}>
+                                                        {d.bonos > 0
+                                                            ? <span className="text-amber-600 dark:text-amber-400">{formatCurrency(d.bonos)}</span>
+                                                            : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                                                    </td>
+                                                    <td className={`${cellPad} text-right font-semibold tabular-nums`}>
+                                                        {d.servicios > 0
+                                                            ? <span className="text-purple-600 dark:text-purple-400">{formatCurrency(d.servicios)}</span>
+                                                            : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                                                    </td>
+                                                    <td className={`${cellPad} text-right font-black tabular-nums`}>
+                                                        {d.neto !== 0 ? (
+                                                            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] ${d.neto >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400'}`}>
+                                                                {d.neto >= 0 ? '+' : '−'}{formatCurrency(Math.abs(d.neto))}
+                                                            </span>
+                                                        ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                                                    </td>
+                                                </tr>
+                                            );})}
                                         </tbody>
-                                        {/* Total General — sticky footer */}
-                                        <tfoot className="sticky bottom-0 z-10">
-                                            <tr className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-slate-700 dark:to-slate-800 text-white">
-                                                <td className="px-3 py-3 text-xs font-black uppercase tracking-wider">Total General</td>
-                                                <td className="px-3 py-3 text-right text-sm font-black tabular-nums">{formatCurrency(generalTotal.ingresos)}</td>
-                                                <td className="px-3 py-3 text-right text-sm font-black text-rose-300 tabular-nums">{formatCurrency(generalTotal.egresos)}</td>
-                                                <td className="px-3 py-3 text-right text-sm font-black text-amber-300 tabular-nums">{formatCurrency(generalTotal.bonos)}</td>
-                                                <td className="px-3 py-3 text-right text-sm font-black text-emerald-300 tabular-nums">{formatCurrency(generalTotal.servicios)}</td>
-                                                <td className={`px-3 py-3 text-right text-sm font-black tabular-nums ${generalTotal.neto >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{generalTotal.neto >= 0 ? '' : '−'}{formatCurrency(Math.abs(generalTotal.neto))}</td>
+                                        <tfoot>
+                                            <tr className="border-t-2 border-slate-300 dark:border-slate-600">
+                                                <td colSpan={6} className="p-0">
+                                                    <div className={`${fullscreenTable ? 'px-3 py-2' : 'px-4 py-3'} bg-slate-100 dark:bg-slate-800 flex items-center justify-between rounded-b-xl`}>
+                                                        <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider">Total {currentMonthLabel}</span>
+                                                        <div className={`flex items-center ${fullscreenTable ? 'gap-3' : 'gap-5'}`}>
+                                                            <span className={`${fullscreenTable ? 'text-[10px]' : 'text-xs'} font-black text-emerald-600 dark:text-emerald-300 tabular-nums`}>{formatCurrency(allMonthDays.reduce((s: number, d: any) => s + d.ingresos, 0))}</span>
+                                                            <span className={`${fullscreenTable ? 'text-[10px]' : 'text-xs'} font-black text-rose-600 dark:text-rose-300 tabular-nums`}>{formatCurrency(allMonthDays.reduce((s: number, d: any) => s + d.egresos, 0))}</span>
+                                                            <span className={`${fullscreenTable ? 'text-[10px]' : 'text-xs'} font-black text-amber-600 dark:text-amber-300 tabular-nums`}>{formatCurrency(allMonthDays.reduce((s: number, d: any) => s + d.bonos, 0))}</span>
+                                                            <span className={`${fullscreenTable ? 'text-[10px]' : 'text-xs'} font-black text-purple-600 dark:text-purple-300 tabular-nums`}>{formatCurrency(allMonthDays.reduce((s: number, d: any) => s + d.servicios, 0))}</span>
+                                                            <span className={`${fullscreenTable ? 'text-xs' : 'text-sm'} font-black tabular-nums ${currentMonthRow.neto >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{currentMonthRow.neto >= 0 ? '+' : '−'}{formatCurrency(Math.abs(currentMonthRow.neto))}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         </tfoot>
                                     </table>
                                 </div>
                             )}
                         </div>
+
+                        {!fullscreenTable && (<>
 
                         {/* Cartera */}
                         {hasCartera && (
@@ -503,6 +407,7 @@ export const CentralCash = () => {
                                 <p className="text-[8px] text-emerald-500/60 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">Ver detalle →</p>
                             </button>
                         </div>
+                        </>)}
                     </div>
                 </div>
             </div>
@@ -511,9 +416,147 @@ export const CentralCash = () => {
             {/* MODALES */}
             {/* ================================================================ */}
 
-            {/* Nuevo Movimiento — inline form modal (funciona en desktop y web) */}
+            {/* Nuevo Movimiento — inline form modal */}
             {showMovementModal && (
                 <NuevoMovimientoModal onClose={() => setShowMovementModal(false)} onSubmit={handleMovementSubmit} />
+            )}
+
+            {/* Historial — tabla multi-año completa (modal) */}
+            {showHistoryModal && (
+                <div className="fixed inset-0 z-[350] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="relative w-full max-w-[95vw] max-h-[90vh] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 dark:text-white">📜 Historial Completo</h2>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{yearGroups.length} años · Total General: <span className={`font-bold ${generalTotal.neto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{generalTotal.neto >= 0 ? '+' : '−'}{formatCurrency(Math.abs(generalTotal.neto))}</span></p>
+                            </div>
+                            <button onClick={() => setShowHistoryModal(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                <span className="material-symbols-outlined !text-[20px]">close</span>
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar">
+                            {tableLoading ? (
+                                <div className="flex flex-col items-center gap-3 py-16">
+                                    <div className="w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
+                                    <p className="text-xs text-slate-500 font-medium">Cargando historial...</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-xs">
+                                    <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800">
+                                        <tr className="text-left">
+                                            <th className="px-4 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider">Año / Mes</th>
+                                            <th className="px-4 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">Ingresos</th>
+                                            <th className="px-4 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">Egresos</th>
+                                            <th className="px-4 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">🎁 Bonos</th>
+                                            <th className="px-4 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">📊 Servicios</th>
+                                            <th className="px-4 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-wider text-right">Neto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {yearGroups.map(yg => {
+                                            const isYearExpanded = expandedYears.has(yg.year);
+                                            return (
+                                                <React.Fragment key={yg.year}>
+                                                    <tr>
+                                                        <td colSpan={6} className="px-0 py-0">
+                                                            <button onClick={() => toggleYear(yg.year)}
+                                                                className="w-full flex items-center px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/30 transition-colors text-left font-bold text-sm text-slate-800 dark:text-slate-200">
+                                                                <span className="material-symbols-outlined text-slate-400 !text-[16px] mr-2 transition-transform duration-200"
+                                                                    style={{ transform: isYearExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>chevron_right</span>
+                                                                <span className="flex-1">{yg.year}</span>
+                                                                <span className="text-emerald-600 tabular-nums mr-4">{formatCurrency(yg.totalIngresos)}</span>
+                                                                <span className="text-rose-600 tabular-nums mr-4">{formatCurrency(yg.totalEgresos)}</span>
+                                                                <span className="text-amber-600 tabular-nums mr-4">{formatCurrency(yg.totalBonos)}</span>
+                                                                <span className="text-emerald-600 tabular-nums mr-4">{formatCurrency(yg.totalServicios)}</span>
+                                                                <span className={`tabular-nums mr-4 font-black ${yg.totalNeto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{yg.totalNeto >= 0 ? '' : '−'}{formatCurrency(Math.abs(yg.totalNeto))}</span>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                    {isYearExpanded && yg.months.map(row => {
+                                                        const isMonthExpanded = expandedMonth === row.monthKey;
+                                                        const hasDetail = row.dailyBreakdown && row.dailyBreakdown.length > 0;
+                                                        return (
+                                                            <React.Fragment key={row.monthKey}>
+                                                                <tr className={`border-t border-slate-100 dark:border-slate-800 ${isMonthExpanded ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'} transition-colors cursor-pointer`}
+                                                                    onClick={() => hasDetail && toggleMonthDetail(row.monthKey)}>
+                                                                    <td className="px-4 py-2 pl-12 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                                                                        <span className="flex items-center gap-2">
+                                                                            {hasDetail && <span className="material-symbols-outlined text-slate-300 !text-[12px] transition-transform duration-200"
+                                                                                style={{ transform: isMonthExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>chevron_right</span>}
+                                                                            {row.monthLabel}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-2 text-right text-emerald-600 font-bold tabular-nums">{formatCurrency(row.ingresos)}</td>
+                                                                    <td className="px-4 py-2 text-right text-rose-600 font-bold tabular-nums">{formatCurrency(row.egresos)}</td>
+                                                                    <td className="px-4 py-2 text-right text-amber-600 font-bold tabular-nums">{formatCurrency(row.bonos)}</td>
+                                                                    <td className="px-4 py-2 text-right text-emerald-600 font-bold tabular-nums">{formatCurrency(row.servicios)}</td>
+                                                                    <td className={`px-4 py-2 text-right font-black tabular-nums ${row.neto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{row.neto >= 0 ? '' : '−'}{formatCurrency(Math.abs(row.neto))}</td>
+                                                                </tr>
+                                                                {isMonthExpanded && row.dailyBreakdown && (
+                                                                    <tr>
+                                                                        <td colSpan={6} className="px-6 py-3 bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-700">
+                                                                            <table className="w-full text-[11px]">
+                                                                                <thead>
+                                                                                    <tr className="text-left border-b border-slate-200 dark:border-slate-700">
+                                                                                        <th className="py-1 px-2 text-[9px] font-black text-slate-400 uppercase">Día</th>
+                                                                                        <th className="py-1 px-2 text-[9px] font-black text-slate-400 uppercase text-right">Ingresos</th>
+                                                                                        <th className="py-1 px-2 text-[9px] font-black text-slate-400 uppercase text-right">Egresos</th>
+                                                                                        <th className="py-1 px-2 text-[9px] font-black text-slate-400 uppercase text-right">🎁 Bonos</th>
+                                                                                        <th className="py-1 px-2 text-[9px] font-black text-slate-400 uppercase text-right">📊 Servicios</th>
+                                                                                        <th className="py-1 px-2 text-[9px] font-black text-slate-400 uppercase text-right">Neto</th>
+                                                                                    </tr>
+                                                                                </thead>
+                                                                                <tbody>
+                                                                                    {row.dailyBreakdown.map(d => (
+                                                                                        <tr key={d.day} className="border-b border-slate-100 dark:border-slate-800">
+                                                                                            <td className="py-1 px-2 font-bold text-slate-600">{d.day}</td>
+                                                                                            <td className="py-1 px-2 text-right font-semibold text-emerald-600 tabular-nums">{d.ingresos > 0 ? formatCurrency(d.ingresos) : '—'}</td>
+                                                                                            <td className="py-1 px-2 text-right font-semibold text-rose-600 tabular-nums">{d.egresos > 0 ? formatCurrency(d.egresos) : '—'}</td>
+                                                                                            <td className="py-1 px-2 text-right font-semibold text-amber-600 tabular-nums">{d.bonos > 0 ? formatCurrency(d.bonos) : '—'}</td>
+                                                                                            <td className="py-1 px-2 text-right font-semibold text-purple-600 tabular-nums">{d.servicios > 0 ? formatCurrency(d.servicios) : '—'}</td>
+                                                                                            <td className={`py-1 px-2 text-right font-black tabular-nums ${d.neto >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{d.neto !== 0 ? (d.neto >= 0 ? '+' : '−') + formatCurrency(Math.abs(d.neto)) : '—'}</td>
+                                                                                        </tr>
+                                                                                    ))}
+                                                                                </tbody>
+                                                                            </table>
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
+                                                            </React.Fragment>
+                                                        );
+                                                    })}
+                                                    {isYearExpanded && (
+                                                        <tr className="border-t-2 border-slate-300 dark:border-slate-600 bg-slate-100/50 dark:bg-slate-700/30">
+                                                            <td className="px-4 py-2 pl-12 text-[10px] font-black text-slate-500 uppercase">Total {yg.year}</td>
+                                                            <td className="px-4 py-2 text-right font-black text-emerald-700 tabular-nums">{formatCurrency(yg.totalIngresos)}</td>
+                                                            <td className="px-4 py-2 text-right font-black text-rose-700 tabular-nums">{formatCurrency(yg.totalEgresos)}</td>
+                                                            <td className="px-4 py-2 text-right font-black text-amber-700 tabular-nums">{formatCurrency(yg.totalBonos)}</td>
+                                                            <td className="px-4 py-2 text-right font-black text-emerald-700 tabular-nums">{formatCurrency(yg.totalServicios)}</td>
+                                                            <td className={`px-4 py-2 text-right font-black tabular-nums ${yg.totalNeto >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>{yg.totalNeto >= 0 ? '' : '−'}{formatCurrency(Math.abs(yg.totalNeto))}</td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tbody>
+                                    <tfoot className="sticky bottom-0 z-10">
+                                        <tr className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white">
+                                            <td className="px-4 py-3 text-xs font-black uppercase tracking-wider">Total General</td>
+                                            <td className="px-4 py-3 text-right text-sm font-black tabular-nums">{formatCurrency(generalTotal.ingresos)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-black text-rose-600 dark:text-rose-300 tabular-nums">{formatCurrency(generalTotal.egresos)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-black text-amber-600 dark:text-amber-300 tabular-nums">{formatCurrency(generalTotal.bonos)}</td>
+                                            <td className="px-4 py-3 text-right text-sm font-black text-emerald-600 dark:text-emerald-300 tabular-nums">{formatCurrency(generalTotal.servicios)}</td>
+                                            <td className={`px-4 py-3 text-right text-sm font-black tabular-nums ${generalTotal.neto >= 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{generalTotal.neto >= 0 ? '' : '−'}{formatCurrency(Math.abs(generalTotal.neto))}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            )}
+                        </div>
+                        <div className="flex justify-end px-6 pb-5 pt-2 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+                            <button onClick={() => setShowHistoryModal(false)} className="px-6 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Balance Total — Todos los movimientos del mes (lista plana + editar/eliminar) */}
