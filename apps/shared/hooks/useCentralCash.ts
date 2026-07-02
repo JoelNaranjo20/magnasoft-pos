@@ -28,6 +28,7 @@ export interface CentralMovement {
     metadata: CentralCashMetadata | null;
     created_at: string;
     user_id: string;
+    user_name: string | null;
 }
 
 interface BackfillResult {
@@ -280,7 +281,28 @@ export function useCentralCash() {
 
             const movs = (data as CentralMovement[]) || [];
             console.log('✅ Fetched movements:', movs.length);
-            setMovements(movs);
+
+            // — Resolver user_id → user_name desde profiles —
+            const userIds = [...new Set(movs.filter(m => m.user_id).map(m => m.user_id))];
+            const userMap = new Map<string, string>();
+            if (userIds.length > 0) {
+                try {
+                    const { data: profiles } = await (supabase
+                        .from('profiles' as any)
+                        .select('id, full_name, email')
+                        .in('id', userIds) as any);
+                    (profiles || []).forEach((p: any) => {
+                        userMap.set(p.id, p.full_name || p.email || 'Usuario');
+                    });
+                } catch (e) {
+                    console.warn('⚠️ Error fetching user profiles for movements:', e);
+                }
+            }
+            const resolvedMovs = movs.map(m => ({
+                ...m,
+                user_name: m.user_id ? (userMap.get(m.user_id) || null) : null
+            }));
+            setMovements(resolvedMovs as CentralMovement[]);
 
             const total = movs.reduce((acc, m) => {
                 return m.type === 'income' ? acc + m.amount : acc - m.amount;

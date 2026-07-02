@@ -610,7 +610,7 @@ export const CentralCash = () => {
                                                 <>
                                                     <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isIncome ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{m.description || 'Movimiento'}</p>
+                                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{m.user_name || 'Sistema'} — {m.description || 'Movimiento'}</p>
                                                         <p className="text-[10px] text-slate-400">{dateStr} · {methodLabel}</p>
                                                     </div>
                                                     <span className={`text-sm font-black tabular-nums flex-shrink-0 ${isIncome ? 'text-emerald-600' : 'text-rose-600'}`}>
