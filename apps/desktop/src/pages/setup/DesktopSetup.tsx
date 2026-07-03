@@ -43,6 +43,21 @@ export const DesktopSetup = () => {
             // Ensure session is fresh before doing write operations
             await ensureSession();
 
+            // Pre-check: verify user doesn't already have a business linked
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('business_id')
+                    .eq('id', user.id)
+                    .single();
+                if (profile?.business_id) {
+                    setError('Esta cuenta ya tiene un negocio asignado. Solo se permite un negocio por cuenta.');
+                    setLoading(false);
+                    return;
+                }
+            }
+
             // RPC atómico: crea negocio + asigna tipo + configura módulos en una sola transacción
             const { error: rpcError } = await supabase.rpc('create_business_without_serial', {
                 p_name: businessName,
