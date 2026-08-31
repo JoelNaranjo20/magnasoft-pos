@@ -18,6 +18,7 @@
     ],
     "win": {
         "icon": "build/icon.ico",
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com",
         "target": [
             {
                 "target": "nsis",

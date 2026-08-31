@@ -21,4 +21,8 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
+# Code Signing Certificates
+certs/
+*.pfx
+*.key
+*.p12
