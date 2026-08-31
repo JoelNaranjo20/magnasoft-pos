@@ -21,7 +21,9 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
-# Code Signing Certificates
+*.sw?
+
+# Certificados / claves privadas — nunca versionar
 certs/
 *.pfx
 *.key
