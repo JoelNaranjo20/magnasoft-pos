@@ -108,7 +108,7 @@ Donde `get_my_business_id()` obtiene el `business_id` del JWT del usuario autent
 | `merge_customers(p_target_id, p_source_ids)` | **Unificar clientes**: Transfiere puntos, visitas, reasigna FK (sales, debts, vehicles), verifica huérfanas, y elimina sources |
 | `deduct_product_stock(p_id, p_quantity)` | Descuento atómico de inventario |
 | `process_debt_payment(p_debt_id, p_amount, p_payment_method, p_cash_session_id, p_notes)` | Procesa pago de deuda |
-| `reset_business_data_modules(p_business_id, p_modules)` | Resetea datos del negocio por módulo |
+| `reset_business_data_modules(p_business_id, p_delete_sales, p_delete_cash, p_delete_customers, p_delete_workers, p_delete_products, p_delete_queue, p_delete_central_cash, p_delete_creditors, p_delete_tables)` | Resetea datos del negocio por módulo (usado por "Limpiar Datos" en el panel SaaS) |
 | `create_and_link_business(p_email, p_business_name, p_business_type)` | Crea negocio y vincula usuario |
 | `activate_business_with_code(p_code, p_hwid, p_business_name)` | Activa licencia con código |
 

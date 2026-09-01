@@ -32,7 +32,9 @@ export default function SaasTenantsPage() {
         customers: false,
         workers: false,
         products: false,
-        queue: false
+        queue: false,
+        creditors: false,
+        tables: false
     });
     const [resetConfirmation, setResetConfirmation] = useState('');
     const [isResetting, setIsResetting] = useState(false);
@@ -96,7 +98,7 @@ export default function SaasTenantsPage() {
             return;
         }
 
-        if (!resetOptions.sales && !resetOptions.cash && !resetOptions.centralCash && !resetOptions.customers && !resetOptions.workers && !resetOptions.products && !resetOptions.queue) {
+        if (!resetOptions.sales && !resetOptions.cash && !resetOptions.centralCash && !resetOptions.customers && !resetOptions.workers && !resetOptions.products && !resetOptions.queue && !resetOptions.creditors && !resetOptions.tables) {
             alert('Debes seleccionar al menos un módulo para limpiar.');
             return;
         }
@@ -111,7 +113,9 @@ export default function SaasTenantsPage() {
                 p_delete_customers: resetOptions.customers,
                 p_delete_workers: resetOptions.workers,
                 p_delete_products: resetOptions.products,
-                p_delete_queue: resetOptions.queue
+                p_delete_queue: resetOptions.queue,
+                p_delete_creditors: resetOptions.creditors,
+                p_delete_tables: resetOptions.tables
             });
 
             if (error) throw error;
@@ -119,7 +123,7 @@ export default function SaasTenantsPage() {
             alert(`Datos limpiados correctamente para el negocio: ${selectedResetTenant.businessName}`);
             setShowResetModal(false);
             setResetConfirmation('');
-            setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false });
+            setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false, creditors: false, tables: false });
             setSelectedResetTenant(null);
         } catch (error: any) {
             console.error('Error al reiniciar datos:', error);
@@ -348,7 +352,7 @@ export default function SaasTenantsPage() {
                                         className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
                                     />
                                     <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                                        Productos y servicios
+                                        Productos, servicios y categorías
                                     </span>
                                 </label>
 
@@ -363,10 +367,34 @@ export default function SaasTenantsPage() {
                                         Cola de servicio
                                     </span>
                                 </label>
+
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.creditors}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, creditors: e.target.checked })}
+                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                        Acreedores (deudas y pagos)
+                                    </span>
+                                </label>
+
+                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={resetOptions.tables}
+                                        onChange={(e) => setResetOptions({ ...resetOptions, tables: e.target.checked })}
+                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                    />
+                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                        Mesas (restaurante)
+                                    </span>
+                                </label>
                             </div>
 
                             <button
-                                onClick={() => setResetOptions({ sales: true, cash: true, centralCash: true, customers: true, workers: true, products: true, queue: true })}
+                                onClick={() => setResetOptions({ sales: true, cash: true, centralCash: true, customers: true, workers: true, products: true, queue: true, creditors: true, tables: true })}
                                 className="w-full mb-6 py-2.5 border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
                             >
                                 Seleccionar Todo
@@ -390,7 +418,7 @@ export default function SaasTenantsPage() {
                                     onClick={() => {
                                         setShowResetModal(false);
                                         setResetConfirmation('');
-                                        setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false });
+                                        setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false, creditors: false, tables: false });
                                     }}
                                     className="flex-1 py-3.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-sm"
                                 >

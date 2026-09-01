@@ -476,7 +476,9 @@ export async function purgeBusinessData(
         workers?: boolean;
         products?: boolean;
         queue?: boolean;
-    } = { sales: true, cash: true, centralCash: true, customers: true, workers: true, products: true, queue: true }
+        creditors?: boolean;
+        tables?: boolean;
+    } = { sales: true, cash: true, centralCash: true, customers: true, workers: true, products: true, queue: true, creditors: true, tables: true }
 ): Promise<{ success: boolean; error?: string; deleted?: Record<string, number> }> {
     try {
         if (!businessId) return { success: false, error: 'businessId requerido' };
@@ -490,7 +492,9 @@ export async function purgeBusinessData(
             p_delete_customers: options.customers || false,
             p_delete_workers: options.workers || false,
             p_delete_products: options.products || false,
-            p_delete_queue: options.queue || false
+            p_delete_queue: options.queue || false,
+            p_delete_creditors: options.creditors || false,
+            p_delete_tables: options.tables || false
         });
 
         if (error) {
