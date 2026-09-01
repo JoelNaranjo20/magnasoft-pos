@@ -29,6 +29,15 @@ se sume en la Caja Central.
 
 ---
 
+## Clarifications
+
+### Session 2026-08-31
+
+- Q: Si el turno se abrió con un monto ≠ Base Diaria, ¿con qué valor se pre-llena "Base Próximo Día" en el Cierre? → A: Siempre la Base Diaria configurada (monto fijo), sin importar el `opening_balance`.
+- Q: Al editar el monto de la base en Apertura o Cierre, ¿se pide PIN? → A: Sí — se solicita el PIN Maestro del negocio ya configurado (`business.pin`, mismo de `SecurityPinModal`).
+
+---
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Configurar la Base Diaria de Caja (Priority: P1)
@@ -64,10 +73,11 @@ Central refleje solo el dinero que realmente se acumuló.
 
 **Why this priority**: Es el objetivo central del requerimiento del usuario.
 
-**Independent Test**: Con una Base Diaria de $100.000 configurada, cerrar una caja con
-$500.000 de ventas en efectivo y verificar en el dashboard de Caja Central que el
-Balance Total aumentó en $400.000 (no $500.000 ni $500.000−$100.000−$100.000), y que
-**no** aparece ningún movimiento etiquetado "Base próximo día".
+**Independent Test**: Con una Base Diaria de $100.000 configurada (y sesión abierta con
+`opening_balance` = $100.000), cerrar una caja con $500.000 de ventas en efectivo y
+verificar en el dashboard de Caja Central que el Balance Total aumentó en $500.000 (el
+efectivo del día depositado), **no** en $600.000 ni en $400.000, y que **no** aparece
+ningún movimiento etiquetado "Base próximo día".
 
 **Acceptance Scenarios**:
 
@@ -76,10 +86,16 @@ Balance Total aumentó en $400.000 (no $500.000 ni $500.000−$100.000−$100.00
    base.
 2. **Given** que cierro la caja, **When** reviso los movimientos de Caja Central,
    **Then** no existe ningún movimiento de egreso "Base próximo día".
-3. **Given** que cierro caja durante varios días seguidos con la misma Base Diaria,
+3. **Given** el turno se abrió con `opening_balance` distinto de la Base Diaria, **When**
+   abro el Cierre, **Then** "Base Próximo Día" se pre-llena con la Base Diaria
+   configurada (no con el `opening_balance`).
+4. **Given** intento editar el monto de "Base Próximo Día" en el Cierre, **When** cambio
+   el valor, **Then** el sistema solicita el PIN Maestro; con PIN correcto se aplica el
+   cambio, con PIN incorrecto o cancelado el valor vuelve a la Base Diaria.
+5. **Given** que cierro caja durante varios días seguidos con la misma Base Diaria,
    **When** comparo el total de Caja Central con la suma de los depósitos reales,
    **Then** coinciden (no hay descuadre acumulado por la base).
-4. **Given** que la Base Diaria configurada es $0, **When** cierro la caja, **Then** el
+6. **Given** que la Base Diaria configurada es $0, **When** cierro la caja, **Then** el
    comportamiento es el de "no se retiene base" y todo el efectivo del día baja a la
    Caja Central.
 
@@ -102,11 +118,14 @@ puede editar con el teclado numérico, y que la sesión se abre con el valor mos
 
 1. **Given** una Base Diaria configurada mayor que cero, **When** abro el modal de
    Apertura de Caja, **Then** el monto inicial aparece pre-cargado con ese valor.
-2. **Given** el monto pre-cargado, **When** lo modifico con el teclado numérico y
-   confirmo, **Then** la sesión se abre con el valor que quedó en pantalla (no con el
-   valor configurado).
-3. **Given** una Base Diaria de $0 o sin configurar, **When** abro el modal de
-   Apertura, **Then** el monto inicial arranca en cero como hoy.
+2. **Given** el monto pre-cargado, **When** intento modificarlo, **Then** el sistema
+   solicita el PIN Maestro; tras PIN correcto puedo editarlo con el teclado numérico y
+   la sesión se abre con el valor que quedó en pantalla (no con el valor configurado).
+3. **Given** que cancelo el PIN o lo ingreso mal, **When** vuelvo al modal de Apertura,
+   **Then** el monto inicial permanece en la Base Diaria configurada.
+4. **Given** una Base Diaria de $0 o sin configurar, **When** abro el modal de
+   Apertura, **Then** el monto inicial arranca en cero como hoy (sin solicitar PIN si no
+   hay PIN configurado).
 
 ---
 
@@ -115,11 +134,15 @@ puede editar con el teclado numérico, y que la sesión se abre con el valor mos
 - **Base mayor que el efectivo contado al cierre**: si la base configurada supera el
   efectivo físico disponible, el sistema debe evitar registrar un depósito negativo a
   Caja Central y advertir/limitar el monto retenido al efectivo disponible.
-- **Admin edita la base en el cierre**: el valor editado esa vez manda sobre el
-  configurado, sin cambiar la configuración global.
-- **La Base Diaria cambia entre la apertura y el cierre del mismo turno**: el cierre usa
-  el valor vigente al momento del cierre (pre-cargado, editable), independientemente de
-  con cuánto se abrió la sesión.
+- **Admin edita la base en Apertura o Cierre**: el sistema pide el PIN Maestro antes de
+  permitir la edición. El valor editado esa vez manda sobre el configurado, sin cambiar
+  la configuración global.
+- **Negocio sin PIN configurado (`business.pin` vacío)**: la edición del monto de la base
+  se permite sin solicitud de PIN (no se puede exigir un secreto inexistente).
+- **La Base Diaria cambia entre la apertura y el cierre del mismo turno**: tanto la
+  Apertura como el Cierre usan el valor de la Base Diaria vigente al momento en que se
+  abre cada modal (pre-cargado, editable con PIN), independientemente del `opening_balance`
+  con que se abrió la sesión.
 - **Primera sesión tras configurar la base**: no hay sesión previa; la apertura propone
   la base configurada igualmente.
 - **Base configurada con decimales o valor no entero**: se normaliza al formato de
@@ -137,11 +160,12 @@ puede editar con el teclado numérico, y que la sesión se abre con el valor mos
 - **FR-003**: Cuando un negocio no tiene Base Diaria configurada, el sistema DEBE
   tratarla como $0 (sin base retenida).
 - **FR-004**: En la Apertura de Caja, el sistema DEBE pre-cargar el "Monto Inicial en
-  Efectivo" con la Base Diaria configurada, permitiendo al administrador editarlo antes
-  de confirmar. La sesión se abre con el valor mostrado en pantalla.
+  Efectivo" con la Base Diaria configurada. El administrador PUEDE editarlo antes de
+  confirmar (ver FR-012). La sesión se abre con el valor mostrado en pantalla.
 - **FR-005**: En el Cierre de Caja, el sistema DEBE pre-cargar el monto de base a
-  retener con la Base Diaria configurada, permitiendo al administrador editarlo esa vez
-  sin alterar la configuración global.
+  retener **siempre con la Base Diaria configurada**, con independencia del
+  `opening_balance` con que se abrió la sesión. El administrador PUEDE editarlo esa vez
+  (ver FR-012) sin alterar la configuración global.
 - **FR-006**: Al cerrar la caja, el sistema NO DEBE registrar ningún movimiento en la
   Caja Central que represente la base retenida (se elimina el egreso "Base próximo día").
 - **FR-007**: Al cerrar la caja, el ingreso de efectivo a la Caja Central DEBE
@@ -157,6 +181,13 @@ puede editar con el teclado numérico, y que la sesión se abre con el valor mos
 - **FR-011**: La documentación `docs/features/cash-flow.md` DEBE actualizarse para
   reflejar el nuevo flujo de apertura (base predeterminada) y cierre (base excluida de
   Caja Central, sin movimiento "Base próximo día").
+- **FR-012**: Editar el monto de la base —tanto el "Monto Inicial en Efectivo" en la
+  Apertura como "Base Próximo Día" en el Cierre— DEBE requerir el PIN Maestro del negocio
+  ya configurado (validado contra `business.pin`, el mismo mecanismo que `SecurityPinModal`
+  usa para acciones protegidas del POS). Si el PIN es incorrecto o se cancela, el campo
+  conserva la Base Diaria configurada. Si el negocio no tiene PIN configurado, la edición
+  se permite sin solicitud. No se introduce un nuevo módulo protegido ni un toggle de
+  configuración para esto.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -164,7 +195,8 @@ puede editar con el teclado numérico, y que la sesión se abre con el valor mos
   Ausencia = 0. Se administra desde Configuración del POS de escritorio. Se consume en
   Apertura y Cierre de Caja.
 - **Sesión de Caja**: su balance de apertura (`opening_balance`) se origina por defecto
-  de la Base Diaria, pero queda registrado con el valor real con que se abrió (editable).
+  de la Base Diaria; queda registrado con el valor real con que se abrió (editable con
+  PIN Maestro, ver FR-012).
 - **Movimiento de Caja Central**: al cerrar caja deja de recibir el egreso que
   representaba la base del día siguiente; solo recibe el/los ingreso(s) por el efectivo y
   transferencias efectivamente depositados.
@@ -195,14 +227,19 @@ puede editar con el teclado numérico, y que la sesión se abre con el valor mos
   Se añade como propiedad nueva sin cambiar firmas existentes.
 - Solo administradores pueden abrir/cerrar caja y acceder a Configuración (regla ya
   vigente); no se añaden nuevos roles ni permisos.
+- El "PIN Maestro" es `business.pin`, el mismo que valida `SecurityPinModal` para
+  acciones protegidas del POS. No se añade un toggle de módulo protegido para la base:
+  su edición siempre pide PIN cuando hay PIN configurado.
 - No hay migración ni backfill: el usuario borrará todos los datos del negocio y el
   sistema arranca de cero, por lo que no existen movimientos "Base próximo día"
   históricos que reconciliar.
-- La fórmula exacta del ingreso de efectivo a Caja Central en el cierre (para excluir la
-  base sin restarla dos veces ni provocar descuadre) se define en la fase de Plan. La
-  intención de negocio es: la Caja Central recibe el efectivo realmente depositado y la
-  base permanece físicamente en la registradora como `opening_balance` del turno
-  siguiente.
+- Fórmula del cierre (resuelta en el Plan): el ingreso de efectivo a Caja Central sigue
+  siendo el efectivo que entró en la sesión (`cashIngresos`), que **ya excluye** el
+  `opening_balance`; basta con **eliminar el movimiento de egreso "Base próximo día"**
+  para que la base no entre ni se reste dos veces. Con Apertura y Cierre proponiendo
+  ambos la Base Diaria, `opening_balance == Base Diaria` en operación normal y el total
+  de Caja Central = suma de depósitos reales (descuadre = 0). El monto de base retenida
+  se conserva sólo como dato (`metadata.next_day_base`), sin generar movimiento.
 - El formato de moneda es pesos colombianos sin decimales, consistente con el resto del
   POS.
 - No se introduce lógica condicionada por `business_type`; la Base Diaria aplica a

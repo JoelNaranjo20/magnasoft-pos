@@ -12,12 +12,18 @@ Añadir un ajuste **"Base Diaria de Caja"** (monto en efectivo, uno por negocio)
    tabla existente `business_settings` (`setting_type = 'cash'`, `value = { daily_base }`)
    — **sin migración SQL**.
 2. Se expone en la store compartida `useBusinessStore` como `dailyCashBase`.
-3. **Apertura de Caja** pre-carga el monto inicial con `dailyCashBase` (editable).
-4. **Cierre de Caja** pre-carga la base a retener con `dailyCashBase` (editable) y
-   **elimina el movimiento de egreso `💵 Base próximo día`** de la Caja Central. El
-   ingreso de efectivo a Caja Central ya excluye de forma natural el `opening_balance`
-   (que es físicamente la base heredada del día anterior), por lo que retirar ese egreso
-   basta para que la base nunca entre ni se sume a la Caja Central, sin descuadre.
+3. **Apertura de Caja** pre-carga el monto inicial con `dailyCashBase`; editarlo pide el
+   PIN Maestro (FR-012).
+4. **Cierre de Caja** pre-carga la base a retener **siempre con `dailyCashBase`**
+   (editar pide PIN, FR-012) y **elimina el movimiento de egreso `💵 Base próximo día`**
+   de la Caja Central. El ingreso de efectivo a Caja Central ya excluye de forma natural
+   el `opening_balance` (que es físicamente la base heredada del día anterior), por lo
+   que retirar ese egreso basta para que la base nunca entre ni se sume a la Caja
+   Central, sin descuadre.
+
+El gate de PIN reutiliza el componente existente `SecurityPinModal`
+(`apps/desktop/src/components/modals/SecurityPinModal.tsx`, valida contra `business.pin`);
+no se crea componente nuevo ni módulo protegido.
 
 Alcance: `apps/desktop` + `apps/shared`. No se toca `apps/web`, ni RPCs, ni el esquema.
 
@@ -88,8 +94,9 @@ apps/
             ├── admin/config/
             │   └── GeneralSettings.tsx  # MODIFICADO: sección "Caja" con campo "Base Diaria de Caja"; upsert business_settings {setting_type:'cash', value:{daily_base}}; refresca store tras guardar
             └── modals/
-                ├── OpenSessionModal.tsx # MODIFICADO: estado `amount` inicial = dailyCashBase (string), editable con numpad; la sesión abre con el valor en pantalla
-                └── CloseSessionModal.tsx# MODIFICADO: nextDayBase por defecto = dailyCashBase (no opening_balance); ELIMINAR el INSERT de central_cash_movements type:'expense' "💵 Base próximo día"; ajustar textos de la tarjeta "Base Próximo Día"
+                ├── OpenSessionModal.tsx # MODIFICADO: estado `amount` inicial = dailyCashBase (string); editar pide PIN vía SecurityPinModal; la sesión abre con el valor en pantalla
+                ├── CloseSessionModal.tsx# MODIFICADO: nextDayBase SIEMPRE = dailyCashBase (no opening_balance); editar pide PIN vía SecurityPinModal; ELIMINAR el INSERT de central_cash_movements type:'expense' "💵 Base próximo día"; ajustar textos de la tarjeta "Base Próximo Día"
+                └── SecurityPinModal.tsx # SIN CAMBIOS — se reutiliza tal cual (props onSuccess/onCancel/title/description)
 
 docs/
 └── features/

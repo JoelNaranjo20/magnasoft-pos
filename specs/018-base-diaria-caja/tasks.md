@@ -70,26 +70,27 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 ### Implementation for User Story 2
 
-- [ ] T008 [P] [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, efecto `fetchTotals`: cambiar el prefill de `nextDayBase` de `cashSession.opening_balance` a `useBusinessStore.getState().dailyCashBase` (fallback `0`). Mantener el input editable (FR-005).
+- [ ] T008 [P] [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, efecto `fetchTotals`: cambiar el prefill de `nextDayBase` de `cashSession.opening_balance` a `useBusinessStore.getState().dailyCashBase` (fallback `0`), **siempre** (FR-005, aclaración 2026-08-31). Mantener el input editable.
 - [ ] T009 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, `handleConfirmClose`: **eliminar** por completo el bloque `if (safeNextDayBase > 0) { ... INSERT central_cash_movements type:'expense' description: '💵 Base próximo día …' ... }`. NO tocar los `INSERT` de ingreso efectivo/transferencia.
 - [ ] T010 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`: conservar el cálculo `safeNextDayBase = Math.max(0, Math.min(nextDayBase, totalCounted))` y seguir incluyendo `next_day_base: safeNextDayBase` en el `metadata` del movimiento de ingreso en efectivo (trazabilidad). Verificar que ninguna otra rama dependa del egreso eliminado.
 - [ ] T011 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, tarjeta "Base Próximo Día": quitar el texto "Se descuenta de Caja Central"; cambiar el texto de ayuda a "Se queda en la registradora para la apertura de mañana". Mantener input, clamp y el mensaje `Se dejarán {monto} en caja para el próximo turno`.
-- [ ] T012 [US2] Revisar `handleConfirmClose` en busca de shadowing de variables introducido por los cambios (riesgo TDZ con Vite en build de producción — Constitución V).
+- [ ] T012 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`: gate de PIN al editar "Base Próximo Día" (FR-012). Importar `SecurityPinModal`; al primer intento de cambiar el valor (o al enfocar el input) y si el negocio tiene `business.pin`, mostrar `<SecurityPinModal title="Editar base" description="Ingrese el PIN Maestro para cambiar la base." onSuccess={() => setBaseUnlocked(true)} onCancel={...} />`; hasta desbloquear, el input queda `readOnly` con el valor de `dailyCashBase`. Si no hay PIN configurado, editable directo. `onCancel` / PIN incorrecto → el valor vuelve a `dailyCashBase`.
+- [ ] T013 [US2] Revisar `handleConfirmClose` (y el nuevo estado del gate de PIN) en busca de shadowing de variables introducido por los cambios (riesgo TDZ con Vite en build de producción — Constitución V).
 
-**Checkpoint**: US2 funcional e independiente — cerrar caja no crea el egreso de base y el total de Caja Central no pierde el monto de la base.
+**Checkpoint**: US2 funcional e independiente — cerrar caja no crea el egreso de base, el total de Caja Central no pierde el monto de la base, y editar la base pide PIN.
 
 ---
 
 ## Phase 5: User Story 3 - Apertura de caja con base predeterminada (Priority: P2)
 
-**Goal**: Al abrir caja, el "Monto Inicial en Efectivo" ya viene propuesto con la Base Diaria configurada, editable con el numpad.
+**Goal**: Al abrir caja, el "Monto Inicial en Efectivo" ya viene propuesto con la Base Diaria configurada; editarlo pide PIN.
 
-**Independent Test**: Con Base Diaria `100.000`, abrir el modal de Apertura y ver `100.000` pre-cargado; editarlo a `120.000` y confirmar → `cash_sessions.opening_balance = 120000`. Con Base Diaria `0` → arranca en `0` (US3 #1-#3).
+**Independent Test**: Con Base Diaria `100.000`, abrir el modal de Apertura y ver `100.000` pre-cargado; intentar editar → pide PIN; con PIN correcto cambiar a `120.000` y confirmar → `cash_sessions.opening_balance = 120000`. Con Base Diaria `0` → arranca en `0` sin pedir PIN (US3 #1-#4).
 
 ### Implementation for User Story 3
 
-- [ ] T013 [P] [US3] En `apps/desktop/src/components/modals/OpenSessionModal.tsx`: inicializar el estado `amount` con la Base Diaria — usar un `useEffect` que haga `setAmount(String(useBusinessStore.getState().dailyCashBase || 0))` cuando el valor esté disponible, sin pisar una edición manual en curso. `'0'` cuando la base es 0/indefinida.
-- [ ] T014 [US3] En `apps/desktop/src/components/modals/OpenSessionModal.tsx`: confirmar que `handleOpenSession` sigue usando `parseFloat(amount)` (el valor en pantalla) para `opening_balance`, no la base configurada (US3 #2). Numpad y edición manual intactos.
+- [ ] T014 [P] [US3] En `apps/desktop/src/components/modals/OpenSessionModal.tsx`: inicializar el estado `amount` con la Base Diaria — `useEffect` que haga `setAmount(String(useBusinessStore.getState().dailyCashBase || 0))` cuando el valor esté disponible, sin pisar una edición manual en curso. `'0'` cuando la base es 0/indefinida.
+- [ ] T015 [US3] En `apps/desktop/src/components/modals/OpenSessionModal.tsx`: gate de PIN al editar el monto (FR-012). Importar `SecurityPinModal`; si el negocio tiene `business.pin`, bloquear numpad + input hasta desbloquear con PIN (`<SecurityPinModal title="Editar base" ... onSuccess={() => setAmountUnlocked(true)} />`); sin PIN configurado, editable directo. Cancelar / PIN incorrecto → `amount` vuelve a `dailyCashBase`. `handleOpenSession` sigue usando `parseFloat(amount)` (el valor en pantalla), no la base configurada.
 
 **Checkpoint**: Las 3 user stories funcionan de forma independiente.
 
@@ -97,10 +98,10 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T015 [P] Actualizar `docs/features/cash-flow.md`: (a) Apertura — el monto inicial se pre-carga con la Base Diaria configurada (editable); (b) Cierre — la base ya no baja a Caja Central y no se inserta el movimiento "Base próximo día"; (c) tabla "Caja Central (useCentralCash)" — quitar la fila `CloseSessionModal | expense | Base del día siguiente`; (d) nota del nuevo ajuste `business_settings` `setting_type='cash'`.
-- [ ] T016 [P] (Limpieza opcional, no bloqueante) En `apps/shared/hooks/useCentralCash.ts`, `monthlySummary`: marcar o retirar las ramas inertes `isBaseProximoDia` / `nextDayBaseExpenses` (ya no habrá movimientos que coincidan). Si se retira, verificar que ningún consumidor de `monthlySummary` lea `nextDayBaseExpenses`.
-- [ ] T017 `pnpm build` en `apps/desktop` y `apps/shared` sin errores de `tsc -b`. Verificar que `apps/web` sigue compilando (código compartido de `useBusinessStore`).
-- [ ] T018 Ejecutar la validación completa de [quickstart.md](./quickstart.md) en `electron:dev`: SC-001 a SC-005 + los 4 edge cases + no regresión de `PaymentModal.tsx` (venta efectivo/transferencia/mixta) y de abrir/cerrar caja repetido.
+- [ ] T016 [P] Actualizar `docs/features/cash-flow.md`: (a) Apertura — el monto inicial se pre-carga con la Base Diaria configurada (editar pide PIN); (b) Cierre — la base ya no baja a Caja Central y no se inserta el movimiento "Base próximo día"; (c) tabla "Caja Central (useCentralCash)" — quitar la fila `CloseSessionModal | expense | Base del día siguiente`; (d) nota del nuevo ajuste `business_settings` `setting_type='cash'` y del gate de PIN.
+- [ ] T017 [P] (Limpieza opcional, no bloqueante) En `apps/shared/hooks/useCentralCash.ts`, `monthlySummary`: marcar o retirar las ramas inertes `isBaseProximoDia` / `nextDayBaseExpenses` (ya no habrá movimientos que coincidan). Si se retira, verificar que ningún consumidor de `monthlySummary` lea `nextDayBaseExpenses`.
+- [ ] T018 `pnpm build` en `apps/desktop` y `apps/shared` sin errores de `tsc -b`. Verificar que `apps/web` sigue compilando (código compartido de `useBusinessStore`).
+- [ ] T019 Ejecutar la validación completa de [quickstart.md](./quickstart.md) en `electron:dev`: SC-001 a SC-005 + los edge cases (incl. gate de PIN y negocio sin PIN) + no regresión de `PaymentModal.tsx` (venta efectivo/transferencia/mixta) y de abrir/cerrar caja repetido.
 
 ---
 
@@ -110,7 +111,7 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 - **Setup (Phase 1)**: sin dependencias.
 - **Foundational (Phase 2)**: depende de Setup. **BLOQUEA** las 3 user stories (todas usan `dailyCashBase`).
-- **User Stories (Phase 3-5)**: dependen de Foundational. Entre sí son independientes (archivos distintos: `GeneralSettings.tsx` / `CloseSessionModal.tsx` / `OpenSessionModal.tsx`).
+- **User Stories (Phase 3-5)**: dependen de Foundational. Entre sí son independientes (archivos distintos: `GeneralSettings.tsx` / `CloseSessionModal.tsx` / `OpenSessionModal.tsx`). `SecurityPinModal.tsx` se reutiliza sin modificar.
 - **Polish (Phase 6)**: depende de las user stories que se quieran entregar.
 
 ### User Story Dependencies
@@ -122,13 +123,13 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 ### Within Each User Story
 
 - Tareas del mismo archivo → secuenciales.
-- Sin modelos/servicios/endpoints (feature de frontend); orden = estado/carga → guardado/persistencia → UI/textos.
+- Sin modelos/servicios/endpoints (feature de frontend); orden = estado/carga → lógica/persistencia → UI/textos → gate de PIN.
 
 ### Parallel Opportunities
 
 - T003 y T004 son el mismo archivo → **secuenciales**.
-- Tras Foundational: US1 (T005-T007), US2 (T008-T012) y US3 (T013-T014) pueden ir **en paralelo** (archivos distintos). Los `[P]` marcan la tarea de arranque de cada stream.
-- T015 y T016 en paralelo (archivos distintos) durante Polish.
+- Tras Foundational: US1 (T005-T007), US2 (T008-T013) y US3 (T014-T015) pueden ir **en paralelo** (archivos distintos). Los `[P]` marcan la tarea de arranque de cada stream.
+- T016 y T017 en paralelo (archivos distintos) durante Polish.
 
 ---
 
@@ -137,8 +138,8 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 ```
 # Tres streams en paralelo (un dev por stream):
 Stream A (US1): T005 → T006 → T007   en apps/desktop/src/components/admin/config/GeneralSettings.tsx
-Stream B (US2): T008 → T009 → T010 → T011 → T012   en apps/desktop/src/components/modals/CloseSessionModal.tsx
-Stream C (US3): T013 → T014   en apps/desktop/src/components/modals/OpenSessionModal.tsx
+Stream B (US2): T008 → T009 → T010 → T011 → T012 → T013   en apps/desktop/src/components/modals/CloseSessionModal.tsx
+Stream C (US3): T014 → T015   en apps/desktop/src/components/modals/OpenSessionModal.tsx
 ```
 
 ---
@@ -148,12 +149,12 @@ Stream C (US3): T013 → T014   en apps/desktop/src/components/modals/OpenSessio
 ### MVP (User Stories P1: US1 + US2)
 
 1. Phase 1 Setup → Phase 2 Foundational (store).
-2. US1 (configurar la base) + US2 (que no entre a Caja Central).
+2. US1 (configurar la base) + US2 (que no entre a Caja Central, editar pide PIN).
 3. **STOP y VALIDAR**: quickstart §1 y §3. En este punto el requerimiento central del usuario está cubierto.
 
 ### Incremental
 
-4. Añadir US3 (apertura con base predeterminada) → validar quickstart §2.
+4. Añadir US3 (apertura con base predeterminada + PIN) → validar quickstart §2.
 5. Polish: doc `cash-flow.md`, build, quickstart completo.
 
 ---
@@ -161,6 +162,7 @@ Stream C (US3): T013 → T014   en apps/desktop/src/components/modals/OpenSessio
 ## Notes
 
 - `[P]` = archivos distintos, sin dependencias pendientes.
-- `CloseSessionModal.tsx` y `OpenSessionModal.tsx` son `// @ts-nocheck` — no se introduce deuda nueva, pero sí verificación anti-shadowing (T012).
+- `CloseSessionModal.tsx` y `OpenSessionModal.tsx` son `// @ts-nocheck` — no se introduce deuda nueva, pero sí verificación anti-shadowing (T013).
+- `SecurityPinModal` se reutiliza tal cual (`apps/desktop/src/components/modals/SecurityPinModal.tsx`, props `onSuccess`/`onCancel`/`title`/`description`, valida contra `business.pin`).
 - No tocar `PaymentModal.tsx`. No tocar `apps/web`. Sin migración SQL.
 - Commit por tarea o por grupo lógico; mensajes Conventional Commits (`feat(caja)`, `feat(shared)`, `docs(caja)`).

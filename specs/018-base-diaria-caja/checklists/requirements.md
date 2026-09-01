@@ -36,6 +36,10 @@
   Se conservan de forma deliberada: son decisiones de alcance ya acordadas con el usuario
   y siguen la convención de specs previas del proyecto (ver 016). No bloquean la fase de
   planificación.
-- La fórmula exacta del ingreso de efectivo a Caja Central en el cierre queda
-  explícitamente diferida al Plan (documentado en *Assumptions*), no como
-  [NEEDS CLARIFICATION].
+- La fórmula del ingreso de efectivo a Caja Central en el cierre quedó **resuelta** en el
+  Plan y la sesión de clarificación 2026-08-31 (ver `## Clarifications` en el spec):
+  eliminar el egreso "Base próximo día"; `cashIngresos` ya excluye `opening_balance`.
+- Clarificación 2026-08-31: (1) "Base Próximo Día" en el Cierre = **siempre** la Base
+  Diaria configurada; (2) editar el monto de la base (Apertura y Cierre) **requiere PIN
+  Maestro** (`business.pin` / `SecurityPinModal`) → nuevo **FR-012**. `plan.md` y
+  `tasks.md` deben actualizarse para incluir el gate de PIN.
