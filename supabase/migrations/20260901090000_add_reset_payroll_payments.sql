@@ -114,8 +114,9 @@ BEGIN
         DELETE FROM public.restaurant_tables WHERE business_id = p_business_id;
     END IF;
 
-    -- 11. Clear Payroll Payments (Nómina fija + comisiones) [NUEVO]
-    --     Borra SOLO el rastro del pago en Caja Central. No borra trabajadores
+    -- 11. Clear Payroll Payments and Commissions (Nómina fija + comisiones) [NUEVO]
+    --     Borra el rastro del pago en Caja Central Y las comisiones en sí
+    --     (pagadas o pendientes). NO borra a los trabajadores ni sus préstamos,
     --     ni el resto del historial financiero (ventas, abonos, acreedores).
     IF p_delete_payroll_payments THEN
         DELETE FROM public.central_cash_movements
@@ -123,10 +124,9 @@ BEGIN
           AND type = 'expense'
           AND (description ILIKE '%Pago de Nómina%' OR description ILIKE '%Pago comisiones a%');
 
-        -- Al borrar el pago, la comisión vuelve a quedar pendiente de cobro.
-        UPDATE public.worker_commissions
-        SET status = 'pending', paid_at = NULL
-        WHERE business_id = p_business_id AND status = 'paid';
+        -- Borra las comisiones en sí (no solo revierte el estado): quedan los
+        -- trabajadores, pero sin historial de comisiones ganadas/pagadas.
+        DELETE FROM public.worker_commissions WHERE business_id = p_business_id;
     END IF;
 
     -- The business and its general configuration are conserved.

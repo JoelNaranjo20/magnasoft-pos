@@ -608,7 +608,7 @@ export default function ConfigurationsPage() {
                                         )}
                                     </div>
                                     <p className="text-[11px] text-slate-400 -mt-3 mb-2 px-1">
-                                        "Pagos de nómina y comisiones" solo borra esos pagos del historial de Caja Central y revierte comisiones pagadas a pendientes — no toca a los trabajadores.
+                                        "Pagos de nómina y comisiones" borra el historial de pagos en Caja Central y las comisiones en sí (pagadas o pendientes) — los trabajadores se conservan.
                                     </p>
 
                                     <button
