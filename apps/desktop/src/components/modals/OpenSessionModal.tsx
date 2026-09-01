@@ -5,6 +5,7 @@ import { supabase, ensureSession } from '../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
 import { useAuthStore } from '@shared/store/useAuthStore';
+import { SecurityPinModal } from './SecurityPinModal';
 
 
 export const OpenSessionModal = () => {
@@ -13,8 +14,47 @@ export const OpenSessionModal = () => {
     const [loading, setLoading] = useState(false);
     const [workers, setWorkers] = useState<any[]>([]);
     const [selectedWorkerId, setSelectedWorkerId] = useState<string>('');
+    // Base Diaria de Caja: valor por defecto + gate de PIN al editar (FR-004, FR-012)
+    const [amountUnlocked, setAmountUnlocked] = useState(false);
+    const [hasPin, setHasPin] = useState(false);
+    const [showPinModal, setShowPinModal] = useState(false);
 
     const setCashSession = useSessionStore((state) => state.setCashSession);
+    const dailyCashBase = useBusinessStore((state) => state.dailyCashBase);
+
+    // Pre-cargar el monto inicial con la Base Diaria configurada.
+    // Reactivo: aplica también si la store carga el valor después de montar el modal.
+    // Solo sobreescribe mientras el campo sigue intacto ('0').
+    useEffect(() => {
+        setAmount((prev) => (prev === '0' && dailyCashBase > 0 ? String(dailyCashBase) : prev));
+    }, [dailyCashBase]);
+
+    // ¿El negocio tiene PIN Maestro? Se exige al editar el monto (FR-012)
+    useEffect(() => {
+        const loadPin = async () => {
+            const businessId = useBusinessStore.getState().id;
+            const { data } = await (supabase as any)
+                .from('business')
+                .select('pin')
+                .eq('id', businessId)
+                .maybeSingle();
+            setHasPin(!!(data?.pin && String(data.pin).length > 0));
+        };
+        loadPin();
+    }, []);
+
+    /**
+     * Bloquea la edición del monto solo cuando HAY una Base Diaria configurada (> 0) que proteger.
+     * Sin Base Diaria configurada → edición libre, como antes.
+     */
+    const baseLocked = hasPin && !amountUnlocked && dailyCashBase > 0;
+    const requireUnlock = () => {
+        if (baseLocked) {
+            setShowPinModal(true);
+            return true;
+        }
+        return false;
+    };
 
     useEffect(() => {
         const fetchWorkers = async () => {
@@ -49,6 +89,7 @@ export const OpenSessionModal = () => {
     }, []);
 
     const handleNumberClick = (num: string) => {
+        if (requireUnlock()) return;
         if (amount === '0') {
             setAmount(num);
         } else {
@@ -57,6 +98,7 @@ export const OpenSessionModal = () => {
     };
 
     const handleBackspace = () => {
+        if (requireUnlock()) return;
         if (amount.length > 1) {
             setAmount((prev) => prev.slice(0, -1));
         } else {
@@ -65,6 +107,7 @@ export const OpenSessionModal = () => {
     };
 
     const handleClear = () => {
+        if (requireUnlock()) return;
         setAmount('0');
     };
 
@@ -158,6 +201,14 @@ export const OpenSessionModal = () => {
 
     return (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center min-h-screen px-4 py-8 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm">
+            {showPinModal && (
+                <SecurityPinModal
+                    title="Editar base"
+                    description="Ingrese el PIN Maestro para cambiar el monto de apertura."
+                    onSuccess={() => { setAmountUnlocked(true); setShowPinModal(false); }}
+                    onCancel={() => setShowPinModal(false)}
+                />
+            )}
             <div className="w-full max-w-4xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-2xl bg-white dark:bg-slate-800 rounded-xl flex flex-col md:flex-row">
 
                 {/* Left Side: Form & Context */}
@@ -258,16 +309,18 @@ export const OpenSessionModal = () => {
                             <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">Monto Inicial en Efectivo</label>
                             <div className="relative group">
                                 <input
-                                    className="block w-full py-6 pl-12 pr-4 text-4xl font-bold border-2 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-primary"
+                                    className="block w-full py-6 pl-12 pr-4 text-4xl font-bold border-2 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-primary read-only:opacity-70 read-only:cursor-pointer"
                                     placeholder="0.00"
+                                    readOnly={baseLocked}
+                                    onFocus={() => requireUnlock()}
                                     onChange={(e) => {
+                                        if (requireUnlock()) return;
                                         const val = e.target.value;
                                         // Allow only numbers and one decimal point
                                         if (/^\d*\.?\d*$/.test(val)) {
                                             setAmount(val);
                                         }
                                     }}
-                                    autoFocus
                                     type="text"
                                     value={amount}
                                 />

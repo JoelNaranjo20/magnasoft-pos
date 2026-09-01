@@ -32,6 +32,8 @@ interface BusinessStore {
     logoUrl: string | null;
     protectedModules: string[];
     config: BusinessConfig;
+    /** Base Diaria de Caja (efectivo) — monto que se deja en la registradora para abrir el día siguiente. 0 si no está configurada. */
+    dailyCashBase: number;
     _realtimeChannel: any | null;
     isModuleEnabled: (moduleKey: string) => boolean;
     fetchBusinessProfile: () => Promise<void>;
@@ -48,6 +50,7 @@ export const useBusinessStore = create<BusinessStore>((set, get) => ({
     logoUrl: null,
     protectedModules: ['audit', 'config'],
     config: DEFAULT_CONFIG,
+    dailyCashBase: 0,
     _realtimeChannel: null,
     isModuleEnabled: (moduleKey: string) => {
         const config = get().config;
@@ -126,6 +129,16 @@ export const useBusinessStore = create<BusinessStore>((set, get) => ({
             if (securityData?.value?.protected_modules) {
                 set({ protectedModules: securityData.value.protected_modules });
             }
+
+            // 2b. Fetch Cash Settings — Base Diaria de Caja
+            const { data: cashData } = await (supabase as any)
+                .from('business_settings')
+                .select('value')
+                .eq('business_id', currentId)
+                .eq('setting_type', 'cash')
+                .maybeSingle();
+
+            set({ dailyCashBase: Number(cashData?.value?.daily_base ?? 0) || 0 });
 
             // 3. Subscribe to realtime changes (only if not already subscribed)
             if (!get()._realtimeChannel) {

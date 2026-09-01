@@ -28,8 +28,8 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 **Purpose**: Confirmar supuestos del plan antes de tocar código. Sin cambios de código.
 
-- [ ] T001 Verificar en el esquema Supabase que `business_settings` tiene `UNIQUE (business_id, setting_type)` y políticas RLS `SELECT/INSERT/UPDATE` por `business_id` sin filtrar por `setting_type` (ref: `supabase/migrations/20260207210000_refactor_business_settings.sql` y `20260207213000_fix_business_settings_rls.sql`). Confirmar que NO se requiere migración.
-- [ ] T002 Releer los 3 archivos objetivo y anotar los números de línea vigentes: `apps/shared/store/useBusinessStore.ts` (`fetchBusinessProfile`, bloque fetch de `security`), `apps/desktop/src/components/modals/CloseSessionModal.tsx` (prefill `nextDayBase`, bloque `handleConfirmClose` que inserta el egreso `💵 Base próximo día`), `apps/desktop/src/components/modals/OpenSessionModal.tsx` (estado `amount`).
+- [X] T001 Verificar en el esquema Supabase que `business_settings` tiene `UNIQUE (business_id, setting_type)` y políticas RLS `SELECT/INSERT/UPDATE` por `business_id` sin filtrar por `setting_type` (ref: `supabase/migrations/20260207210000_refactor_business_settings.sql` y `20260207213000_fix_business_settings_rls.sql`). Confirmar que NO se requiere migración. → Confirmado en planificación: `UNIQUE (business_id, setting_type)`, RLS por `business_id` sin filtro de tipo. Sin migración.
+- [X] T002 Releer los 3 archivos objetivo y anotar los números de línea vigentes: `apps/shared/store/useBusinessStore.ts` (`fetchBusinessProfile`, bloque fetch de `security`), `apps/desktop/src/components/modals/CloseSessionModal.tsx` (prefill `nextDayBase` ~L54, bloque egreso `💵 Base próximo día` ~L366-381 en `handleConfirmClose`), `apps/desktop/src/components/modals/OpenSessionModal.tsx` (estado `amount` ~L12, `handleOpenSession` ~L123).
 
 ---
 
@@ -39,8 +39,8 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 **⚠️ CRITICAL**: Ninguna user story puede completarse hasta terminar esta fase.
 
-- [ ] T003 En `apps/shared/store/useBusinessStore.ts`: añadir `dailyCashBase: number` a la interfaz `BusinessStore` y al estado inicial del `create(...)` con valor `0`. No modificar ninguna propiedad ni firma existente.
-- [ ] T004 En `apps/shared/store/useBusinessStore.ts`, dentro de `fetchBusinessProfile` (después del bloque que lee `business_settings` `setting_type='security'`): añadir un `SELECT value FROM business_settings WHERE business_id = currentId AND setting_type = 'cash'` con `.maybeSingle()`, y `set({ dailyCashBase: Number(data?.value?.daily_base ?? 0) || 0 })`. Envolver en try/catch como el bloque de `security`.
+- [X] T003 En `apps/shared/store/useBusinessStore.ts`: añadir `dailyCashBase: number` a la interfaz `BusinessStore` y al estado inicial del `create(...)` con valor `0`. No modificar ninguna propiedad ni firma existente.
+- [X] T004 En `apps/shared/store/useBusinessStore.ts`, dentro de `fetchBusinessProfile` (después del bloque que lee `business_settings` `setting_type='security'`): añadir un `SELECT value FROM business_settings WHERE business_id = currentId AND setting_type = 'cash'` con `.maybeSingle()`, y `set({ dailyCashBase: Number(data?.value?.daily_base ?? 0) || 0 })`. (El cuerpo de `fetchBusinessProfile` ya está en un try/catch único.)
 
 **Checkpoint**: `useBusinessStore.getState().dailyCashBase` disponible (0 si no hay ajuste). Las 3 user stories pueden arrancar en paralelo.
 
@@ -54,9 +54,9 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 ### Implementation for User Story 1
 
-- [ ] T005 [P] [US1] En `apps/desktop/src/components/admin/config/GeneralSettings.tsx`: añadir estado `dailyCashBase` (number) y una sección "Caja" con un input numérico "Base Diaria de Caja" (formato de moneda COP sin decimales, mínimo 0). Cargar el valor inicial en `fetchBusinessData` desde `business_settings` `setting_type='cash'` (`value.daily_base`), con fallback a `0` (FR-003) — mismo patrón que la carga de `security`.
-- [ ] T006 [US1] En `apps/desktop/src/components/admin/config/GeneralSettings.tsx`, en el guardado: `upsert` a `business_settings` con `{ business_id, setting_type: 'cash', value: { daily_base: <number> } }` y `{ onConflict: 'business_id,setting_type' }` (mismo patrón que el `upsert` de `security`, ~líneas 184-189). Tras éxito, `useBusinessStore.setState({ dailyCashBase: <number> })` para refresco optimista sin re-fetch.
-- [ ] T007 [US1] Validación de entrada en `GeneralSettings.tsx`: coerción a entero ≥ 0; valor vacío/`NaN` se guarda como `0`. Feedback visual de guardado consistente con el resto del formulario.
+- [X] T005 [P] [US1] En `apps/desktop/src/components/admin/config/GeneralSettings.tsx`: añadir estado `dailyCashBase` (number) y una sección "Caja" con un input numérico "Base Diaria de Caja" (formato de moneda COP sin decimales, mínimo 0). Cargar el valor inicial en `fetchBusinessData` desde `business_settings` `setting_type='cash'` (`value.daily_base`), con fallback a `0` (FR-003) — mismo patrón que la carga de `security`.
+- [X] T006 [US1] En `apps/desktop/src/components/admin/config/GeneralSettings.tsx`, en el guardado: `upsert` a `business_settings` con `{ business_id, setting_type: 'cash', value: { daily_base: <number> } }` y `{ onConflict: 'business_id,setting_type' }` (mismo patrón que el `upsert` de `security`, ~líneas 184-189). Tras éxito, `useBusinessStore.setState({ dailyCashBase: <number> })` para refresco optimista sin re-fetch.
+- [X] T007 [US1] Validación de entrada en `GeneralSettings.tsx`: coerción a entero ≥ 0; valor vacío/`NaN` se guarda como `0`. Feedback visual de guardado consistente con el resto del formulario.
 
 **Checkpoint**: US1 funcional e independiente — el ajuste persiste y `useBusinessStore.dailyCashBase` refleja el valor guardado.
 
@@ -70,12 +70,12 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 ### Implementation for User Story 2
 
-- [ ] T008 [P] [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, efecto `fetchTotals`: cambiar el prefill de `nextDayBase` de `cashSession.opening_balance` a `useBusinessStore.getState().dailyCashBase` (fallback `0`), **siempre** (FR-005, aclaración 2026-08-31). Mantener el input editable.
-- [ ] T009 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, `handleConfirmClose`: **eliminar** por completo el bloque `if (safeNextDayBase > 0) { ... INSERT central_cash_movements type:'expense' description: '💵 Base próximo día …' ... }`. NO tocar los `INSERT` de ingreso efectivo/transferencia.
-- [ ] T010 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`: conservar el cálculo `safeNextDayBase = Math.max(0, Math.min(nextDayBase, totalCounted))` y seguir incluyendo `next_day_base: safeNextDayBase` en el `metadata` del movimiento de ingreso en efectivo (trazabilidad). Verificar que ninguna otra rama dependa del egreso eliminado.
-- [ ] T011 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, tarjeta "Base Próximo Día": quitar el texto "Se descuenta de Caja Central"; cambiar el texto de ayuda a "Se queda en la registradora para la apertura de mañana". Mantener input, clamp y el mensaje `Se dejarán {monto} en caja para el próximo turno`.
-- [ ] T012 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`: gate de PIN al editar "Base Próximo Día" (FR-012). Importar `SecurityPinModal`; al primer intento de cambiar el valor (o al enfocar el input) y si el negocio tiene `business.pin`, mostrar `<SecurityPinModal title="Editar base" description="Ingrese el PIN Maestro para cambiar la base." onSuccess={() => setBaseUnlocked(true)} onCancel={...} />`; hasta desbloquear, el input queda `readOnly` con el valor de `dailyCashBase`. Si no hay PIN configurado, editable directo. `onCancel` / PIN incorrecto → el valor vuelve a `dailyCashBase`.
-- [ ] T013 [US2] Revisar `handleConfirmClose` (y el nuevo estado del gate de PIN) en busca de shadowing de variables introducido por los cambios (riesgo TDZ con Vite en build de producción — Constitución V).
+- [X] T008 [P] [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, efecto `fetchTotals`: cambiar el prefill de `nextDayBase` de `cashSession.opening_balance` a `useBusinessStore.getState().dailyCashBase` (fallback `0`), **siempre** (FR-005, aclaración 2026-08-31). Mantener el input editable.
+- [X] T009 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, `handleConfirmClose`: **eliminar** por completo el bloque `if (safeNextDayBase > 0) { ... INSERT central_cash_movements type:'expense' description: '💵 Base próximo día …' ... }`. NO tocar los `INSERT` de ingreso efectivo/transferencia.
+- [X] T010 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`: conservar el cálculo `safeNextDayBase = Math.max(0, Math.min(nextDayBase, totalCounted))` y seguir incluyendo `next_day_base: safeNextDayBase` en el `metadata` del movimiento de ingreso en efectivo (trazabilidad). Verificar que ninguna otra rama dependa del egreso eliminado.
+- [X] T011 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`, tarjeta "Base Próximo Día": quitar el texto "Se descuenta de Caja Central"; cambiar el texto de ayuda a "Se queda en la registradora para la apertura de mañana". Mantener input, clamp y el mensaje `Se dejarán {monto} en caja para el próximo turno`.
+- [X] T012 [US2] En `apps/desktop/src/components/modals/CloseSessionModal.tsx`: gate de PIN al editar "Base Próximo Día" (FR-012). Importar `SecurityPinModal`; al primer intento de cambiar el valor (o al enfocar el input) y si el negocio tiene `business.pin`, mostrar `<SecurityPinModal title="Editar base" description="Ingrese el PIN Maestro para cambiar la base." onSuccess={() => setBaseUnlocked(true)} onCancel={...} />`; hasta desbloquear, el input queda `readOnly` con el valor de `dailyCashBase`. Si no hay PIN configurado, editable directo. `onCancel` / PIN incorrecto → el valor vuelve a `dailyCashBase`.
+- [X] T013 [US2] Revisar `handleConfirmClose` (y el nuevo estado del gate de PIN) en busca de shadowing de variables introducido por los cambios (riesgo TDZ con Vite en build de producción — Constitución V).
 
 **Checkpoint**: US2 funcional e independiente — cerrar caja no crea el egreso de base, el total de Caja Central no pierde el monto de la base, y editar la base pide PIN.
 
@@ -89,8 +89,8 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 ### Implementation for User Story 3
 
-- [ ] T014 [P] [US3] En `apps/desktop/src/components/modals/OpenSessionModal.tsx`: inicializar el estado `amount` con la Base Diaria — `useEffect` que haga `setAmount(String(useBusinessStore.getState().dailyCashBase || 0))` cuando el valor esté disponible, sin pisar una edición manual en curso. `'0'` cuando la base es 0/indefinida.
-- [ ] T015 [US3] En `apps/desktop/src/components/modals/OpenSessionModal.tsx`: gate de PIN al editar el monto (FR-012). Importar `SecurityPinModal`; si el negocio tiene `business.pin`, bloquear numpad + input hasta desbloquear con PIN (`<SecurityPinModal title="Editar base" ... onSuccess={() => setAmountUnlocked(true)} />`); sin PIN configurado, editable directo. Cancelar / PIN incorrecto → `amount` vuelve a `dailyCashBase`. `handleOpenSession` sigue usando `parseFloat(amount)` (el valor en pantalla), no la base configurada.
+- [X] T014 [P] [US3] En `apps/desktop/src/components/modals/OpenSessionModal.tsx`: inicializar el estado `amount` con la Base Diaria — `useEffect` que haga `setAmount(String(useBusinessStore.getState().dailyCashBase || 0))` cuando el valor esté disponible, sin pisar una edición manual en curso. `'0'` cuando la base es 0/indefinida.
+- [X] T015 [US3] En `apps/desktop/src/components/modals/OpenSessionModal.tsx`: gate de PIN al editar el monto (FR-012). Importar `SecurityPinModal`; si el negocio tiene `business.pin`, bloquear numpad + input hasta desbloquear con PIN (`<SecurityPinModal title="Editar base" ... onSuccess={() => setAmountUnlocked(true)} />`); sin PIN configurado, editable directo. Cancelar / PIN incorrecto → `amount` vuelve a `dailyCashBase`. `handleOpenSession` sigue usando `parseFloat(amount)` (el valor en pantalla), no la base configurada.
 
 **Checkpoint**: Las 3 user stories funcionan de forma independiente.
 
@@ -98,10 +98,10 @@ Monorepo pnpm: `apps/shared/` (store compartida), `apps/desktop/src/` (POS Elect
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T016 [P] Actualizar `docs/features/cash-flow.md`: (a) Apertura — el monto inicial se pre-carga con la Base Diaria configurada (editar pide PIN); (b) Cierre — la base ya no baja a Caja Central y no se inserta el movimiento "Base próximo día"; (c) tabla "Caja Central (useCentralCash)" — quitar la fila `CloseSessionModal | expense | Base del día siguiente`; (d) nota del nuevo ajuste `business_settings` `setting_type='cash'` y del gate de PIN.
-- [ ] T017 [P] (Limpieza opcional, no bloqueante) En `apps/shared/hooks/useCentralCash.ts`, `monthlySummary`: marcar o retirar las ramas inertes `isBaseProximoDia` / `nextDayBaseExpenses` (ya no habrá movimientos que coincidan). Si se retira, verificar que ningún consumidor de `monthlySummary` lea `nextDayBaseExpenses`.
-- [ ] T018 `pnpm build` en `apps/desktop` y `apps/shared` sin errores de `tsc -b`. Verificar que `apps/web` sigue compilando (código compartido de `useBusinessStore`).
-- [ ] T019 Ejecutar la validación completa de [quickstart.md](./quickstart.md) en `electron:dev`: SC-001 a SC-005 + los edge cases (incl. gate de PIN y negocio sin PIN) + no regresión de `PaymentModal.tsx` (venta efectivo/transferencia/mixta) y de abrir/cerrar caja repetido.
+- [X] T016 [P] Actualizar `docs/features/cash-flow.md`: (a) Apertura — el monto inicial se pre-carga con la Base Diaria configurada (editar pide PIN); (b) Cierre — la base ya no baja a Caja Central y no se inserta el movimiento "Base próximo día"; (c) tabla "Caja Central (useCentralCash)" — quitar la fila `CloseSessionModal | expense | Base del día siguiente`; (d) nota del nuevo ajuste `business_settings` `setting_type='cash'` y del gate de PIN.
+- [X] T017 [P] (Limpieza opcional, no bloqueante) En `apps/shared/hooks/useCentralCash.ts`, `monthlySummary`: marcar o retirar las ramas inertes `isBaseProximoDia` / `nextDayBaseExpenses` (ya no habrá movimientos que coincidan). Si se retira, verificar que ningún consumidor de `monthlySummary` lea `nextDayBaseExpenses`.
+- [X] T018 `pnpm build` en `apps/desktop` y `apps/shared` sin errores de `tsc -b`. Verificar que `apps/web` sigue compilando (código compartido de `useBusinessStore`).
+- [ ] T019 (PENDIENTE — validación manual del usuario en `electron:dev`) Ejecutar la validación completa de [quickstart.md](./quickstart.md) en `electron:dev`: SC-001 a SC-005 + los edge cases (incl. gate de PIN y negocio sin PIN) + no regresión de `PaymentModal.tsx` (venta efectivo/transferencia/mixta) y de abrir/cerrar caja repetido.
 
 ---
 

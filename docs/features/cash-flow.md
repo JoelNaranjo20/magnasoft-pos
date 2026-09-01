@@ -1,6 +1,6 @@
 # Flujo de Caja — Sesiones, Cierre y Caja Central
 
-**Actualizado**: 2026-06-05
+**Actualizado**: 2026-08-31 (spec 018 — Base Diaria de Caja)
 
 ---
 
@@ -8,7 +8,8 @@
 
 ```
 APERTURA DE CAJA
-  └─ OpenSessionModal → INSERT cash_sessions { opening_balance, status: 'open' }
+  └─ OpenSessionModal → monto inicial pre-cargado con la Base Diaria de Caja (editable con PIN)
+                      → INSERT cash_sessions { opening_balance, status: 'open' }
 
 DURANTE LA SESIÓN
   ├─ Ventas (PaymentModal) → INSERT sales (+ sale_items)
@@ -22,10 +23,16 @@ CIERRE DE CAJA
   └─ CloseSessionModal
        ├─ Cálculo: expectedTotal = opening_balance + cashSales + cashMovements + cashAbonos
        ├─ Conteo físico: totalCounted (billetes + monedas)
+       ├─ "Base Próximo Día" pre-cargado con la Base Diaria de Caja (editable con PIN)
        ├─ UPDATE cash_sessions { closed_at, end_amount, manual_end_amount, difference, status:'closed' }
-       └─ INSERT central_cash_movements { type:'income', amount: totalCounted - cashAbonosTotal }
-            └─ NOTA: Se resta cashAbonosTotal porque esos abonos YA fueron registrados
-               en central_cash_movements al momento del pago (evitar doble conteo)
+       ├─ INSERT central_cash_movements { type:'income', payment_method:'cash', amount: cashIngresos }
+       │       (cashIngresos = ventas/abonos/otros en efectivo de la sesión — NO incluye opening_balance)
+       │       metadata.next_day_base = safeNextDayBase  (solo dato, no genera movimiento)
+       └─ INSERT central_cash_movements { type:'income', payment_method:'transfer', amount: transferIngresos }
+
+  ⚠️ spec 018: la base del día siguiente NO genera movimiento en Caja Central.
+     Se queda físicamente en la registradora y es el opening_balance del turno siguiente.
+     (Antes existía un egreso "💵 Base próximo día" — ELIMINADO: causaba descuadre acumulado.)
 ```
 
 ---
@@ -35,14 +42,26 @@ CIERRE DE CAJA
 **Archivo**: [`apps/desktop/src/components/modals/OpenSessionModal.tsx`](../../apps/desktop/src/components/modals/OpenSessionModal.tsx)
 
 1. El cajero selecciona un trabajador admin como responsable
-2. Ingresa la base inicial en efectivo mediante un teclado numérico
+2. El "Monto Inicial en Efectivo" ya viene pre-cargado con la **Base Diaria de Caja** configurada (0 si no está configurada). El admin puede editarlo con el teclado numérico, pero editar el monto pide el **PIN Maestro** del negocio (si hay PIN configurado)
 3. El sistema verifica que no haya otra sesión abierta. Si existe, la restaura en vez de crear una nueva
-4. Se inserta en `cash_sessions`: `{ business_id, worker_id, opening_balance, status: 'open', opened_at }`
+4. Se inserta en `cash_sessions`: `{ business_id, worker_id, opening_balance, status: 'open', opened_at }` — `opening_balance` = el valor mostrado en pantalla
 5. Se actualiza `useSessionStore.setCashSession()` con los datos de la sesión
 
 **Validaciones**:
 - Solo trabajadores con rol admin pueden abrir caja
 - Si no hay admins configurados, muestra advertencia
+
+---
+
+## Base Diaria de Caja (ajuste)
+
+**Configuración**: Configuración → sección **Caja** → "Base Diaria de Caja" (`GeneralSettings.tsx`, desktop).
+
+- Persistencia: `business_settings` con `setting_type = 'cash'`, `value = { daily_base: <número> }` (uno por negocio; ausencia = 0).
+- Expuesto en la store compartida `useBusinessStore` como `dailyCashBase`, cargado en `fetchBusinessProfile`.
+- **Apertura**: pre-carga el monto inicial. **Cierre**: pre-carga "Base Próximo Día" (siempre la Base Diaria, no el `opening_balance`).
+- Editar el monto en Apertura o Cierre requiere el **PIN Maestro** (`business.pin` / `SecurityPinModal`). Sin PIN configurado → editable directo.
+- La base **nunca** entra ni se resta en Caja Central: se queda en la registradora como base del turno siguiente.
 
 ---
 
@@ -115,13 +134,17 @@ digitalDifference   = manualDigitalAmount - expectedDigitalTotal
 
 ### Grabación en Caja Central
 
-```typescript
-const netToTransfer = Math.max(0, totalCounted - cashAbonosTotal);
-```
+Al cerrar se insertan hasta dos movimientos `income` (uno `cash`, uno `transfer`) con
+el efectivo y las transferencias que **entraron durante la sesión** (`cashIngresos` /
+`transferIngresos`). Estos totales **no incluyen `opening_balance`**, así que la base
+heredada del día anterior nunca vuelve a "entrar" a Caja Central.
 
-**¿Por qué se resta `cashAbonosTotal`?** Los abonos en efectivo recibidos durante la sesión YA fueron registrados individualmente en `central_cash_movements` al momento del pago. Si el cierre enviara `totalCounted` completo, esos montos aparecerían dos veces. Esta resta corrige el doble conteo.
-
-La descripción del registro incluye: `"($X ya registrados como abonos)"` para trazabilidad.
+**Base del día siguiente (spec 018)**: NO genera ningún movimiento. El monto de
+"Base Próximo Día" (por defecto = Base Diaria de Caja) se guarda solo como
+`metadata.next_day_base` para trazabilidad. Físicamente ese efectivo se queda en la
+registradora y será el `opening_balance` del turno siguiente. El antiguo egreso
+`💵 Base próximo día` fue eliminado porque restaba la base del total central cada día
+sin que ésta se hubiera sumado (descuadre acumulado).
 
 ### Cálculo de Ganancia
 
@@ -139,10 +162,12 @@ La caja central (`central_cash_movements`) recibe registros de:
 
 | Origen | Tipo | Cuándo |
 |---|---|---|
-| CloseSessionModal | `income` | Al cerrar caja (neto de abonos) |
+| CloseSessionModal | `income` (cash + transfer) | Al cerrar caja — efectivo y transferencias de la sesión (NO la base, NO `opening_balance`) |
 | CreditManagement / CarteraHub | `income` | Al recibir abono de cliente |
 | RegisterAbonoModal (web) | `income` | Al recibir abono de cliente (web) |
 | WorkerPaymentCalculator | `expense` | Al pagar comisiones/salarios |
+
+> La "Base Próximo Día" **no** aparece en esta tabla: desde spec 018 no genera movimiento.
 
 **Balance**: `SUM(income) - SUM(expense)` calculado en frontend.
 

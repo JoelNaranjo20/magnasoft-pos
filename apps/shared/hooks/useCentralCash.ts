@@ -396,6 +396,8 @@ export function useCentralCash() {
             const entry = monthsMap.get(key)!;
 
             const isAbono = (m.description || '').toLowerCase().includes('abono crédito');
+            // spec 018: el cierre ya no crea movimientos "Base próximo día". Esta rama
+            // (y nextDayBaseExpenses) queda inerte — solo aplica a datos históricos previos.
             const isBaseProximoDia = (m.description || '').toLowerCase().includes('base próximo día');
 
             if (m.type === 'income') {

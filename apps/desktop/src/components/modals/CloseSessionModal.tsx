@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useSessionStore } from '@shared/store/useSessionStore';
 import { useBusinessStore } from '@shared/store/useBusinessStore';
+import { SecurityPinModal } from './SecurityPinModal';
 
 const DENOMINATIONS = [
     { value: 100000, label: '$100.000' },
@@ -44,15 +45,35 @@ export const CloseSessionModal = () => {
     const [sessionCashOther, setSessionCashOther] = useState(0);
     const [sessionTransferOther, setSessionTransferOther] = useState(0);
     const [nextDayBase, setNextDayBase] = useState<number>(0);
+    const [baseUnlocked, setBaseUnlocked] = useState(false);
+    const [hasPin, setHasPin] = useState(false);
+    const [showBasePinModal, setShowBasePinModal] = useState(false);
+    const dailyCashBase = useBusinessStore((state) => state.dailyCashBase);
+
+    // El gate de PIN sobre "Base Próximo Día" solo aplica si hay una Base Diaria configurada (> 0).
+    const baseLocked = hasPin && !baseUnlocked && dailyCashBase > 0;
+
+    // "Base Próximo Día" = SIEMPRE la Base Diaria configurada (FR-005, aclaración 2026-08-31).
+    // Reactivo: aplica aunque la store cargue el valor después de montar. No pisa una edición
+    // hecha tras desbloquear con PIN.
+    useEffect(() => {
+        if (!baseUnlocked) setNextDayBase(dailyCashBase || 0);
+    }, [dailyCashBase, baseUnlocked]);
 
     // Fetch expected total and commissions
     useEffect(() => {
         const fetchTotals = async () => {
             if (!cashSession) return;
 
-            // Pre-fill next day base with current opening balance
-            setNextDayBase(cashSession.opening_balance || 0);
             const businessId = useBusinessStore.getState().id;
+
+            // ¿El negocio tiene PIN Maestro? Se exige al editar la base (FR-012)
+            const { data: bizPin } = await (supabase as any)
+                .from('business')
+                .select('pin')
+                .eq('id', businessId)
+                .maybeSingle();
+            setHasPin(!!(bizPin?.pin && String(bizPin.pin).length > 0));
 
             // 1. Get cash and mixed sales for this session
             const { data: cashSales } = await (supabase as any)
@@ -363,22 +384,10 @@ export const CloseSessionModal = () => {
                 if (transferErr) console.error('Error registrando ingreso transferencia en Caja Central:', transferErr);
             }
 
-            // ── 3c. EGRESO: Base del día siguiente (efectivo que se queda en la registradora) ──
-            if (safeNextDayBase > 0) {
-                const { error: expenseErr } = await (supabase as any)
-                    .from('central_cash_movements')
-                    .insert({
-                        type: 'expense',
-                        amount: safeNextDayBase,
-                        payment_method: 'cash',
-                        session_id: cashSession.id,
-                        metadata: { next_day_base: safeNextDayBase },
-                        business_id: businessId,
-                        description: `💵 Base próximo día — Sesión #${sessionTag}`,
-                        user_id: userId,
-                    });
-                if (expenseErr) console.error('Error registrando base próximo día en Caja Central:', expenseErr);
-            }
+            // ── 3c. Base del día siguiente ──
+            // La base NO genera movimiento en Caja Central (spec 018): se queda físicamente
+            // en la registradora como opening_balance del turno siguiente. safeNextDayBase
+            // se conserva solo como dato de trazabilidad en cashMeta.next_day_base.
 
             setCashSession(null); // Clear session from store
             setClosing(false); // Close this modal
@@ -408,6 +417,16 @@ export const CloseSessionModal = () => {
 
             {/* Modal Container */}
             <div className="relative z-50 flex flex-col w-full max-w-[1300px] max-h-[90vh] bg-background-light dark:bg-background-dark rounded-xl shadow-2xl overflow-hidden ring-1 ring-white/10">
+
+                {/* PIN para editar la base (FR-012) */}
+                {showBasePinModal && (
+                    <SecurityPinModal
+                        title="Editar base"
+                        description="Ingrese el PIN Maestro para cambiar la base del próximo día."
+                        onSuccess={() => { setBaseUnlocked(true); setShowBasePinModal(false); }}
+                        onCancel={() => setShowBasePinModal(false)}
+                    />
+                )}
 
                 {/* Confirmation Overlay */}
                 {showFinalConfirm && (
@@ -686,7 +705,7 @@ export const CloseSessionModal = () => {
                                         💵 Base Próximo Día
                                     </span>
                                     <span className="text-[9px] text-amber-500 font-bold">
-                                        Se descuenta de Caja Central
+                                        {baseLocked ? '🔒 PIN para editar' : 'Se queda en la registradora'}
                                     </span>
                                 </div>
                                 <div className="relative">
@@ -694,16 +713,18 @@ export const CloseSessionModal = () => {
                                     <input
                                         type="number"
                                         value={nextDayBase || ''}
+                                        readOnly={baseLocked}
+                                        onFocus={() => { if (baseLocked) setShowBasePinModal(true); }}
                                         onChange={(e) => setNextDayBase(Math.max(0, parseInt(e.target.value) || 0))}
-                                        className="w-full pl-8 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-lg text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all"
+                                        className="w-full pl-8 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-700 rounded-lg text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400 transition-all read-only:opacity-70 read-only:cursor-pointer"
                                         placeholder="0"
                                     />
                                 </div>
-                                {nextDayBase > 0 && (
-                                    <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1.5 font-medium">
-                                        Se dejarán {formatCurrency(nextDayBase)} en caja para el próximo turno.
-                                    </p>
-                                )}
+                                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-1.5 font-medium">
+                                    {nextDayBase > 0
+                                        ? `Se dejarán ${formatCurrency(nextDayBase)} en la registradora para la apertura de mañana.`
+                                        : 'No se retiene base para el próximo turno.'}
+                                </p>
                             </div>
 
                             {/* Spacer */}

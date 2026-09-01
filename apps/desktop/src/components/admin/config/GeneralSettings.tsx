@@ -42,6 +42,8 @@ export const GeneralSettings = () => {
     const [localProtectedModules, setLocalProtectedModules] = useState<string[]>([]);
     const [printers, setPrinters] = useState<any[]>([]);
     const [selectedPrinter, setSelectedPrinter] = useState('');
+    // Cash settings — Base Diaria de Caja
+    const [dailyCashBase, setDailyCashBase] = useState<number>(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
 
@@ -110,6 +112,21 @@ export const GeneralSettings = () => {
             }
         } catch (error) {
             console.error('Error fetching security settings:', error);
+        }
+
+        // Fetch Cash Settings (Base Diaria de Caja)
+        try {
+            const businessId = useBusinessStore.getState().id;
+            const { data: cashData } = await supabase
+                .from('business_settings')
+                .select('value')
+                .eq('business_id', businessId)
+                .eq('setting_type', 'cash')
+                .maybeSingle();
+
+            setDailyCashBase(Number(cashData?.value?.daily_base ?? 0) || 0);
+        } catch (error) {
+            console.error('Error fetching cash settings:', error);
         }
 
         // Fetch Printer Settings
@@ -189,6 +206,20 @@ export const GeneralSettings = () => {
                 }, { onConflict: 'business_id,setting_type' });
 
             if (securityError) throw securityError;
+
+            // 3b. Save Cash Settings (Base Diaria de Caja)
+            const safeDailyBase = Math.max(0, Math.floor(Number(dailyCashBase) || 0));
+            const { error: cashError } = await supabase
+                .from('business_settings')
+                .upsert({
+                    business_id: businessId,
+                    setting_type: 'cash',
+                    value: { daily_base: safeDailyBase }
+                }, { onConflict: 'business_id,setting_type' });
+
+            if (cashError) throw cashError;
+
+            useBusinessStore.setState({ dailyCashBase: safeDailyBase });
 
             // 4. Save Printer Settings
             if (window.electronAPI && selectedPrinter) {
@@ -487,6 +518,40 @@ export const GeneralSettings = () => {
                 <p className="text-[10px] text-slate-400 mt-4 italic">
                     * Los módulos seleccionados solicitarán el PIN maestro al intentar acceder a ellos.
                 </p>
+            </div >
+
+            {/* Caja Section — Base Diaria */}
+            < div className="border-t border-slate-100 dark:border-slate-700 pt-8 mt-8" >
+                <div className="flex items-center gap-4 mb-6">
+                    <div className="h-12 w-12 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                        <span className="material-symbols-outlined !text-3xl">payments</span>
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">Caja</h3>
+                        <p className="text-sm text-slate-500">Monto fijo que se deja en la registradora como base para abrir el día siguiente.</p>
+                    </div>
+                </div>
+
+                <div className="max-w-sm space-y-2">
+                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Base Diaria de Caja</label>
+                    <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400">$</span>
+                        <input
+                            type="number"
+                            min={0}
+                            step={1000}
+                            value={dailyCashBase || ''}
+                            onChange={(e) => setDailyCashBase(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                            placeholder="0"
+                            className="w-full pl-9 pr-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:border-primary outline-none font-bold text-slate-900 dark:text-white"
+                        />
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                        {dailyCashBase > 0
+                            ? `Se propondrá ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(dailyCashBase)} al abrir y cerrar caja. Editar el monto pedirá el PIN Maestro.`
+                            : 'En 0: no se retiene base; todo el efectivo del día baja a Caja Central.'}
+                    </p>
+                </div>
             </div >
 
 
