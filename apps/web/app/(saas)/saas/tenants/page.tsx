@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { INDUSTRY_PRESETS } from '../../../constants/ModuleRegistry';
 
 interface ActiveTenant {
     id: string;
@@ -14,7 +15,27 @@ interface ActiveTenant {
         name: string;
         status: string;
         business_type: string;
+        config?: Record<string, boolean> | null;
     } | null;
+}
+
+// Módulos que no todo negocio tiene activos — nunca se condiciona por
+// business_type directo (Constitución I), siempre por el config real del
+// negocio (mismo merge que useBusinessStore: default -> preset -> config).
+const DEFAULT_MODULE_CONFIG: Record<string, boolean> = {
+    module_vehicles: false,
+    module_tables: false,
+    module_service_queue: false,
+    module_commissions: false,
+    module_commission_payment: false,
+    module_customers: true,
+    module_inventory: true,
+    module_payroll: false,
+};
+
+function resolveModules(businessType: string, config?: Record<string, boolean> | null): Record<string, boolean> {
+    const preset = INDUSTRY_PRESETS[businessType as keyof typeof INDUSTRY_PRESETS];
+    return { ...DEFAULT_MODULE_CONFIG, ...(preset || {}), ...(config || {}) };
 }
 
 export default function SaasTenantsPage() {
@@ -24,7 +45,7 @@ export default function SaasTenantsPage() {
 
     // --- Reset Data Modal State ---
     const [showResetModal, setShowResetModal] = useState(false);
-    const [selectedResetTenant, setSelectedResetTenant] = useState<{ id: string, businessId: string, email: string, businessName: string } | null>(null);
+    const [selectedResetTenant, setSelectedResetTenant] = useState<{ id: string, businessId: string, email: string, businessName: string, businessType: string, businessConfig?: Record<string, boolean> | null } | null>(null);
     const [resetOptions, setResetOptions] = useState({
         sales: false,
         cash: false,
@@ -38,6 +59,12 @@ export default function SaasTenantsPage() {
     });
     const [resetConfirmation, setResetConfirmation] = useState('');
     const [isResetting, setIsResetting] = useState(false);
+
+    // Módulos activos del negocio seleccionado — decide qué checkboxes de
+    // "Limpiar Datos" mostrar (solo lo que ese negocio realmente tiene).
+    const activeModules = selectedResetTenant
+        ? resolveModules(selectedResetTenant.businessType, selectedResetTenant.businessConfig)
+        : DEFAULT_MODULE_CONFIG;
 
     useEffect(() => {
         fetchTenants();
@@ -228,7 +255,9 @@ export default function SaasTenantsPage() {
                                                             id: tenant.id,
                                                             businessId: tenant.business!.id,
                                                             email: tenant.email || '',
-                                                            businessName: tenant.business!.name
+                                                            businessName: tenant.business!.name,
+                                                            businessType: tenant.business!.business_type,
+                                                            businessConfig: tenant.business!.config
                                                         });
                                                         setShowResetModal(true);
                                                     }}
@@ -356,17 +385,19 @@ export default function SaasTenantsPage() {
                                     </span>
                                 </label>
 
-                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
-                                    <input
-                                        type="checkbox"
-                                        checked={resetOptions.queue}
-                                        onChange={(e) => setResetOptions({ ...resetOptions, queue: e.target.checked })}
-                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
-                                    />
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                                        Cola de servicio
-                                    </span>
-                                </label>
+                                {activeModules.module_service_queue && (
+                                    <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={resetOptions.queue}
+                                            onChange={(e) => setResetOptions({ ...resetOptions, queue: e.target.checked })}
+                                            className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                        />
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                            Cola de servicio
+                                        </span>
+                                    </label>
+                                )}
 
                                 <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
                                     <input
@@ -380,24 +411,31 @@ export default function SaasTenantsPage() {
                                     </span>
                                 </label>
 
-                                <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
-                                    <input
-                                        type="checkbox"
-                                        checked={resetOptions.tables}
-                                        onChange={(e) => setResetOptions({ ...resetOptions, tables: e.target.checked })}
-                                        className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
-                                    />
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                                        Mesas (restaurante)
-                                    </span>
-                                </label>
+                                {activeModules.module_tables && (
+                                    <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={resetOptions.tables}
+                                            onChange={(e) => setResetOptions({ ...resetOptions, tables: e.target.checked })}
+                                            className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                        />
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                            Mesas (restaurante)
+                                        </span>
+                                    </label>
+                                )}
                             </div>
 
                             <button
-                                onClick={() => setResetOptions({ sales: true, cash: true, centralCash: true, customers: true, workers: true, products: true, queue: true, creditors: true, tables: true })}
+                                onClick={() => setResetOptions({
+                                    sales: true, cash: true, centralCash: true, customers: true, workers: true, products: true,
+                                    queue: !!activeModules.module_service_queue,
+                                    creditors: true,
+                                    tables: !!activeModules.module_tables,
+                                })}
                                 className="w-full mb-6 py-2.5 border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
                             >
-                                Seleccionar Todo
+                                Seleccionar Todo (lo aplicable a este negocio)
                             </button>
 
                             <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 mb-6 border border-slate-200 dark:border-slate-800">

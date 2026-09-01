@@ -4,13 +4,34 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { applyDefaultTemplate, saveDashboardConfig, changeBusinessType, purgeBusinessData, deleteBusiness } from './actions';
 import DashboardBuilderModal from './components/DashboardBuilderModal';
+import { INDUSTRY_PRESETS } from '../../../../constants/ModuleRegistry';
 
 interface Business {
     id: string;
     name: string;
     business_type: string;
     dashboard_config: any;
+    config?: Record<string, boolean> | null;
     created_at: string;
+}
+
+// Módulos que no todo negocio tiene activos — nunca se condiciona por
+// business_type directo (Constitución I), siempre por el config real del
+// negocio (con el mismo merge que useBusinessStore: default -> preset -> config).
+const DEFAULT_MODULE_CONFIG: Record<string, boolean> = {
+    module_vehicles: false,
+    module_tables: false,
+    module_service_queue: false,
+    module_commissions: false,
+    module_commission_payment: false,
+    module_customers: true,
+    module_inventory: true,
+    module_payroll: false,
+};
+
+function resolveModules(business: { business_type: string; config?: Record<string, boolean> | null }): Record<string, boolean> {
+    const preset = INDUSTRY_PRESETS[business.business_type as keyof typeof INDUSTRY_PRESETS];
+    return { ...DEFAULT_MODULE_CONFIG, ...(preset || {}), ...(business.config || {}) };
 }
 
 type DangerAction = 'purge' | 'delete';
@@ -34,6 +55,10 @@ export default function ConfigurationsPage() {
     const [dangerConfirmText, setDangerConfirmText] = useState('');
     const [dangerLoading, setDangerLoading] = useState(false);
     const [dangerResult, setDangerResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+    // Módulos activos del negocio seleccionado en la Zona Peligrosa — decide qué
+    // checkboxes de "Limpiar Datos" mostrar (solo lo que ese negocio realmente tiene).
+    const activeModules = dangerModal ? resolveModules(dangerModal.business) : DEFAULT_MODULE_CONFIG;
 
     const [resetOptions, setResetOptions] = useState({
         sales: false,
@@ -527,17 +552,19 @@ export default function ConfigurationsPage() {
                                             </span>
                                         </label>
 
-                                        <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
-                                            <input
-                                                type="checkbox"
-                                                checked={resetOptions.queue}
-                                                onChange={(e) => setResetOptions({ ...resetOptions, queue: e.target.checked })}
-                                                className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
-                                            />
-                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                                                Cola de servicio
-                                            </span>
-                                        </label>
+                                        {activeModules.module_service_queue && (
+                                            <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={resetOptions.queue}
+                                                    onChange={(e) => setResetOptions({ ...resetOptions, queue: e.target.checked })}
+                                                    className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                                />
+                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                    Cola de servicio
+                                                </span>
+                                            </label>
+                                        )}
 
                                         <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
                                             <input
@@ -551,24 +578,31 @@ export default function ConfigurationsPage() {
                                             </span>
                                         </label>
 
-                                        <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
-                                            <input
-                                                type="checkbox"
-                                                checked={resetOptions.tables}
-                                                onChange={(e) => setResetOptions({ ...resetOptions, tables: e.target.checked })}
-                                                className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
-                                            />
-                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                                                Mesas (restaurante)
-                                            </span>
-                                        </label>
+                                        {activeModules.module_tables && (
+                                            <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={resetOptions.tables}
+                                                    onChange={(e) => setResetOptions({ ...resetOptions, tables: e.target.checked })}
+                                                    className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                                />
+                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                    Mesas (restaurante)
+                                                </span>
+                                            </label>
+                                        )}
                                     </div>
 
                                     <button
-                                        onClick={() => setResetOptions({ sales: true, cash: true, centralCash: true, customers: true, workers: true, products: true, queue: true, creditors: true, tables: true })}
+                                        onClick={() => setResetOptions({
+                                            sales: true, cash: true, centralCash: true, customers: true, workers: true, products: true,
+                                            queue: !!activeModules.module_service_queue,
+                                            creditors: true,
+                                            tables: !!activeModules.module_tables,
+                                        })}
                                         className="w-full mt-2 py-2 border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
                                     >
-                                        Seleccionar Todo
+                                        Seleccionar Todo (lo aplicable a este negocio)
                                     </button>
                                 </div>
                             ) : (
