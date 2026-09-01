@@ -69,7 +69,8 @@ export default function ConfigurationsPage() {
         products: false,
         queue: false,
         creditors: false,
-        tables: false
+        tables: false,
+        payroll: false
     });
 
     useEffect(() => {
@@ -140,7 +141,7 @@ export default function ConfigurationsPage() {
         setDangerModal(null);
         setDangerConfirmText('');
         setDangerResult(null);
-        setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false, creditors: false, tables: false });
+        setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false, creditors: false, tables: false, payroll: false });
     };
 
     const handleDangerConfirm = async () => {
@@ -154,7 +155,7 @@ export default function ConfigurationsPage() {
 
         try {
             if (action === 'purge') {
-                if (!resetOptions.sales && !resetOptions.cash && !resetOptions.centralCash && !resetOptions.customers && !resetOptions.workers && !resetOptions.products && !resetOptions.queue && !resetOptions.creditors && !resetOptions.tables) {
+                if (!resetOptions.sales && !resetOptions.cash && !resetOptions.centralCash && !resetOptions.customers && !resetOptions.workers && !resetOptions.products && !resetOptions.queue && !resetOptions.creditors && !resetOptions.tables && !resetOptions.payroll) {
                     setDangerResult({ type: 'error', message: '❌ Error: Debes seleccionar al menos un módulo para limpiar.' });
                     setDangerLoading(false);
                     return;
@@ -591,7 +592,24 @@ export default function ConfigurationsPage() {
                                                 </span>
                                             </label>
                                         )}
+
+                                        {(activeModules.module_payroll || activeModules.module_commissions || activeModules.module_commission_payment) && (
+                                            <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={resetOptions.payroll}
+                                                    onChange={(e) => setResetOptions({ ...resetOptions, payroll: e.target.checked })}
+                                                    className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                                />
+                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                                    Pagos de nómina y comisiones
+                                                </span>
+                                            </label>
+                                        )}
                                     </div>
+                                    <p className="text-[11px] text-slate-400 -mt-3 mb-2 px-1">
+                                        "Pagos de nómina y comisiones" solo borra esos pagos del historial de Caja Central y revierte comisiones pagadas a pendientes — no toca a los trabajadores.
+                                    </p>
 
                                     <button
                                         onClick={() => setResetOptions({
@@ -599,6 +617,7 @@ export default function ConfigurationsPage() {
                                             queue: !!activeModules.module_service_queue,
                                             creditors: true,
                                             tables: !!activeModules.module_tables,
+                                            payroll: !!(activeModules.module_payroll || activeModules.module_commissions || activeModules.module_commission_payment),
                                         })}
                                         className="w-full mt-2 py-2 border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
                                     >

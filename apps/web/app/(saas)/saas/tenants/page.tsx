@@ -55,7 +55,8 @@ export default function SaasTenantsPage() {
         products: false,
         queue: false,
         creditors: false,
-        tables: false
+        tables: false,
+        payroll: false
     });
     const [resetConfirmation, setResetConfirmation] = useState('');
     const [isResetting, setIsResetting] = useState(false);
@@ -125,7 +126,7 @@ export default function SaasTenantsPage() {
             return;
         }
 
-        if (!resetOptions.sales && !resetOptions.cash && !resetOptions.centralCash && !resetOptions.customers && !resetOptions.workers && !resetOptions.products && !resetOptions.queue && !resetOptions.creditors && !resetOptions.tables) {
+        if (!resetOptions.sales && !resetOptions.cash && !resetOptions.centralCash && !resetOptions.customers && !resetOptions.workers && !resetOptions.products && !resetOptions.queue && !resetOptions.creditors && !resetOptions.tables && !resetOptions.payroll) {
             alert('Debes seleccionar al menos un módulo para limpiar.');
             return;
         }
@@ -142,7 +143,8 @@ export default function SaasTenantsPage() {
                 p_delete_products: resetOptions.products,
                 p_delete_queue: resetOptions.queue,
                 p_delete_creditors: resetOptions.creditors,
-                p_delete_tables: resetOptions.tables
+                p_delete_tables: resetOptions.tables,
+                p_delete_payroll_payments: resetOptions.payroll
             });
 
             if (error) throw error;
@@ -150,7 +152,7 @@ export default function SaasTenantsPage() {
             alert(`Datos limpiados correctamente para el negocio: ${selectedResetTenant.businessName}`);
             setShowResetModal(false);
             setResetConfirmation('');
-            setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false, creditors: false, tables: false });
+            setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false, creditors: false, tables: false, payroll: false });
             setSelectedResetTenant(null);
         } catch (error: any) {
             console.error('Error al reiniciar datos:', error);
@@ -424,7 +426,24 @@ export default function SaasTenantsPage() {
                                         </span>
                                     </label>
                                 )}
+
+                                {(activeModules.module_payroll || activeModules.module_commissions || activeModules.module_commission_payment) && (
+                                    <label className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={resetOptions.payroll}
+                                            onChange={(e) => setResetOptions({ ...resetOptions, payroll: e.target.checked })}
+                                            className="size-5 rounded border-slate-300 text-red-600 focus:ring-red-500 bg-white"
+                                        />
+                                        <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                            Pagos de nómina y comisiones
+                                        </span>
+                                    </label>
+                                )}
                             </div>
+                            <p className="text-[11px] text-slate-400 -mt-3 mb-4 px-1">
+                                "Pagos de nómina y comisiones" solo borra esos pagos del historial de Caja Central y revierte comisiones pagadas a pendientes — no toca a los trabajadores.
+                            </p>
 
                             <button
                                 onClick={() => setResetOptions({
@@ -432,6 +451,7 @@ export default function SaasTenantsPage() {
                                     queue: !!activeModules.module_service_queue,
                                     creditors: true,
                                     tables: !!activeModules.module_tables,
+                                    payroll: !!(activeModules.module_payroll || activeModules.module_commissions || activeModules.module_commission_payment),
                                 })}
                                 className="w-full mb-6 py-2.5 border-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm"
                             >
@@ -456,7 +476,7 @@ export default function SaasTenantsPage() {
                                     onClick={() => {
                                         setShowResetModal(false);
                                         setResetConfirmation('');
-                                        setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false, creditors: false, tables: false });
+                                        setResetOptions({ sales: false, cash: false, centralCash: false, customers: false, workers: false, products: false, queue: false, creditors: false, tables: false, payroll: false });
                                     }}
                                     className="flex-1 py-3.5 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-sm"
                                 >
